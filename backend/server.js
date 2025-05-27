@@ -3,8 +3,7 @@ const cors = require('cors');
 const mongoose = require('mongoose');
 
 const app = express();
-const PORT = process.env.PORT || 5000;
-
+const PORT = process.env.PORT || 5050;
 
 const MONGODB_URI = 'mongodb+srv://ADH:HELLO@employeemanagement.9tmhw4a.mongodb.net/?retryWrites=true&w=majority&appName=EmployeeManagement';
 
@@ -16,18 +15,18 @@ const employeeSchema = new mongoose.Schema({
   firstname: String,
   lastname: String,
   email: String,
-  phone: Number,
+  phone: String,
   department: String,
   position: String,
   role: String,
   salary: Number,
   startDate: Date,
   address: String,
-});
+  status: { type: String, default: 'active' }
+});  
 
 const Employee = mongoose.model('Employee', employeeSchema);
-
-app.use(cors());
+app.use(cors()); // allow all origins for now
 app.use(express.json());
 
 app.get('/', (req, res) => {

@@ -14,11 +14,18 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
   const [employees, setEmployees] = useState([]);
 
   useEffect(() => {
-    fetch('http://localhost:5000/api/employees')
+    fetch('http://localhost:5050/api/employees')
       .then(res => res.json())
-      .then(data => setEmployees(data))
-      .catch(() => setEmployees([]));
+      .then(data => {
+        console.log('Fetched employees:', data);
+        setEmployees(data);
+      })
+      .catch(err => {
+        console.error('Failed to fetch employees:', err);
+        setEmployees([]);
+      });
   }, []);
+  
 
   const filteredEmployees = employees.filter(employee =>
     `${employee.firstname} ${employee.lastname}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -66,12 +73,12 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
                 
                 <div className="flex items-center space-x-4">
                   <div className="text-right">
-                    <Badge variant={employee.status === 'active' ? 'default' : 'secondary'}>
-                      {employee.status}
-                    </Badge>
-                    <p className="text-sm text-gray-500 mt-1">
-                      Joined: {new Date(employee.joinDate).toLocaleDateString()}
-                    </p>
+                  <Badge variant="default">
+                    {employee.status || 'active'}
+                  </Badge>
+                  <p className="text-sm text-gray-500 mt-1">
+                    Joined: {new Date(employee.startDate).toLocaleDateString()}
+                  </p>
                   </div>
                   
                   <div className="flex space-x-2">
