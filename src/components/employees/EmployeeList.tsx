@@ -1,5 +1,4 @@
-
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -12,55 +11,19 @@ interface EmployeeListProps {
 
 const EmployeeList = ({ userRole }: EmployeeListProps) => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [employees, setEmployees] = useState([]);
 
-  // Mock employee data
-  const employees = [
-    {
-      id: 1,
-      name: 'John Smith',
-      email: 'john@company.com',
-      role: 'super_admin',
-      department: 'IT',
-      position: 'System Administrator',
-      status: 'active',
-      joinDate: '2023-01-15'
-    },
-    {
-      id: 2,
-      name: 'Jane Doe',
-      email: 'jane@company.com',
-      role: 'admin',
-      department: 'HR',
-      position: 'HR Manager',
-      status: 'active',
-      joinDate: '2023-02-20'
-    },
-    {
-      id: 3,
-      name: 'Mike Johnson',
-      email: 'mike@company.com',
-      role: 'employee',
-      department: 'Sales',
-      position: 'Sales Executive',
-      status: 'active',
-      joinDate: '2023-03-10'
-    },
-    {
-      id: 4,
-      name: 'Sarah Wilson',
-      email: 'sarah@company.com',
-      role: 'employee',
-      department: 'Marketing',
-      position: 'Marketing Specialist',
-      status: 'inactive',
-      joinDate: '2023-04-05'
-    }
-  ];
+  useEffect(() => {
+    fetch('http://localhost:5000/api/employees')
+      .then(res => res.json())
+      .then(data => setEmployees(data))
+      .catch(() => setEmployees([]));
+  }, []);
 
   const filteredEmployees = employees.filter(employee =>
-    employee.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    employee.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    employee.department.toLowerCase().includes(searchTerm.toLowerCase())
+    `${employee.firstname} ${employee.lastname}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (employee.email || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (employee.department || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const canEdit = userRole === 'super_admin' || userRole === 'admin';
@@ -85,17 +48,17 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
 
       <div className="grid gap-4">
         {filteredEmployees.map((employee) => (
-          <Card key={employee.id}>
+          <Card key={employee._id}>
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-4">
                   <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
                     <span className="text-blue-600 font-semibold">
-                      {employee.name.split(' ').map(n => n[0]).join('')}
+                      {employee.firstname && employee.lastname ? `${employee.firstname[0]}${employee.lastname[0]}`.toUpperCase() : '?'}
                     </span>
                   </div>
                   <div>
-                    <h3 className="text-lg font-semibold text-gray-900">{employee.name}</h3>
+                    <h3 className="text-lg font-semibold text-gray-900">{employee.firstname} {employee.lastname}</h3>
                     <p className="text-gray-600">{employee.position} • {employee.department}</p>
                     <p className="text-sm text-gray-500">{employee.email}</p>
                   </div>

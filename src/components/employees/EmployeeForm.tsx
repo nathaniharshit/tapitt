@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -27,10 +26,49 @@ const EmployeeForm = ({ userRole }: EmployeeFormProps) => {
 
   const canAddAdmin = userRole === 'super_admin';
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('Form submitted:', formData);
-    // Here you would typically send the data to your backend
+    try {
+      const response = await fetch('http://localhost:5000/api/employees', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          firstname: formData.firstName,
+          lastname: formData.lastName,
+          email: formData.email,
+          phone: formData.phone,
+          department: formData.department,
+          position: formData.position,
+          role: formData.role,
+          salary: formData.salary,
+          startDate: formData.startDate,
+          address: formData.address,
+        }),
+      });
+      if (response.ok) {
+        const data = await response.json();
+        alert('Employee added successfully!');
+        setFormData({
+          firstName: '',
+          lastName: '',
+          email: '',
+          phone: '',
+          department: '',
+          position: '',
+          role: '',
+          salary: '',
+          startDate: '',
+          address: ''
+        });
+      } else {
+        const error = await response.json();
+        alert('Error: ' + error.error);
+      }
+    } catch (err) {
+      alert('Network error.');
+    }
   };
 
   const handleInputChange = (field: string, value: string) => {
