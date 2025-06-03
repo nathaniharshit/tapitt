@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import Header from './Header';
 import Sidebar from './Sidebar';
@@ -7,6 +6,7 @@ import EmployeeForm from '../employees/EmployeeForm';
 import AdminPanel from '../admin/AdminPanel';
 import Reports from '../reports/Reports';
 import Settings from '../settings/Settings';
+import { Navigate } from 'react-router-dom';
 
 interface User {
   id: string;
@@ -19,6 +19,15 @@ interface DashboardProps {
   user: User;
   onLogout: () => void;
 }
+// src/components/auth/protectedroute.tsx
+
+
+const ProtectedRoute = ({ user, allowedRoles, children }) => {
+  if (!user || !allowedRoles.includes(user.role)) {
+    return <Navigate to="/login" />;
+  }
+  return children;
+};
 
 const Dashboard = ({ user, onLogout }: DashboardProps) => {
   const [activeTab, setActiveTab] = useState('employees');
@@ -28,7 +37,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
       case 'employees':
         return <EmployeeList userRole={user.role} />;
       case 'add-employee':
-        return <EmployeeForm userRole={user.role} />;
+        return user.role === 'super_admin' ? <EmployeeForm /> : <EmployeeList userRole={user.role} />;
       case 'admin-panel':
         return <AdminPanel userRole={user.role} />;
       case 'reports':

@@ -1,4 +1,3 @@
-
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { 
@@ -28,7 +27,7 @@ const Sidebar = ({ userRole, activeTab, setActiveTab }: SidebarProps) => {
       id: 'add-employee',
       label: 'Add Employee',
       icon: UserPlus,
-      roles: ['super_admin', 'admin']
+      roles: ['super_admin'] // Only super_admin can see this
     },
     {
       id: 'admin-panel',

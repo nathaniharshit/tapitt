@@ -68,6 +68,9 @@ const LoginForm = ({ onLogin }: LoginFormProps) => {
 
     const user = Object.values(demoUsers).find((u) => u.email === email);
 
+    // Debug log for troubleshooting
+    console.log({ email, password, selectedRole, user });
+
     if (!user) {
       setError('Invalid email address.');
       return;
