@@ -109,16 +109,7 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
               className="pl-10 w-64"
             />
           </div>
-          {userRole === 'super_admin' && (
-            <Button
-              variant="default"
-              onClick={() => {
-                window.location.href = '/register';
-              }}
-            >
-              Add Employee
-            </Button>
-          )}
+          
         </div>
       </div>
 
