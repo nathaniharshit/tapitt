@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -61,32 +61,64 @@ const LoginForm = ({ onLogin }: LoginFormProps) => {
   const [selectedRole, setSelectedRole] = useState<string>('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const navigate = useNavigate();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
-    const user = Object.values(demoUsers).find((u) => u.email === email);
-
-    // Debug log for troubleshooting
-    console.log({ email, password, selectedRole, user });
-
-    if (!user) {
-      setError('Invalid email address.');
+    // Static login for super_admin and admin
+    if (selectedRole === 'super_admin' || selectedRole === 'admin') {
+      const user = Object.values(demoUsers).find((u) => u.email === email);
+      // Debug log for troubleshooting
+      console.log({ email, password, selectedRole, user });
+      if (!user) {
+        setError('Invalid email address.');
+        return;
+      }
+      if (user.role !== selectedRole) {
+        setError('Selected role does not match the email entered.');
+        return;
+      }
+      if (user.password !== password) {
+        setError('Incorrect password.');
+        return;
+      }
+      onLogin(user);
       return;
     }
 
-    if (user.role !== selectedRole) {
-      setError('Selected role does not match the email entered.');
-      return;
+    // Employee login via backend
+    if (selectedRole === 'employee') {
+      try {
+        const response = await fetch('http://localhost:5050/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password })
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          setError(data.error || 'Login failed');
+          return;
+        }
+        // Check mustChangePassword
+        if (data.employee && data.employee.mustChangePassword) {
+          // Redirect to set password page, pass employeeId
+          navigate('/employee-set-password', { state: { employeeId: data.employee._id } });
+          return;
+        }
+        // Successful login
+        onLogin({
+          id: data.employee._id,
+          name: `${data.employee.firstname} ${data.employee.lastname}`,
+          email: data.employee.email,
+          password: password,
+          role: data.employee.role
+        });
+      } catch (err) {
+        setError('Network error.');
+      }
     }
-
-    if (user.password !== password) {
-      setError('Incorrect password.');
-      return;
-    }
-
-    onLogin(user);
   };
 
   return (

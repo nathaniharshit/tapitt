@@ -1,8 +1,8 @@
 const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
-const bcrypt = require('bcrypt');
 const authorizeRoles = require('./middleware/rbac');
+const bcrypt = require('bcrypt');
 const app = express();
 const PORT = process.env.PORT || 5050;
 
@@ -24,36 +24,9 @@ const employeeSchema = new mongoose.Schema({
   startDate: Date,
   address: String,
   status: { type: String, default: 'active' },
-  password: { type: String, default: '' } // Add password field
+  password: { type: String, default: '' },
+  mustChangePassword: { type: Boolean, default: true } // New field
 });  
-
-// Hash password before saving if it is new or modified
-employeeSchema.pre('save', async function (next) {
-  if (this.isModified('password') && this.password) {
-    try {
-      const salt = await bcrypt.genSalt(10);
-      this.password = await bcrypt.hash(this.password, salt);
-    } catch (err) {
-      return next(err);
-    }
-  }
-  next();
-});
-
-// Hash password before updating if it is modified
-employeeSchema.pre('findOneAndUpdate', async function (next) {
-  const update = this.getUpdate();
-  if (update.password) {
-    try {
-      const salt = await bcrypt.genSalt(10);
-      update.password = await bcrypt.hash(update.password, salt);
-      this.setUpdate(update);
-    } catch (err) {
-      return next(err);
-    }
-  }
-  next();
-});
 
 const Employee = mongoose.model('Employee', employeeSchema);
 app.use(cors()); // allow all origins for now
@@ -65,11 +38,12 @@ app.get('/', (req, res) => {
 
 app.post('/api/employees', async (req, res) => {
   try {
-    // Require a temporary password for new employees
     if (!req.body.password || req.body.password.length < 8) {
       return res.status(400).json({ error: 'A temporary password of at least 8 characters is required.' });
     }
-    const employee = new Employee(req.body);
+    // Hash the password before saving
+    const hashedPassword = await bcrypt.hash(req.body.password, 10);
+    const employee = new Employee({ ...req.body, password: hashedPassword, mustChangePassword: true });
     await employee.save();
     res.status(201).json(employee);
   } catch (err) {
@@ -115,27 +89,6 @@ app.delete('/api/employees/:id', async (req, res) => {
   }
 });
 
-app.post('/api/employees/:id/set-password', async (req, res) => {
-  try {
-    const { password } = req.body;
-    if (!password || password.length < 8) {
-      return res.status(400).json({ error: 'Password must be at least 8 characters.' });
-    }
-    const updatedEmployee = await Employee.findByIdAndUpdate(
-      req.params.id,
-      { password },
-      { new: true, runValidators: true }
-    );
-    if (!updatedEmployee) {
-      return res.status(404).json({ error: 'Employee not found' });
-    }
-    res.json({ message: 'Password set successfully' });
-  } catch (err) {
-    res.status(400).json({ error: err.message });
-  }
-});
-
-// Employee login endpoint (example, add to your backend if not present)
 app.post('/api/login', async (req, res) => {
   const { email, password } = req.body;
   try {
@@ -144,17 +97,45 @@ app.post('/api/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid email or password' });
     }
     if (!employee.password) {
-      // Password not set yet
       return res.status(403).json({ error: 'Password not set', employeeId: employee._id });
     }
     const isMatch = await bcrypt.compare(password, employee.password);
     if (!isMatch) {
       return res.status(401).json({ error: 'Invalid email or password' });
     }
-    // You can add JWT or session logic here
-    res.json({ message: 'Login successful', employee });
+    // Return mustChangePassword flag for frontend
+    res.json({ message: 'Login successful', employee: {
+      _id: employee._id,
+      email: employee.email,
+      role: employee.role,
+      mustChangePassword: employee.mustChangePassword,
+      firstname: employee.firstname,
+      lastname: employee.lastname
+    }});
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/employees/:id/set-password', async (req, res) => {
+  try {
+    const { password } = req.body;
+    if (!password || password.length < 8) {
+      return res.status(400).json({ error: 'Password must be at least 8 characters.' });
+    }
+    // Hash the new password before saving
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const updatedEmployee = await Employee.findByIdAndUpdate(
+      req.params.id,
+      { password: hashedPassword, mustChangePassword: false },
+      { new: true, runValidators: true }
+    );
+    if (!updatedEmployee) {
+      return res.status(404).json({ error: 'Employee not found' });
+    }
+    res.json({ message: 'Password set successfully' });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
   }
 });
 
