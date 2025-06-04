@@ -7,6 +7,7 @@ import AdminPanel from '../admin/AdminPanel';
 import Reports from '../reports/Reports';
 import Settings from '../settings/Settings';
 import { Navigate } from 'react-router-dom';
+import EmployeePersonalDetails from '../employees/EmployeePersonalDetails';
 
 interface User {
   id: string;
@@ -30,9 +31,23 @@ const ProtectedRoute = ({ user, allowedRoles, children }) => {
 };
 
 const Dashboard = ({ user, onLogout }: DashboardProps) => {
-  const [activeTab, setActiveTab] = useState('employees');
+  // Set default tab for employees to 'personal-details', others to 'employees'
+  const [activeTab, setActiveTab] = useState(user.role === 'employee' ? 'personal-details' : 'employees');
 
   const renderContent = () => {
+    if (user.role === 'employee') {
+      switch (activeTab) {
+        case 'personal-details':
+          return <EmployeePersonalDetails user={user} />;
+        case 'employees':
+          return <EmployeeList userRole={user.role} />;
+        case 'settings':
+          return <Settings userRole={user.role} />;
+        // Add more employee-only sections here if needed
+        default:
+          return <EmployeeList userRole={user.role} />;
+      }
+    }
     switch (activeTab) {
       case 'employees':
         return <EmployeeList userRole={user.role} />;

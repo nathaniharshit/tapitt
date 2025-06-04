@@ -24,6 +24,12 @@ const Sidebar = ({ userRole, activeTab, setActiveTab }: SidebarProps) => {
       roles: ['super_admin', 'admin', 'employee']
     },
     {
+      id: 'personal-details',
+      label: 'Personal Details',
+      icon: UserPlus, // You may want to use a different icon, e.g., User or IdCard
+      roles: ['employee']
+    },
+    {
       id: 'add-employee',
       label: 'Add Employee',
       icon: UserPlus,

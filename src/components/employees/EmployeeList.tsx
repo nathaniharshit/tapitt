@@ -167,60 +167,60 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
       </div>
       {/* Employee Details Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Employee Details</DialogTitle>
-          </DialogHeader>
-          {viewedEmployee && (
-            <div className="space-y-2">
-              <div className="flex items-center space-x-4">
-                <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center">
-                  <span className="text-blue-600 font-bold text-2xl">
-                    {viewedEmployee.firstname && viewedEmployee.lastname ? `${viewedEmployee.firstname[0]}${viewedEmployee.lastname[0]}`.toUpperCase() : '?'}
-                  </span>
-                </div>
-                <div>
-                  <h3 className="text-xl font-semibold text-gray-900">{viewedEmployee.firstname} {viewedEmployee.lastname}</h3>
-                  <p className="text-gray-600">{viewedEmployee.position} • {viewedEmployee.department}</p>
-                  <Badge variant="default">{viewedEmployee.status || 'active'}</Badge>
-                </div>
+        <DialogContent className="w-full max-w-none h-screen p-0 bg-white flex flex-col">
+          <div className="flex-1 flex flex-col md:flex-row">
+            {/* Left: Avatar and Basic Info */}
+            <div className="flex flex-col items-center justify-center bg-blue-50 w-full md:w-1/3 p-8 border-b md:border-b-0 md:border-r">
+              <div className="w-32 h-32 bg-blue-200 rounded-full flex items-center justify-center mb-4">
+                <span className="text-blue-700 font-bold text-5xl">
+                  {viewedEmployee?.firstname && viewedEmployee?.lastname ? `${viewedEmployee.firstname[0]}${viewedEmployee.lastname[0]}`.toUpperCase() : '?'}
+                </span>
               </div>
-              <div className="grid grid-cols-2 gap-4 mt-4">
+              <h3 className="text-3xl font-semibold text-gray-900 mb-2">{viewedEmployee?.firstname} {viewedEmployee?.lastname}</h3>
+              <p className="text-lg text-gray-600 mb-1">{viewedEmployee?.position} • {viewedEmployee?.department}</p>
+              <Badge variant="default" className="text-base px-3 py-1">{viewedEmployee?.status || 'active'}</Badge>
+            </div>
+            {/* Right: Details */}
+            <div className="flex-1 flex flex-col justify-center items-center p-8 overflow-y-auto">
+              <DialogHeader className="w-full max-w-2xl mx-auto mb-6">
+                <DialogTitle className="text-2xl text-center">Employee Details</DialogTitle>
+              </DialogHeader>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-2xl">
                 <div>
-                  <p className="text-sm text-gray-500">Email:</p>
-                  <p className="font-medium">{viewedEmployee.email}</p>
+                  <p className="text-gray-500 font-medium">Email</p>
+                  <p className="text-lg font-semibold">{viewedEmployee?.email}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">Phone:</p>
-                  <p className="font-medium">{viewedEmployee.phone || '-'}</p>
+                  <p className="text-gray-500 font-medium">Phone</p>
+                  <p className="text-lg font-semibold">{viewedEmployee?.phone || '-'}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">Department:</p>
-                  <p className="font-medium">{viewedEmployee.department}</p>
+                  <p className="text-gray-500 font-medium">Department</p>
+                  <p className="text-lg font-semibold">{viewedEmployee?.department}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">Position:</p>
-                  <p className="font-medium">{viewedEmployee.position}</p>
+                  <p className="text-gray-500 font-medium">Position</p>
+                  <p className="text-lg font-semibold">{viewedEmployee?.position}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">Role:</p>
-                  <p className="font-medium">{viewedEmployee.role}</p>
+                  <p className="text-gray-500 font-medium">Role</p>
+                  <p className="text-lg font-semibold">{viewedEmployee?.role}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">Salary:</p>
-                  <p className="font-medium">{viewedEmployee.salary || '-'}</p>
+                  <p className="text-gray-500 font-medium">Salary</p>
+                  <p className="text-lg font-semibold">{viewedEmployee?.salary || '-'}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">Start Date:</p>
-                  <p className="font-medium">{viewedEmployee.startDate ? new Date(viewedEmployee.startDate).toLocaleDateString() : '-'}</p>
+                  <p className="text-gray-500 font-medium">Start Date</p>
+                  <p className="text-lg font-semibold">{viewedEmployee?.startDate ? new Date(viewedEmployee.startDate).toLocaleDateString() : '-'}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">Address:</p>
-                  <p className="font-medium">{viewedEmployee.address || '-'}</p>
+                  <p className="text-gray-500 font-medium">Address</p>
+                  <p className="text-lg font-semibold">{viewedEmployee?.address || '-'}</p>
                 </div>
               </div>
             </div>
-          )}
+          </div>
         </DialogContent>
       </Dialog>
       {/* Edit Employee Dialog (Super Admin only) */}
