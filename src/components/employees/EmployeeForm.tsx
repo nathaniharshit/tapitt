@@ -20,7 +20,8 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
     role: '',
     salary: '',
     startDate: '',
-    address: ''
+    address: '',
+    password: '' // Add password field
   });
 
   const [message, setMessage] = useState('');
@@ -57,7 +58,8 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
           role: formData.role,
           salary: parseFloat(formData.salary),
           startDate: formData.startDate,
-          address: formData.address
+          address: formData.address,
+          password: formData.password // Send password
         })
       });
 
@@ -73,7 +75,8 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
           role: '',
           salary: '',
           startDate: '',
-          address: ''
+          address: '',
+          password: '' // Reset password
         });
 
         if (onEmployeeAdded) onEmployeeAdded();
@@ -140,6 +143,10 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
             <div>
               <Label htmlFor="address">Address</Label>
               <Input name="address" value={formData.address} onChange={handleChange} />
+            </div>
+            <div>
+              <Label htmlFor="password">Temporary Password</Label>
+              <Input name="password" type="password" value={formData.password} onChange={handleChange} required minLength={8} placeholder="At least 8 characters" />
             </div>
           </div>
 
