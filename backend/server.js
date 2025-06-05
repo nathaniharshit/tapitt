@@ -3,6 +3,8 @@ const cors = require('cors');
 const mongoose = require('mongoose');
 const authorizeRoles = require('./middleware/rbac');
 const bcrypt = require('bcrypt');
+const multer = require('multer');
+const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 5050;
 
@@ -25,12 +27,44 @@ const employeeSchema = new mongoose.Schema({
   address: String,
   status: { type: String, default: 'active' },
   password: { type: String, default: '' },
-  mustChangePassword: { type: Boolean, default: true } // New field
+  mustChangePassword: { type: Boolean, default: true },
+  // Additional fields for personal info
+  aadhar: String,
+  dob: String,
+  city: String,
+  state: String,
+  zipcode: String,
+  country: String,
+  emergencyContact: String,
+  upi: String,
+  ifsc: String,
+  experience: String,
+  currentCompany: String,
+  previousCompany: String,
+  skills: String,
+  linkedin: String,
+  github: String,
+  picture: String // Store as URL or base64 string
 });  
 
 const Employee = mongoose.model('Employee', employeeSchema);
 app.use(cors()); // allow all origins for now
 app.use(express.json());
+
+// Multer config for file uploads
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, path.join(__dirname, 'uploads'));
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, uniqueSuffix + '-' + file.originalname);
+  }
+});
+const upload = multer({ storage: storage, limits: { fileSize: 10 * 1024 * 1024 } }); // 10MB limit
+
+// Serve uploads as static files
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 app.get('/', (req, res) => {
   res.send('Backend is running!');
@@ -60,11 +94,21 @@ app.get('/api/employees', async (req, res) => {
   }
 });
 
-app.put('/api/employees/:id', async (req, res) => {
+// Update employee with file upload
+app.put('/api/employees/:id', upload.single('picture'), async (req, res) => {
   try {
+    let updateData = req.body;
+    // If a file was uploaded, set the picture field to the file URL
+    if (req.file) {
+      updateData.picture = `/uploads/${req.file.filename}`;
+    }
+    // If no file, keep the existing picture if not provided
+    if (!updateData.picture && req.body.existingPicture) {
+      updateData.picture = req.body.existingPicture;
+    }
     const updatedEmployee = await Employee.findByIdAndUpdate(
       req.params.id,
-      req.body,
+      updateData,
       { new: true, runValidators: true }
     );
     if (!updatedEmployee) {
