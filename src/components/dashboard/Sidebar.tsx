@@ -55,7 +55,7 @@ const Sidebar = ({ userRole, activeTab, setActiveTab }: SidebarProps) => {
       id: 'add-employee',
       label: 'Add Employee',
       icon: UserPlus,
-      roles: ['super_admin'] // Only super_admin can see this
+      roles: ['super_admin', 'admin'] // Allow both super_admin and admin
     },
     {
       id: 'admin-panel',

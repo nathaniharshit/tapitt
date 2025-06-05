@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Header from './Header';
 import Sidebar from './Sidebar';
 import EmployeeList from '../employees/EmployeeList';
@@ -32,12 +32,85 @@ const ProtectedRoute = ({ user, allowedRoles, children }) => {
 };
 
 const Dashboard = ({ user, onLogout }: DashboardProps) => {
-  const [activeTab, setActiveTab] = useState('dashboard'); // Always default to dashboard
+  const [activeTab, setActiveTab] = useState('dashboard');
+  const [loginTime, setLoginTime] = useState<string | null>(null);
+  const [clockInTime, setClockInTime] = useState<string | null>(null);
+  const [clockOutTime, setClockOutTime] = useState<string | null>(null);
+  const [isClockedIn, setIsClockedIn] = useState(false);
+
+  useEffect(() => {
+    // Fetch login time for the current user
+    const fetchLoginTime = async () => {
+      try {
+        const res = await fetch(`http://localhost:5050/api/employees`);
+        const employees = await res.json();
+        const emp = employees.find((e: any) => e.email === user.email);
+        if (emp && emp.lastLogin) {
+          setLoginTime(emp.lastLogin);
+        } else {
+          setLoginTime(null);
+        }
+      } catch {
+        setLoginTime(null);
+      }
+    };
+    fetchLoginTime();
+  }, [user.email]);
+
+  // Fetch clock-in/out times for the current user
+  useEffect(() => {
+    const fetchClockTimes = async () => {
+      try {
+        const res = await fetch(`http://localhost:5050/api/employees`);
+        const employees = await res.json();
+        const emp = employees.find((e: any) => e.email === user.email);
+        if (emp) {
+          setClockInTime(emp.clockInTime || null);
+          setClockOutTime(emp.clockOutTime || null);
+          setIsClockedIn(!!emp.clockInTime && !emp.clockOutTime);
+        }
+      } catch {
+        setClockInTime(null);
+        setClockOutTime(null);
+        setIsClockedIn(false);
+      }
+    };
+    fetchClockTimes();
+  }, [user.email]);
+
+  const handleClockIn = async () => {
+    await fetch(`http://localhost:5050/api/employees/${user.id}/clockin`, { method: 'POST' });
+    setIsClockedIn(true);
+    setClockInTime(new Date().toISOString());
+    setClockOutTime(null);
+  };
+  const handleClockOut = async () => {
+    await fetch(`http://localhost:5050/api/employees/${user.id}/clockout`, { method: 'POST' });
+    setIsClockedIn(false);
+    setClockOutTime(new Date().toISOString());
+  };
 
   // Unified dashboard for all roles
   const renderContent = () => {
     switch (activeTab) {
       case 'dashboard':
+        // Calculate time since clock-in
+        let timesheetDisplay = '0h 0m';
+        if (clockInTime && !clockOutTime) {
+          const clockInDate = new Date(clockInTime);
+          const now = new Date();
+          const diffMs = now.getTime() - clockInDate.getTime();
+          const hours = Math.floor(diffMs / (1000 * 60 * 60));
+          const minutes = Math.floor((diffMs / (1000 * 60)) % 60);
+          timesheetDisplay = `${hours}h ${minutes}m`;
+        } else if (clockInTime && clockOutTime) {
+          const clockInDate = new Date(clockInTime);
+          const clockOutDate = new Date(clockOutTime);
+          const diffMs = clockOutDate.getTime() - clockInDate.getTime();
+          const hours = Math.floor(diffMs / (1000 * 60 * 60));
+          const minutes = Math.floor((diffMs / (1000 * 60)) % 60);
+          timesheetDisplay = `${hours}h ${minutes}m`;
+        }
         return (
           <div className="p-4 md:p-8">
             <h2 className="text-2xl font-bold mb-6">Welcome to your Dashboard</h2>
@@ -48,8 +121,24 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                   <CardTitle>Timesheet</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-4xl font-bold text-blue-600 mb-2">8h 15m</div>
-                  <div className="text-gray-600">Today's logged hours</div>
+                  <div className="text-4xl font-bold text-blue-600 mb-2">{timesheetDisplay}</div>
+                  <div className="text-gray-600 mb-2">{isClockedIn ? 'Clocked in' : clockInTime && clockOutTime ? 'Clocked out' : 'Not clocked in yet'}</div>
+                  <div className="flex space-x-2">
+                    <button
+                      className="px-4 py-2 rounded bg-green-600 text-white font-semibold disabled:opacity-50"
+                      onClick={handleClockIn}
+                      disabled={isClockedIn}
+                    >
+                      Clock In
+                    </button>
+                    <button
+                      className="px-4 py-2 rounded bg-red-600 text-white font-semibold disabled:opacity-50"
+                      onClick={handleClockOut}
+                      disabled={!isClockedIn}
+                    >
+                      Clock Out
+                    </button>
+                  </div>
                 </CardContent>
               </Card>
               {/* On Leave Today Widget */}
@@ -153,7 +242,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
       case 'employees':
         return <EmployeeList userRole={user.role} />;
       case 'add-employee':
-        return user.role === 'super_admin' ? <EmployeeForm /> : <EmployeeList userRole={user.role} />;
+        return (user.role === 'super_admin' || user.role === 'admin') ? <EmployeeForm /> : <EmployeeList userRole={user.role} />;
       case 'admin-panel':
         return <AdminPanel userRole={user.role} />;
       case 'reports':

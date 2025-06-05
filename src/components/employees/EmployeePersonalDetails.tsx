@@ -123,22 +123,24 @@ const EmployeePersonalDetails = ({ user }: EmployeePersonalDetailsProps) => {
     try {
       let body;
       let headers;
-      if (form.picture && form.picture !== details.picture && form.picture instanceof File) {
+      // If either picture or aadhar is a new File, use FormData
+      const isPictureFile = form.picture && form.picture !== details.picture && form.picture instanceof File;
+      const isAadharFile = form.aadhar && form.aadhar !== details.aadhar && typeof form.aadhar === 'object' && form.aadhar !== null && 'name' in (form.aadhar as any);
+      if (isPictureFile || isAadharFile) {
         body = new FormData();
         Object.entries(form).forEach(([key, value]) => {
-          if (key === 'picture' && value instanceof File) {
+          if ((key === 'picture' || key === 'aadhar') && value instanceof File) {
             body.append(key, value);
-          } else if (key !== 'picture') {
+          } else if (key !== 'picture' && key !== 'aadhar') {
             body.append(key, value as string);
           }
         });
         headers = undefined;
       } else {
-        // Don't send the picture field if it's a File (only send string/URL)
+        // Don't send the picture/aadhar field if it's a File (only send string/URL)
         const formToSend = { ...form };
-        if (formToSend.picture instanceof File) {
-          delete formToSend.picture;
-        }
+        if (formToSend.picture instanceof File) delete formToSend.picture;
+        if (formToSend.aadhar && typeof formToSend.aadhar === 'object' && 'name' in (formToSend.aadhar as any)) delete formToSend.aadhar;
         body = JSON.stringify({ ...details, ...formToSend });
         headers = { 'Content-Type': 'application/json' };
       }
@@ -188,6 +190,20 @@ const EmployeePersonalDetails = ({ user }: EmployeePersonalDetailsProps) => {
         }
       } else if (summary.picture instanceof File) {
         pictureUrl = URL.createObjectURL(summary.picture);
+      }
+    }
+    let aadharUrl = '';
+    if (summary.aadhar) {
+      if (typeof summary.aadhar === 'string') {
+        if (summary.aadhar.startsWith('/uploads/')) {
+          aadharUrl = `http://localhost:5050${summary.aadhar}`;
+        } else if (summary.aadhar.startsWith('http')) {
+          aadharUrl = summary.aadhar;
+        } else {
+          aadharUrl = summary.aadhar;
+        }
+      } else if (summary.aadhar instanceof File) {
+        aadharUrl = URL.createObjectURL(summary.aadhar);
       }
     }
     return (
@@ -244,6 +260,13 @@ const EmployeePersonalDetails = ({ user }: EmployeePersonalDetailsProps) => {
                 <span>No picture uploaded</span>
               )}
             </div>
+            <div>
+              <b>Aadhar Photo:</b> {aadharUrl ? (
+                <img src={aadharUrl} alt="Aadhar" className="h-24 w-24 object-cover rounded border" />
+              ) : (
+                <span>No aadhar photo uploaded</span>
+              )}
+            </div>
             <div className="flex space-x-2 mt-4">
               <Button type="button" onClick={handleEdit}>Edit</Button>
             </div>
@@ -272,7 +295,11 @@ const EmployeePersonalDetails = ({ user }: EmployeePersonalDetailsProps) => {
               <Input name="email" placeholder="Email" value={form.email} onChange={handleChange} />
               <Input name="phone" placeholder="Phone Number" value={form.phone} onChange={handleChange} />
               <Input name="dob" placeholder="Date of Birth" type="date" value={form.dob} onChange={handleChange} />
-              <Input name="aadhar" placeholder="Aadhar Number" value={form.aadhar} onChange={handleChange} />
+              <Label htmlFor="aadhar" className="font-bold">Aadhar Photo</Label>
+              <input name="aadhar" type="file" accept="image/*" onChange={handleChange} className="w-full border-dashed border-2 rounded-md p-4 text-center cursor-pointer" />
+              {form.aadhar && typeof form.aadhar === 'string' && form.aadhar.startsWith('/uploads/') && (
+                <img src={`http://localhost:5050${form.aadhar}`} alt="Aadhar" className="h-24 w-24 object-cover rounded border mt-2" />
+              )}
               <Input name="city" placeholder="City" value={form.city} onChange={handleChange} />
               <Input name="state" placeholder="State" value={form.state} onChange={handleChange} />
               <Input name="zipcode" placeholder="Zip Code" value={form.zipcode} onChange={handleChange} />

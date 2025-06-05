@@ -29,7 +29,7 @@ const employeeSchema = new mongoose.Schema({
   password: { type: String, default: '' },
   mustChangePassword: { type: Boolean, default: true },
   // Additional fields for personal info
-  aadhar: String,
+  aadhar: String, // Now will store the file URL
   dob: String,
   city: String,
   state: String,
@@ -44,7 +44,10 @@ const employeeSchema = new mongoose.Schema({
   skills: String,
   linkedin: String,
   github: String,
-  picture: String // Store as URL or base64 string
+  picture: String, // Store as URL or base64 string
+  lastLogin: Date,
+  clockInTime: Date,
+  clockOutTime: Date
 });  
 
 const Employee = mongoose.model('Employee', employeeSchema);
@@ -95,16 +98,34 @@ app.get('/api/employees', async (req, res) => {
 });
 
 // Update employee with file upload
-app.put('/api/employees/:id', upload.single('picture'), async (req, res) => {
+app.put('/api/employees/:id', upload.fields([
+  { name: 'picture', maxCount: 1 },
+  { name: 'aadhar', maxCount: 1 }
+]), async (req, res) => {
   try {
-    let updateData = req.body;
-    // If a file was uploaded, set the picture field to the file URL
-    if (req.file) {
-      updateData.picture = `/uploads/${req.file.filename}`;
+    let updateData = { ...req.body };
+    // Multer fields: req.body fields are always strings, so fix arrays/objects if needed
+    // If a profile picture was uploaded, set the picture field to the file URL
+    if (req.files && req.files['picture']) {
+      updateData.picture = `/uploads/${req.files['picture'][0].filename}`;
     }
-    // If no file, keep the existing picture if not provided
+    // If an aadhar file was uploaded, set the aadhar field to the file URL
+    if (req.files && req.files['aadhar']) {
+      updateData.aadhar = `/uploads/${req.files['aadhar'][0].filename}`;
+    }
+    // Fix: If using multipart/form-data, convert empty strings to undefined/null for optional fields
+    Object.keys(updateData).forEach(key => {
+      if (updateData[key] === '') updateData[key] = undefined;
+    });
+    // Fix: If using multipart/form-data, numeric and boolean fields come as strings, so cast as needed
+    if (updateData.salary) updateData.salary = Number(updateData.salary);
+    if (updateData.mustChangePassword !== undefined) updateData.mustChangePassword = updateData.mustChangePassword === 'true' || updateData.mustChangePassword === true;
+    // If no file, keep the existing picture/aadhar if not provided
     if (!updateData.picture && req.body.existingPicture) {
       updateData.picture = req.body.existingPicture;
+    }
+    if (!updateData.aadhar && req.body.existingAadhar) {
+      updateData.aadhar = req.body.existingAadhar;
     }
     const updatedEmployee = await Employee.findByIdAndUpdate(
       req.params.id,
@@ -147,6 +168,9 @@ app.post('/api/login', async (req, res) => {
     if (!isMatch) {
       return res.status(401).json({ error: 'Invalid email or password' });
     }
+    // Update lastLogin timestamp
+    employee.lastLogin = new Date();
+    await employee.save();
     // Return mustChangePassword flag for frontend
     res.json({ message: 'Login successful', employee: {
       _id: employee._id,
@@ -154,7 +178,8 @@ app.post('/api/login', async (req, res) => {
       role: employee.role,
       mustChangePassword: employee.mustChangePassword,
       firstname: employee.firstname,
-      lastname: employee.lastname
+      lastname: employee.lastname,
+      lastLogin: employee.lastLogin
     }});
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -178,6 +203,36 @@ app.post('/api/employees/:id/set-password', async (req, res) => {
       return res.status(404).json({ error: 'Employee not found' });
     }
     res.json({ message: 'Password set successfully' });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Clock-in endpoint
+app.post('/api/employees/:id/clockin', async (req, res) => {
+  try {
+    const employee = await Employee.findByIdAndUpdate(
+      req.params.id,
+      { clockInTime: new Date(), clockOutTime: undefined },
+      { new: true }
+    );
+    if (!employee) return res.status(404).json({ error: 'Employee not found' });
+    res.json({ message: 'Clocked in', clockInTime: employee.clockInTime });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Clock-out endpoint
+app.post('/api/employees/:id/clockout', async (req, res) => {
+  try {
+    const employee = await Employee.findByIdAndUpdate(
+      req.params.id,
+      { clockOutTime: new Date() },
+      { new: true }
+    );
+    if (!employee) return res.status(404).json({ error: 'Employee not found' });
+    res.json({ message: 'Clocked out', clockOutTime: employee.clockOutTime });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }

@@ -122,7 +122,22 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
             </div>
             <div>
               <Label htmlFor="department">Department</Label>
-              <Input name="department" value={formData.department} onChange={handleChange} />
+              <select
+                name="department"
+                value={formData.department}
+                onChange={e => setFormData({ ...formData, department: e.target.value })}
+                required
+                className="w-full mt-1 mb-2 border rounded-md px-3 py-2"
+              >
+                <option value="">Select department</option>
+                <option value="HR">HR</option>
+                <option value="Engineering">Engineering</option>
+                <option value="Sales">Sales</option>
+                <option value="Marketing">Marketing</option>
+                <option value="Finance">Finance</option>
+                <option value="Support">Support</option>
+                <option value="Other">Other</option>
+              </select>
             </div>
             <div>
               <Label htmlFor="position">Position</Label>
