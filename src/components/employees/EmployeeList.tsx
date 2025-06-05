@@ -17,6 +17,7 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editEmployee, setEditEmployee] = useState<any | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [secondsSinceJoin, setSecondsSinceJoin] = useState<{ [id: string]: number }>({});
 
   useEffect(() => {
     fetch('http://localhost:5050/api/employees')
@@ -77,6 +78,17 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
     }
   };
 
+  // Expose a function to refresh employees (for dashboard to call after clock in/out)
+  const refreshEmployees = async () => {
+    try {
+      const res = await fetch('http://localhost:5050/api/employees');
+      const data = await res.json();
+      setEmployees(data);
+    } catch {
+      setEmployees([]);
+    }
+  };
+
   const handleDelete = async (employee: any) => {
     if (window.confirm(`Are you sure you want to delete ${employee.firstname} ${employee.lastname}?`)) {
       try {
@@ -94,6 +106,21 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
       }
     }
   };
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setSecondsSinceJoin((prev) => {
+        const updated: { [id: string]: number } = {};
+        employees.forEach((employee: any) => {
+          if (employee.startDate) {
+            updated[employee._id] = Math.floor((Date.now() - new Date(employee.startDate).getTime()) / 1000);
+          }
+        });
+        return updated;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [employees]);
 
   return (
     <div className="space-y-6">
@@ -139,6 +166,12 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
                   <p className="text-sm text-gray-500 mt-1">
                     Joined: {new Date(employee.startDate).toLocaleDateString()}
                   </p>
+                  {/* Show seconds since joining (live) */}
+                  {employee.startDate && (
+                    <p className="text-xs text-gray-400 mt-1">
+                      Seconds since joining: {secondsSinceJoin[employee._id] ?? Math.floor((Date.now() - new Date(employee.startDate).getTime()) / 1000)}
+                    </p>
+                  )}
                   </div>
                   
                   <div className="flex space-x-2">

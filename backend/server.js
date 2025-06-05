@@ -47,7 +47,8 @@ const employeeSchema = new mongoose.Schema({
   picture: String, // Store as URL or base64 string
   lastLogin: Date,
   clockInTime: Date,
-  clockOutTime: Date
+  clockOutTime: Date,
+  attendance: [String] // Array of date strings (YYYY-MM-DD)
 });  
 
 const Employee = mongoose.model('Employee', employeeSchema);
@@ -236,6 +237,30 @@ app.post('/api/employees/:id/clockout', async (req, res) => {
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
+});
+
+// Middleware to mark attendance on login
+app.use(async (req, res, next) => {
+  // Add this to mark attendance on login
+  if (req.path === '/api/login' && req.method === 'POST') {
+    // After successful login, mark today's attendance
+    const { email, password } = req.body;
+    try {
+      const employee = await Employee.findOne({ email });
+      if (employee) {
+        const today = new Date();
+        const dateStr = today.toISOString().substring(0, 10); // YYYY-MM-DD
+        if (!employee.attendance) employee.attendance = [];
+        if (!employee.attendance.includes(dateStr)) {
+          employee.attendance.push(dateStr);
+          await employee.save();
+        }
+      }
+    } catch (err) {
+      console.error('Error marking attendance:', err);
+    }
+  }
+  next();
 });
 
 app.listen(PORT, () => {
