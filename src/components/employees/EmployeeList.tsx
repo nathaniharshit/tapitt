@@ -17,7 +17,6 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editEmployee, setEditEmployee] = useState<any | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [secondsSinceJoin, setSecondsSinceJoin] = useState<{ [id: string]: number }>({});
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' | '' }>({ text: '', type: '' });
   const [deleteEmployee, setDeleteEmployee] = useState<any | null>(null); // For delete confirmation dialog
 
@@ -55,7 +54,14 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
   };
 
   const handleEditChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setEditEmployee({ ...editEmployee, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    if (name === 'salary') {
+      // Remove non-digit characters except dot, then format
+      const numericValue = value.replace(/[^0-9.]/g, '');
+      setEditEmployee({ ...editEmployee, [name]: numericValue });
+    } else {
+      setEditEmployee({ ...editEmployee, [name]: value });
+    }
   };
 
   const handleEditSave = async () => {
@@ -112,21 +118,6 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
     setDeleteEmployee(null); // Close dialog
   };
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setSecondsSinceJoin((prev) => {
-        const updated: { [id: string]: number } = {};
-        employees.forEach((employee: any) => {
-          if (employee.startDate) {
-            updated[employee._id] = Math.floor((Date.now() - new Date(employee.startDate).getTime()) / 1000);
-          }
-        });
-        return updated;
-      });
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [employees]);
-
   // Clear message after 3 seconds
   useEffect(() => {
     if (message.text) {
@@ -134,6 +125,14 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
       return () => clearTimeout(timer);
     }
   }, [message]);
+
+  // Helper function for formatting salary
+  const formatSalary = (salary: number | string) => {
+    if (!salary && salary !== 0) return '-';
+    const num = typeof salary === 'string' ? Number(salary) : salary;
+    if (isNaN(num)) return '-';
+    return `₹${num.toLocaleString('en-IN')}`;
+  };
 
   return (
     <div className="space-y-6">
@@ -191,11 +190,6 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
                   <p className="text-sm text-gray-500 mt-1">
                     Joined: {new Date(employee.startDate).toLocaleDateString()}
                   </p>
-                  {employee.startDate && (
-                    <p className="text-xs text-gray-400 mt-1">
-                      Seconds since joining: {secondsSinceJoin[employee._id] ?? Math.floor((Date.now() - new Date(employee.startDate).getTime()) / 1000)}
-                    </p>
-                  )}
                 </div>
                 <div className="flex space-x-2">
                   <Button variant="outline" size="sm" onClick={() => handleView(employee)}>
@@ -270,10 +264,13 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
                   <p className="text-gray-500 font-medium">Role</p>
                   <p className="text-lg font-semibold">{viewedEmployee?.role}</p>
                 </div>
-                <div>
-                  <p className="text-gray-500 font-medium">Salary</p>
-                  <p className="text-lg font-semibold">{viewedEmployee?.salary || '-'}</p>
-                </div>
+                {/* Only show salary if userRole is super_admin or admin */}
+                {(userRole === 'super_admin' || userRole === 'admin') && (
+                  <div>
+                    <p className="text-gray-500 font-medium">Salary</p>
+                    <p className="text-lg font-semibold">{formatSalary(viewedEmployee?.salary)}</p>
+                  </div>
+                )}
                 <div>
                   <p className="text-gray-500 font-medium">Start Date</p>
                   <p className="text-lg font-semibold">{viewedEmployee?.startDate ? new Date(viewedEmployee.startDate).toLocaleDateString() : '-'}</p>
@@ -281,10 +278,6 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
                 <div>
                   <p className="text-gray-500 font-medium">Address</p>
                   <p className="text-lg font-semibold">{viewedEmployee?.address || '-'}</p>
-                </div>
-                <div>
-                  <p className="text-gray-500 font-medium">Aadhar Number</p>
-                  <p className="text-lg font-semibold">{viewedEmployee?.aadhar || '-'}</p>
                 </div>
               </div>
             </div>
@@ -330,7 +323,15 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
                 </div>
                 <div>
                   <label className="text-sm text-gray-500">Salary</label>
-                  <Input name="salary" value={editEmployee.salary || ''} onChange={handleEditChange} />
+                  <Input
+                    name="salary"
+                    value={
+                      editEmployee.salary
+                        ? Number(editEmployee.salary).toLocaleString('en-IN')
+                        : ''
+                    }
+                    onChange={handleEditChange}
+                  />
                 </div>
                 <div>
                   <label className="text-sm text-gray-500">Start Date</label>

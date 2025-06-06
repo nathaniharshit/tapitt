@@ -19,17 +19,6 @@ const employeeSchema = new mongoose.Schema({
   lastname: String,
   email: String,
   phone: String,
-  department: String,
-  position: String,
-  role: String,
-  salary: Number,
-  startDate: Date,
-  address: String,
-  status: { type: String, default: 'active' },
-  password: { type: String, default: '' },
-  mustChangePassword: { type: Boolean, default: true },
-  // Additional fields for personal info
-  aadhar: String, // Now just the number, not a file/photo
   dob: String,
   city: String,
   state: String,
@@ -44,11 +33,8 @@ const employeeSchema = new mongoose.Schema({
   skills: String,
   linkedin: String,
   github: String,
+  status: String,
   picture: String, // Store as URL or base64 string
-  lastLogin: Date,
-  clockInTime: Date,
-  clockOutTime: Date,
-  attendance: [String], // Array of date strings (YYYY-MM-DD)
   employmentType: {
     type: String,
     enum: ['employee', 'intern'],
@@ -79,6 +65,12 @@ app.get('/', (req, res) => {
   res.send('Backend is running!');
 });
 
+const allowedFields = [
+  'firstname', 'lastname', 'email', 'phone', 'dob', 'city', 'state', 'zipcode', 'country',
+  'emergencyContact', 'upi', 'ifsc', 'experience', 'currentCompany', 'previousCompany', 'skills',
+  'linkedin', 'github', 'status', 'picture', 'employmentType'
+];
+
 app.post('/api/employees', async (req, res) => {
   try {
     if (!req.body.password || req.body.password.length < 8) {
@@ -86,7 +78,14 @@ app.post('/api/employees', async (req, res) => {
     }
     // Hash the password before saving
     const hashedPassword = await bcrypt.hash(req.body.password, 10);
-    const employee = new Employee({ ...req.body, password: hashedPassword, mustChangePassword: true });
+    // Only pick allowed fields
+    const employeeData = {};
+    allowedFields.forEach(field => {
+      if (req.body[field] !== undefined) employeeData[field] = req.body[field];
+    });
+    employeeData.password = hashedPassword;
+    employeeData.mustChangePassword = true;
+    const employee = new Employee(employeeData);
     await employee.save();
     res.status(201).json(employee);
   } catch (err) {
@@ -109,24 +108,17 @@ app.put('/api/employees/:id', upload.fields([
   // Remove aadhar from multer fields
 ]), async (req, res) => {
   try {
-    let updateData = { ...req.body };
-    // Multer fields: req.body fields are always strings, so fix arrays/objects if needed
+    let updateData = {};
+    allowedFields.forEach(field => {
+      if (req.body[field] !== undefined) updateData[field] = req.body[field];
+    });
     // If a profile picture was uploaded, set the picture field to the file URL
     if (req.files && req.files['picture']) {
       updateData.picture = `/uploads/${req.files['picture'][0].filename}`;
     }
-    // Remove aadhar file upload logic
-    // Fix: If using multipart/form-data, convert empty strings to undefined/null for optional fields
     Object.keys(updateData).forEach(key => {
       if (updateData[key] === '') updateData[key] = undefined;
     });
-    // Fix: If using multipart/form-data, numeric and boolean fields come as strings, so cast as needed
-    if (updateData.salary) updateData.salary = Number(updateData.salary);
-    if (updateData.mustChangePassword !== undefined) updateData.mustChangePassword = updateData.mustChangePassword === 'true' || updateData.mustChangePassword === true;
-    // If no file, keep the existing picture if not provided
-    if (!updateData.picture && req.body.existingPicture) {
-      updateData.picture = req.body.existingPicture;
-    }
     const updatedEmployee = await Employee.findByIdAndUpdate(
       req.params.id,
       updateData,
@@ -260,6 +252,30 @@ app.use(async (req, res, next) => {
     }
   }
   next();
+});
+
+// Add this endpoint before app.listen
+app.get('/api/employees/roles-count', async (req, res) => {
+  try {
+    const counts = await Employee.aggregate([
+      {
+        $group: {
+          _id: '$role',
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+    // Convert to { super_admin: X, admin: Y, employee: Z }
+    const result = { super_admin: 0, admin: 0, employee: 0 };
+    counts.forEach(item => {
+      if (item._id === 'super_admin' || item._id === 'superadmin') result.super_admin = item.count;
+      else if (item._id === 'admin') result.admin = item.count;
+      else if (item._id === 'employee') result.employee = item.count;
+    });
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.listen(PORT, () => {

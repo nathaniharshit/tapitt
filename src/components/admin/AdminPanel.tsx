@@ -1,14 +1,39 @@
-
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Shield, Users, Database, Settings } from 'lucide-react';
+import { useEffect, useState } from 'react';
 
 interface AdminPanelProps {
   userRole: 'super_admin' | 'admin' | 'employee';
 }
 
 const AdminPanel = ({ userRole }: AdminPanelProps) => {
+  const [counts, setCounts] = useState<{ super_admin: number; admin: number; employee: number }>({
+    super_admin: 0,
+    admin: 0,
+    employee: 0,
+  });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchCounts = async () => {
+      setLoading(true);
+      try {
+        const res = await fetch('http://localhost:5050/api/employees/roles-count');
+        const data = await res.json();
+        setCounts(data);
+      } catch {
+        setCounts({ super_admin: 0, admin: 0, employee: 0 });
+      }
+      setLoading(false);
+    };
+    fetchCounts();
+    // Optionally, poll every 30 seconds for live updates:
+    const interval = setInterval(fetchCounts, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
   if (userRole !== 'super_admin') {
     return (
       <div className="text-center py-12">
@@ -88,20 +113,22 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="text-center">
-              <div className="text-2xl font-bold text-blue-600">24</div>
-              <div className="text-sm text-gray-600">Total Users</div>
+              <div className="text-2xl font-bold text-blue-600">
+                {loading ? '...' : counts.super_admin}
+              </div>
+              <div className="text-sm text-gray-600">Super Admins</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold text-green-600">18</div>
-              <div className="text-sm text-gray-600">Active Users</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-yellow-600">3</div>
+              <div className="text-2xl font-bold text-green-600">
+                {loading ? '...' : counts.admin}
+              </div>
               <div className="text-sm text-gray-600">Admins</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold text-purple-600">1</div>
-              <div className="text-sm text-gray-600">Super Admin</div>
+              <div className="text-2xl font-bold text-yellow-600">
+                {loading ? '...' : counts.employee}
+              </div>
+              <div className="text-sm text-gray-600">Employees</div>
             </div>
           </div>
         </CardContent>

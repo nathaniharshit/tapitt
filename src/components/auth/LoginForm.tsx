@@ -34,14 +34,14 @@ type DemoUser = {
 const demoUsers: Record<'super_admin' | 'admin' | 'employee', DemoUser> = {
   super_admin: {
     id: '1',
-    name: 'Devsingh Bisht',
+    name: 'Divy Shah',
     email: 'super@tapitt.com',
     password: 'super123',
     role: 'super_admin'
   },
   admin: {
     id: '2',
-    name: 'Pranay Pandey',
+    name: 'Nilay Shah',
     email: 'admin@tapitt.com',
     password: 'admin123',
     role: 'admin'

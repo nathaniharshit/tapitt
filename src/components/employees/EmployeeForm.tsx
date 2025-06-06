@@ -37,7 +37,22 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
   }, [message]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    if (name === 'salary') {
+      // Remove all non-digit except dot, then format with commas for display
+      const numericValue = value.replace(/[^0-9.]/g, '');
+      setFormData({ ...formData, [name]: numericValue });
+    } else {
+      setFormData({ ...formData, [name]: value });
+    }
+  };
+
+  // Helper to format salary for input display
+  const formatSalaryInput = (salary: string) => {
+    if (!salary) return '';
+    const num = Number(salary.replace(/,/g, ''));
+    if (isNaN(num)) return '';
+    return num.toLocaleString('en-IN');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -58,7 +73,7 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
           department: formData.department,
           position: formData.position,
           role: formData.role,
-          salary: parseFloat(formData.salary),
+          salary: parseFloat(formData.salary.replace(/,/g, '')), // Remove commas before sending
           startDate: formData.startDate,
           address: formData.address,
           password: formData.password,
@@ -180,7 +195,15 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
             </div>
             <div>
               <Label htmlFor="salary">Salary</Label>
-              <Input type="number" name="salary" value={formData.salary} onChange={handleChange} />
+              <Input
+                type="text"
+                name="salary"
+                value={formatSalaryInput(formData.salary)}
+                onChange={handleChange}
+                inputMode="numeric"
+                pattern="[0-9,]*"
+                autoComplete="off"
+              />
             </div>
             <div>
               <Label htmlFor="startDate">Start Date</Label>
