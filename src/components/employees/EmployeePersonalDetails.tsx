@@ -192,20 +192,6 @@ const EmployeePersonalDetails = ({ user }: EmployeePersonalDetailsProps) => {
         pictureUrl = URL.createObjectURL(summary.picture);
       }
     }
-    let aadharUrl = '';
-    if (summary.aadhar) {
-      if (typeof summary.aadhar === 'string') {
-        if (summary.aadhar.startsWith('/uploads/')) {
-          aadharUrl = `http://localhost:5050${summary.aadhar}`;
-        } else if (summary.aadhar.startsWith('http')) {
-          aadharUrl = summary.aadhar;
-        } else {
-          aadharUrl = summary.aadhar;
-        }
-      } else if (summary.aadhar instanceof File) {
-        aadharUrl = URL.createObjectURL(summary.aadhar);
-      }
-    }
     return (
       <Card className="max-w-2xl mx-auto mt-8">
         <CardHeader>
@@ -260,13 +246,6 @@ const EmployeePersonalDetails = ({ user }: EmployeePersonalDetailsProps) => {
                 <span>No picture uploaded</span>
               )}
             </div>
-            <div>
-              <b>Aadhar Photo:</b> {aadharUrl ? (
-                <img src={aadharUrl} alt="Aadhar" className="h-24 w-24 object-cover rounded border" />
-              ) : (
-                <span>No aadhar photo uploaded</span>
-              )}
-            </div>
             <div className="flex space-x-2 mt-4">
               <Button type="button" onClick={handleEdit}>Edit</Button>
             </div>
@@ -288,18 +267,23 @@ const EmployeePersonalDetails = ({ user }: EmployeePersonalDetailsProps) => {
           handleSave();
         }}>
           <div>
-            <h2 className="text-lg font-bold mb-2">Tell us a bit more about yourself</h2>
+            <h2 className="text-lg font-bold mb-2">Personal Details</h2>
             <div className="grid grid-cols-2 gap-4 mb-2">
               <Input name="firstname" placeholder="First Name" value={form.firstname} onChange={handleChange} />
               <Input name="lastname" placeholder="Last Name" value={form.lastname} onChange={handleChange} />
               <Input name="email" placeholder="Email" value={form.email} onChange={handleChange} />
               <Input name="phone" placeholder="Phone Number" value={form.phone} onChange={handleChange} />
               <Input name="dob" placeholder="Date of Birth" type="date" value={form.dob} onChange={handleChange} />
-              <Label htmlFor="aadhar" className="font-bold">Aadhar Photo</Label>
-              <input name="aadhar" type="file" accept="image/*" onChange={handleChange} className="w-full border-dashed border-2 rounded-md p-4 text-center cursor-pointer" />
-              {form.aadhar && typeof form.aadhar === 'string' && form.aadhar.startsWith('/uploads/') && (
-                <img src={`http://localhost:5050${form.aadhar}`} alt="Aadhar" className="h-24 w-24 object-cover rounded border mt-2" />
-              )}
+              <Input
+                name="aadhar"
+                placeholder="Aadhar Number"
+                value={form.aadhar}
+                onChange={handleChange}
+                required
+                minLength={12}
+                maxLength={12}
+                pattern="\d{12}"
+              />
               <Input name="city" placeholder="City" value={form.city} onChange={handleChange} />
               <Input name="state" placeholder="State" value={form.state} onChange={handleChange} />
               <Input name="zipcode" placeholder="Zip Code" value={form.zipcode} onChange={handleChange} />

@@ -22,7 +22,8 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
     startDate: '',
     address: '',
     password: '',
-    employmentType: '', // NEW FIELD
+    employmentType: 'employee', // Set default value to 'employee'
+    aadhar: '', // Add this field for the number
   });
 
   const [message, setMessage] = useState('');
@@ -35,7 +36,7 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
     }
   }, [message]);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
@@ -62,6 +63,7 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
           address: formData.address,
           password: formData.password,
           employmentType: formData.employmentType, // NEW FIELD
+          aadhar: formData.aadhar, // Add this field to the POST body
         })
       });
 
@@ -79,7 +81,8 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
           startDate: '',
           address: '',
           password: '',
-          employmentType: '', // Reset field
+          employmentType: 'employee', // Reset to default value, not empty string
+          aadhar: '',
         });
 
         if (onEmployeeAdded) onEmployeeAdded();
@@ -128,7 +131,7 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
               <select
                 name="department"
                 value={formData.department}
-                onChange={e => setFormData({ ...formData, department: e.target.value })}
+                onChange={handleChange}
                 required
                 className="w-full mt-1 mb-2 border rounded-md px-3 py-2"
               >
@@ -151,7 +154,7 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
               <select
                 name="role"
                 value={formData.role}
-                onChange={e => setFormData({ ...formData, role: e.target.value })}
+                onChange={handleChange}
                 required
                 className="w-full mt-1 mb-2 border rounded-md px-3 py-2"
               >
@@ -166,7 +169,7 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
               <select
                 name="employmentType"
                 value={formData.employmentType}
-                onChange={(e) => setFormData({ ...formData, employmentType: e.target.value })}
+                onChange={handleChange}
                 required
                 className="w-full mt-1 mb-2 border rounded-md px-3 py-2"
               >
@@ -191,6 +194,7 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
               <Label htmlFor="password">Temporary Password</Label>
               <Input name="password" type="password" value={formData.password} onChange={handleChange} required minLength={8} placeholder="At least 8 characters" />
             </div>
+           
           </div>
 
           <Button type="submit" disabled={loading}>

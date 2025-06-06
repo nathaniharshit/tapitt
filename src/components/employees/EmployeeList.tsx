@@ -18,6 +18,8 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
   const [editEmployee, setEditEmployee] = useState<any | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [secondsSinceJoin, setSecondsSinceJoin] = useState<{ [id: string]: number }>({});
+  const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' | '' }>({ text: '', type: '' });
+  const [deleteEmployee, setDeleteEmployee] = useState<any | null>(null); // For delete confirmation dialog
 
   useEffect(() => {
     fetch('http://localhost:5050/api/employees')
@@ -65,16 +67,15 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
         body: JSON.stringify(editEmployee),
       });
       if (response.ok) {
-        // Update local state
         setEmployees((prev) => prev.map(emp => emp._id === editEmployee._id ? editEmployee : emp));
         setIsEditDialogOpen(false);
         setEditEmployee(null);
-        alert('Employee updated successfully!');
+        setMessage({ text: 'Employee updated successfully!', type: 'success' });
       } else {
-        alert('Failed to update employee.');
+        setMessage({ text: 'Failed to update employee.', type: 'error' });
       }
     } catch (err) {
-      alert('Network error.');
+      setMessage({ text: 'Network error.', type: 'error' });
     }
   };
 
@@ -90,21 +91,25 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
   };
 
   const handleDelete = async (employee: any) => {
-    if (window.confirm(`Are you sure you want to delete ${employee.firstname} ${employee.lastname}?`)) {
-      try {
-        const response = await fetch(`http://localhost:5050/api/employees/${employee._id}`, {
-          method: 'DELETE',
-        });
-        if (response.ok) {
-          setEmployees((prev) => prev.filter(emp => emp._id !== employee._id));
-          alert('Employee deleted successfully!');
-        } else {
-          alert('Failed to delete employee.');
-        }
-      } catch (err) {
-        alert('Network error.');
+    setDeleteEmployee(employee); // Open confirmation dialog
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteEmployee) return;
+    try {
+      const response = await fetch(`http://localhost:5050/api/employees/${deleteEmployee._id}`, {
+        method: 'DELETE',
+      });
+      if (response.ok) {
+        setEmployees((prev) => prev.filter(emp => emp._id !== deleteEmployee._id));
+        setMessage({ text: 'Employee deleted successfully!', type: 'success' });
+      } else {
+        setMessage({ text: 'Failed to delete employee.', type: 'error' });
       }
+    } catch (err) {
+      setMessage({ text: 'Network error.', type: 'error' });
     }
+    setDeleteEmployee(null); // Close dialog
   };
 
   useEffect(() => {
@@ -122,8 +127,28 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
     return () => clearInterval(interval);
   }, [employees]);
 
+  // Clear message after 3 seconds
+  useEffect(() => {
+    if (message.text) {
+      const timer = setTimeout(() => setMessage({ text: '', type: '' }), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [message]);
+
   return (
     <div className="space-y-6">
+      {/* Show message */}
+      {message.text && (
+        <div
+          className={`rounded px-4 py-2 mb-2 text-sm font-medium ${
+            message.type === 'success'
+              ? 'bg-green-100 text-green-800 border border-green-200'
+              : 'bg-red-100 text-red-800 border border-red-200'
+          }`}
+        >
+          {message.text}
+        </div>
+      )}
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold text-gray-900">Employee Management</h2>
         <div className="flex items-center space-x-4">
@@ -141,7 +166,7 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
       </div>
 
       {/* Employee Cards Grid */}
-      <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+      <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 md:grid-cols-3">
         {filteredEmployees.map((employee) => (
           <Card key={employee._id} className="flex flex-col h-full">
             <CardContent className="p-6 flex flex-col flex-1">
@@ -182,7 +207,12 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
                     </Button>
                   )}
                   {canDelete && (
-                    <Button variant="outline" size="sm" className="text-red-600 hover:text-red-700" onClick={() => handleDelete(employee)}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-red-600 hover:text-red-700"
+                      onClick={() => handleDelete(employee)}
+                    >
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   )}
@@ -192,6 +222,13 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
           </Card>
         ))}
       </div>
+
+      {filteredEmployees.length === 0 && (
+        <div className="text-center py-12">
+          <p className="text-gray-500">No employees found matching your search.</p>
+        </div>
+      )}
+
       {/* Employee Details Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="w-full max-w-none h-screen p-0 bg-white flex flex-col">
@@ -244,6 +281,10 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
                 <div>
                   <p className="text-gray-500 font-medium">Address</p>
                   <p className="text-lg font-semibold">{viewedEmployee?.address || '-'}</p>
+                </div>
+                <div>
+                  <p className="text-gray-500 font-medium">Aadhar Number</p>
+                  <p className="text-lg font-semibold">{viewedEmployee?.aadhar || '-'}</p>
                 </div>
               </div>
             </div>
@@ -299,6 +340,10 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
                   <label className="text-sm text-gray-500">Address</label>
                   <Input name="address" value={editEmployee.address || ''} onChange={handleEditChange} />
                 </div>
+                <div>
+                  <label className="text-sm text-gray-500">Aadhar Number</label>
+                  <Input name="aadhar" value={editEmployee?.aadhar || ''} onChange={handleEditChange} />
+                </div>
               </div>
               <div className="flex justify-end space-x-2">
                 <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)}>Cancel</Button>
@@ -309,11 +354,29 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
         </DialogContent>
       </Dialog>
 
-      {filteredEmployees.length === 0 && (
-        <div className="text-center py-12">
-          <p className="text-gray-500">No employees found matching your search.</p>
-        </div>
-      )}
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={!!deleteEmployee} onOpenChange={open => { if (!open) setDeleteEmployee(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Employee</DialogTitle>
+          </DialogHeader>
+          <div className="mb-4">
+            Are you sure you want to delete{' '}
+            <span className="font-semibold">
+              {deleteEmployee?.firstname} {deleteEmployee?.lastname}
+            </span>
+            ?
+          </div>
+          <div className="flex justify-end space-x-2">
+            <Button variant="outline" onClick={() => setDeleteEmployee(null)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={confirmDelete}>
+              Delete
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

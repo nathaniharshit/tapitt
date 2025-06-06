@@ -29,7 +29,7 @@ const employeeSchema = new mongoose.Schema({
   password: { type: String, default: '' },
   mustChangePassword: { type: Boolean, default: true },
   // Additional fields for personal info
-  aadhar: String, // Now will store the file URL
+  aadhar: String, // Now just the number, not a file/photo
   dob: String,
   city: String,
   state: String,
@@ -48,7 +48,12 @@ const employeeSchema = new mongoose.Schema({
   lastLogin: Date,
   clockInTime: Date,
   clockOutTime: Date,
-  attendance: [String] // Array of date strings (YYYY-MM-DD)
+  attendance: [String], // Array of date strings (YYYY-MM-DD)
+  employmentType: {
+    type: String,
+    enum: ['employee', 'intern'],
+    required: true
+  }
 });  
 
 const Employee = mongoose.model('Employee', employeeSchema);
@@ -100,8 +105,8 @@ app.get('/api/employees', async (req, res) => {
 
 // Update employee with file upload
 app.put('/api/employees/:id', upload.fields([
-  { name: 'picture', maxCount: 1 },
-  { name: 'aadhar', maxCount: 1 }
+  { name: 'picture', maxCount: 1 }
+  // Remove aadhar from multer fields
 ]), async (req, res) => {
   try {
     let updateData = { ...req.body };
@@ -110,10 +115,7 @@ app.put('/api/employees/:id', upload.fields([
     if (req.files && req.files['picture']) {
       updateData.picture = `/uploads/${req.files['picture'][0].filename}`;
     }
-    // If an aadhar file was uploaded, set the aadhar field to the file URL
-    if (req.files && req.files['aadhar']) {
-      updateData.aadhar = `/uploads/${req.files['aadhar'][0].filename}`;
-    }
+    // Remove aadhar file upload logic
     // Fix: If using multipart/form-data, convert empty strings to undefined/null for optional fields
     Object.keys(updateData).forEach(key => {
       if (updateData[key] === '') updateData[key] = undefined;
@@ -121,12 +123,9 @@ app.put('/api/employees/:id', upload.fields([
     // Fix: If using multipart/form-data, numeric and boolean fields come as strings, so cast as needed
     if (updateData.salary) updateData.salary = Number(updateData.salary);
     if (updateData.mustChangePassword !== undefined) updateData.mustChangePassword = updateData.mustChangePassword === 'true' || updateData.mustChangePassword === true;
-    // If no file, keep the existing picture/aadhar if not provided
+    // If no file, keep the existing picture if not provided
     if (!updateData.picture && req.body.existingPicture) {
       updateData.picture = req.body.existingPicture;
-    }
-    if (!updateData.aadhar && req.body.existingAadhar) {
-      updateData.aadhar = req.body.existingAadhar;
     }
     const updatedEmployee = await Employee.findByIdAndUpdate(
       req.params.id,
