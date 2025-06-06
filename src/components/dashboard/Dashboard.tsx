@@ -38,6 +38,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
   const [clockInTime, setClockInTime] = useState<string | null>(null);
   const [clockOutTime, setClockOutTime] = useState<string | null>(null);
   const [isClockedIn, setIsClockedIn] = useState(false);
+  const [elapsedMs, setElapsedMs] = useState<number>(0);
 
   useEffect(() => {
     // Fetch login time for the current user
@@ -50,6 +51,11 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
           setLoginTime(emp.lastLogin);
         } else {
           setLoginTime(null);
+        }
+        // Always update user.id to the real MongoDB ObjectId if found
+        if (emp && emp._id && user.id !== emp._id) {
+          // Instead of mutating the prop, store the id in state
+          setUserId(emp._id);
         }
       } catch {
         setLoginTime(null);
@@ -79,34 +85,75 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
     fetchClockTimes();
   }, [user.email]);
 
+  // Add a state for userId and use it everywhere instead of user.id
+  const [userId, setUserId] = useState(user.id);
+
+  // Ensure userId is always up to date with the latest employee data
+  useEffect(() => {
+    const fetchAndSetUserId = async () => {
+      try {
+        const res = await fetch(`http://localhost:5050/api/employees`);
+        const employees = await res.json();
+        const emp = employees.find((e: any) => e.email === user.email);
+        if (emp && emp._id) {
+          setUserId(emp._id);
+        }
+      } catch {}
+    };
+    fetchAndSetUserId();
+  }, [user.email]);
+
+  // Only allow clock in/out if userId is a valid MongoDB ObjectId
+  const isValidObjectId = (id: string) => /^[a-f\d]{24}$/i.test(id);
+
   const handleClockIn = async () => {
-    console.log('Clock In: user.id =', user.id);
-    const resp = await fetch(`http://localhost:5050/api/employees/${user.id}/clockin`, { method: 'POST' });
-    const data = await resp.json();
-    console.log('Clock In response:', data);
-    // Fetch latest clock-in/out times from backend
-    const res = await fetch(`http://localhost:5050/api/employees`);
-    const employees = await res.json();
-    const emp = employees.find((e: any) => e.email === user.email);
-    if (emp) {
-      setIsClockedIn(!!emp.clockInTime && !emp.clockOutTime);
-      setClockInTime(emp.clockInTime || null);
-      setClockOutTime(emp.clockOutTime || null);
+    if (!isValidObjectId(userId)) {
+      alert('Invalid user ID. Please contact admin.');
+      return;
+    }
+    try {
+      const resp = await fetch(`http://localhost:5050/api/employees/${userId}/clockin`, { method: 'POST' });
+      const data = await resp.json();
+      if (data.error) {
+        alert('Clock In failed: ' + data.error);
+        return;
+      }
+      // Fetch latest clock-in/out times from backend
+      const res = await fetch(`http://localhost:5050/api/employees`);
+      const employees = await res.json();
+      const emp = employees.find((e: any) => e.email === user.email);
+      if (emp) {
+        setIsClockedIn(!!emp.clockInTime && !emp.clockOutTime);
+        setClockInTime(emp.clockInTime || null);
+        setClockOutTime(emp.clockOutTime || null);
+      }
+    } catch (err) {
+      alert('Clock In failed. Please try again.');
     }
   };
   const handleClockOut = async () => {
-    console.log('Clock Out: user.id =', user.id);
-    const resp = await fetch(`http://localhost:5050/api/employees/${user.id}/clockout`, { method: 'POST' });
-    const data = await resp.json();
-    console.log('Clock Out response:', data);
-    // Fetch latest clock-in/out times from backend
-    const res = await fetch(`http://localhost:5050/api/employees`);
-    const employees = await res.json();
-    const emp = employees.find((e: any) => e.email === user.email);
-    if (emp) {
-      setIsClockedIn(!!emp.clockInTime && !emp.clockOutTime);
-      setClockInTime(emp.clockInTime || null);
-      setClockOutTime(emp.clockOutTime || null);
+    if (!isValidObjectId(userId)) {
+      alert('Invalid user ID. Please contact admin.');
+      return;
+    }
+    try {
+      const resp = await fetch(`http://localhost:5050/api/employees/${userId}/clockout`, { method: 'POST' });
+      const data = await resp.json();
+      if (data.error) {
+        alert('Clock Out failed: ' + data.error);
+        return;
+      }
+      // Fetch latest clock-in/out times from backend
+      const res = await fetch(`http://localhost:5050/api/employees`);
+      const employees = await res.json();
+      const emp = employees.find((e: any) => e.email === user.email);
+      if (emp) {
+        setIsClockedIn(!!emp.clockInTime && !emp.clockOutTime);
+        setClockInTime(emp.clockInTime || null);
+        setClockOutTime(emp.clockOutTime || null);
+      }
+    } catch (err) {
+      alert('Clock Out failed. Please try again.');
     }
   };
 
@@ -129,27 +176,47 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
     return () => clearInterval(interval);
   }, [isClockedIn, clockInTime]);
 
+  useEffect(() => {
+    if (isClockedIn && clockInTime && !clockOutTime) {
+      // Calculate initial elapsed time
+      const clockInDate = new Date(clockInTime);
+      setElapsedMs(Date.now() - clockInDate.getTime());
+      // Start interval
+      const interval = setInterval(() => {
+        setElapsedMs(Date.now() - clockInDate.getTime());
+      }, 1000);
+      return () => clearInterval(interval);
+    } else if (clockInTime && clockOutTime) {
+      // If clocked out, show total duration
+      const clockInDate = new Date(clockInTime);
+      const clockOutDate = new Date(clockOutTime);
+      setElapsedMs(Math.max(0, clockOutDate.getTime() - clockInDate.getTime()));
+    } else {
+      setElapsedMs(0);
+    }
+  }, [isClockedIn, clockInTime, clockOutTime]);
+
+  // Defensive: If clockInTime is in the future, reset to 0
+  useEffect(() => {
+    if (isClockedIn && clockInTime && !clockOutTime) {
+      const clockInDate = new Date(clockInTime);
+      if (Date.now() < clockInDate.getTime()) {
+        setElapsedMs(0);
+      }
+    }
+  }, [isClockedIn, clockInTime, clockOutTime]);
+
   // Unified dashboard for all roles
   const renderContent = () => {
     switch (activeTab) {
       case 'dashboard':
         // Calculate time since clock-in
         let timesheetDisplay = '0h 0m 0s';
-        if (clockInTime && !clockOutTime) {
-          const clockInDate = new Date(clockInTime);
-          const now = new Date();
-          const diffMs = now.getTime() - clockInDate.getTime();
-          const hours = Math.floor(diffMs / (1000 * 60 * 60));
-          const minutes = Math.floor((diffMs / (1000 * 60)) % 60);
-          const seconds = Math.floor((diffMs / 1000) % 60);
-          timesheetDisplay = `${hours}h ${minutes}m ${seconds}s`;
-        } else if (clockInTime && clockOutTime) {
-          const clockInDate = new Date(clockInTime);
-          const clockOutDate = new Date(clockOutTime);
-          const diffMs = clockOutDate.getTime() - clockInDate.getTime();
-          const hours = Math.floor(diffMs / (1000 * 60 * 60));
-          const minutes = Math.floor((diffMs / (1000 * 60)) % 60);
-          const seconds = Math.floor((diffMs / 1000) % 60);
+        if (clockInTime) {
+          const totalMs = elapsedMs;
+          const hours = Math.floor(totalMs / (1000 * 60 * 60));
+          const minutes = Math.floor((totalMs / (1000 * 60)) % 60);
+          const seconds = Math.floor((totalMs / 1000) % 60);
           timesheetDisplay = `${hours}h ${minutes}m ${seconds}s`;
         }
         return (
@@ -347,7 +414,125 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
           </div>
         );
       case 'leaves':
+        // Leaves feature: show leave balance, request leave, and leave history
+        return (
+          <div className="p-8">
+            <Card className="max-w-2xl mx-auto mb-8">
+              <CardHeader>
+                <CardTitle>My Leave Balance</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                  <div className="bg-blue-100 rounded-lg p-4 text-center">
+                    <div className="text-2xl font-bold text-blue-700">12</div>
+                    <div className="text-gray-600 text-sm">Annual Leaves</div>
+                  </div>
+                  <div className="bg-green-100 rounded-lg p-4 text-center">
+                    <div className="text-2xl font-bold text-green-700">5</div>
+                    <div className="text-gray-600 text-sm">Sick Leaves</div>
+                  </div>
+                </div>
+                <form className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Leave Type</label>
+                    <select className="w-full border rounded px-3 py-2">
+                      <option>Annual</option>
+                      <option>Sick</option>
+                      <option>Unpaid</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">From</label>
+                    <input type="date" className="w-full border rounded px-3 py-2" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">To</label>
+                    <input type="date" className="w-full border rounded px-3 py-2" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Reason</label>
+                    <textarea className="w-full border rounded px-3 py-2" rows={2} placeholder="Reason for leave" />
+                  </div>
+                  <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded font-semibold">Request Leave</button>
+                </form>
+              </CardContent>
+            </Card>
+            <Card className="max-w-2xl mx-auto">
+              <CardHeader>
+                <CardTitle>Leave History</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ul className="divide-y divide-gray-200">
+                  <li className="py-2 flex justify-between">
+                    <span>2025-05-10 to 2025-05-12</span>
+                    <span className="text-green-600">Approved</span>
+                  </li>
+                  <li className="py-2 flex justify-between">
+                    <span>2025-04-01 to 2025-04-01</span>
+                    <span className="text-yellow-600">Pending</span>
+                  </li>
+                  <li className="py-2 flex justify-between">
+                    <span>2025-03-15 to 2025-03-16</span>
+                    <span className="text-red-600">Rejected</span>
+                  </li>
+                </ul>
+              </CardContent>
+            </Card>
+          </div>
+        );
       case 'payroll':
+        // Payroll feature: show salary details and payslip download
+        return (
+          <div className="p-8">
+            <Card className="max-w-2xl mx-auto mb-8">
+              <CardHeader>
+                <CardTitle>My Salary Details</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="mb-4">
+                  <div className="flex justify-between mb-2">
+                    <span className="font-semibold">Base Salary:</span>
+                    <span>₹50,000</span>
+                  </div>
+                  <div className="flex justify-between mb-2">
+                    <span className="font-semibold">Allowances:</span>
+                    <span>₹5,000</span>
+                  </div>
+                  <div className="flex justify-between mb-2">
+                    <span className="font-semibold">Deductions:</span>
+                    <span>-₹2,000</span>
+                  </div>
+                  <div className="flex justify-between font-bold text-lg">
+                    <span>Net Pay:</span>
+                    <span>₹53,000</span>
+                  </div>
+                </div>
+                <button className="px-4 py-2 bg-green-600 text-white rounded font-semibold">Download Payslip (PDF)</button>
+              </CardContent>
+            </Card>
+            <Card className="max-w-2xl mx-auto">
+              <CardHeader>
+                <CardTitle>Payslip History</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ul className="divide-y divide-gray-200">
+                  <li className="py-2 flex justify-between">
+                    <span>May 2025</span>
+                    <button className="text-blue-600 underline">Download</button>
+                  </li>
+                  <li className="py-2 flex justify-between">
+                    <span>April 2025</span>
+                    <button className="text-blue-600 underline">Download</button>
+                  </li>
+                  <li className="py-2 flex justify-between">
+                    <span>March 2025</span>
+                    <button className="text-blue-600 underline">Download</button>
+                  </li>
+                </ul>
+              </CardContent>
+            </Card>
+          </div>
+        );
       case 'projects':
         return (
           <div className="p-8">
@@ -400,16 +585,121 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
           </div>
         );
       case 'teams':
-      case 'awards':
-      case 'performance':
+        // Teams feature: show team members and allow team creation
         return (
           <div className="p-8">
-            <Card>
+            <Card className="max-w-2xl mx-auto mb-8">
               <CardHeader>
-                <CardTitle>{activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}</CardTitle>
+                <CardTitle>My Team</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-gray-600">{activeTab} content coming soon...</p>
+                <ul className="divide-y divide-gray-200 mb-4">
+                  <li className="py-2 flex justify-between">
+                    <span>Priya Sharma</span>
+                    <span className="text-gray-500">HR</span>
+                  </li>
+                  <li className="py-2 flex justify-between">
+                    <span>Rohit Mehra</span>
+                    <span className="text-gray-500">Developer</span>
+                  </li>
+                  <li className="py-2 flex justify-between">
+                    <span>John Doe</span>
+                    <span className="text-gray-500">Designer</span>
+                  </li>
+                </ul>
+                <form className="space-y-2">
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Add Team Member</label>
+                    <input className="w-full border rounded px-3 py-2" placeholder="Enter name or email" />
+                  </div>
+                  <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded font-semibold">Add Member</button>
+                </form>
+              </CardContent>
+            </Card>
+            <Card className="max-w-2xl mx-auto">
+              <CardHeader>
+                <CardTitle>Create New Team</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <form className="space-y-2">
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Team Name</label>
+                    <input className="w-full border rounded px-3 py-2" placeholder="Team name" />
+                  </div>
+                  <button type="submit" className="px-4 py-2 bg-green-600 text-white rounded font-semibold">Create Team</button>
+                </form>
+              </CardContent>
+            </Card>
+          </div>
+        );
+      case 'awards':
+        // Awards feature: show awards and allow nomination
+        return (
+          <div className="p-8">
+            <Card className="max-w-2xl mx-auto mb-8">
+              <CardHeader>
+                <CardTitle>My Awards</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ul className="divide-y divide-gray-200 mb-4">
+                  <li className="py-2 flex justify-between">
+                    <span>Employee of the Month</span>
+                    <span className="text-green-600">May 2025</span>
+                  </li>
+                  <li className="py-2 flex justify-between">
+                    <span>Best Team Player</span>
+                    <span className="text-blue-600">March 2025</span>
+                  </li>
+                </ul>
+                <form className="space-y-2">
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Nominate a Colleague</label>
+                    <input className="w-full border rounded px-3 py-2" placeholder="Enter name or email" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Award</label>
+                    <input className="w-full border rounded px-3 py-2" placeholder="Award name" />
+                  </div>
+                  <button type="submit" className="px-4 py-2 bg-yellow-500 text-white rounded font-semibold">Nominate</button>
+                </form>
+              </CardContent>
+            </Card>
+          </div>
+        );
+      case 'performance':
+        // Performance feature: show performance summary and feedback
+        return (
+          <div className="p-8">
+            <Card className="max-w-2xl mx-auto mb-8">
+              <CardHeader>
+                <CardTitle>Performance Summary</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="mb-4">
+                  <div className="flex justify-between mb-2">
+                    <span className="font-semibold">Attendance:</span>
+                    <span>96%</span>
+                  </div>
+                  <div className="flex justify-between mb-2">
+                    <span className="font-semibold">Projects Completed:</span>
+                    <span>8</span>
+                  </div>
+                  <div className="flex justify-between mb-2">
+                    <span className="font-semibold">Peer Rating:</span>
+                    <span>4.7/5</span>
+                  </div>
+                </div>
+                <div className="mb-2 font-semibold">Manager Feedback</div>
+                <div className="bg-gray-100 rounded p-3 mb-4 text-gray-700">
+                  Great work this quarter! Keep up the excellent performance and teamwork.
+                </div>
+                <form className="space-y-2">
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Self-Review</label>
+                    <textarea className="w-full border rounded px-3 py-2" rows={2} placeholder="Write your self-review..." />
+                  </div>
+                  <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded font-semibold">Submit Review</button>
+                </form>
               </CardContent>
             </Card>
           </div>
