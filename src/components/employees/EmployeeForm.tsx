@@ -21,7 +21,8 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
     salary: '',
     startDate: '',
     address: '',
-    password: '' // Add password field
+    password: '',
+    employmentType: '', // NEW FIELD
   });
 
   const [message, setMessage] = useState('');
@@ -59,7 +60,8 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
           salary: parseFloat(formData.salary),
           startDate: formData.startDate,
           address: formData.address,
-          password: formData.password // Send password
+          password: formData.password,
+          employmentType: formData.employmentType, // NEW FIELD
         })
       });
 
@@ -76,7 +78,8 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
           salary: '',
           startDate: '',
           address: '',
-          password: '' // Reset password
+          password: '',
+          employmentType: '', // Reset field
         });
 
         if (onEmployeeAdded) onEmployeeAdded();
@@ -156,6 +159,20 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
                 <option value="employee">Employee</option>
                 <option value="admin">Admin</option>
                 <option value="superadmin">Superadmin</option>
+              </select>
+            </div>
+            <div>
+              <Label htmlFor="employmentType">Employment Type</Label>
+              <select
+                name="employmentType"
+                value={formData.employmentType}
+                onChange={(e) => setFormData({ ...formData, employmentType: e.target.value })}
+                required
+                className="w-full mt-1 mb-2 border rounded-md px-3 py-2"
+              >
+                <option value="">Select type</option>
+                <option value="employee">Employee</option>
+                <option value="intern">Intern</option>
               </select>
             </div>
             <div>
