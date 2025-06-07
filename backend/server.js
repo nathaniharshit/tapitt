@@ -81,10 +81,12 @@ app.post('/api/employees', async (req, res) => {
     // Only pick allowed fields
     const employeeData = {};
     allowedFields.forEach(field => {
-      if (req.body[field] !== undefined) employeeData[field] = req.body[field];
+      if (req.body[field] !== undefined && req.body[field] !== '') employeeData[field] = req.body[field];
     });
     employeeData.password = hashedPassword;
     employeeData.mustChangePassword = true;
+    // Ensure employmentType is always set (default to 'employee' if not provided)
+    if (!employeeData.employmentType) employeeData.employmentType = 'employee';
     const employee = new Employee(employeeData);
     await employee.save();
     res.status(201).json(employee);
@@ -110,13 +112,16 @@ app.put('/api/employees/:id', upload.fields([
 ]), async (req, res) => {
   try {
     let updateData = {};
+    // If multipart/form-data, req.body fields are strings
     allowedFields.forEach(field => {
-      if (req.body[field] !== undefined) updateData[field] = req.body[field];
+      if (req.body[field] !== undefined && req.body[field] !== '') updateData[field] = req.body[field];
     });
     // If a profile picture was uploaded, set the picture field to the file URL
     if (req.files && req.files['picture']) {
       updateData.picture = `/uploads/${req.files['picture'][0].filename}`;
     }
+    // Ensure employmentType is always set (default to 'employee' if not provided)
+    if (!updateData.employmentType) updateData.employmentType = 'employee';
     Object.keys(updateData).forEach(key => {
       if (updateData[key] === '') updateData[key] = undefined;
     });

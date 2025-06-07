@@ -42,6 +42,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
   const [elapsedMs, setElapsedMs] = useState<number>(0);
   const [employees, setEmployees] = useState<any[]>([]);
   const [welcomeName, setWelcomeName] = useState<string>('');
+  const [holidays, setHolidays] = useState<{ name: string; date: string }[]>([]);
 
   useEffect(() => {
     // Fetch login time for the current user
@@ -225,6 +226,17 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
     fetchEmployees();
   }, []);
 
+  // Fetch holidays from backend or use static data
+  // Example: fetch('http://localhost:5050/api/holidays').then(...)
+  useEffect(() => {
+    setHolidays([
+      { name: 'Independence Day', date: '2025-08-15' },
+      { name: 'Raksha Bandhan', date: '2025-08-19' },
+      { name: 'Janmashtami', date: '2025-08-26' },
+      // Add more or fetch from backend
+    ]);
+  }, []);
+
   // Set admin panel tab if navigated from View Users
   useEffect(() => {
     if (location.state && (location.state as any).adminPanel) {
@@ -293,9 +305,15 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                 </CardHeader>
                 <CardContent>
                   <ul className="text-gray-700 space-y-1">
-                    <li>Independence Day - 15 Aug</li>
-                    <li>Raksha Bandhan - 19 Aug</li>
-                    <li>Janmashtami - 26 Aug</li>
+                    {holidays.length === 0 ? (
+                      <li>No holidays found.</li>
+                    ) : (
+                      holidays.map(h => (
+                        <li key={h.name + h.date}>
+                          {h.name} - {new Date(h.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
+                        </li>
+                      ))
+                    )}
                   </ul>
                 </CardContent>
               </Card>

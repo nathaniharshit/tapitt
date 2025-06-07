@@ -77,6 +77,9 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
       return;
     }
 
+    // Always send employmentType, fallback to 'employee' if empty
+    const employmentTypeToSend = formData.employmentType || 'employee';
+
     try {
       const response = await fetch('http://localhost:5050/api/employees', {
         method: 'POST',
@@ -95,7 +98,7 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
           startDate: formData.startDate,
           address: formData.address,
           password: formData.password,
-          employmentType: formData.employmentType, // NEW FIELD
+          employmentType: employmentTypeToSend, // Always send this
           aadhar: formData.aadhar, // Add this field to the POST body
         })
       });
@@ -115,7 +118,7 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
           startDate: '',
           address: '',
           password: '',
-          employmentType: 'employee', // Reset to default value, not empty string
+          employmentType: '', // Reset to default value, not empty string
           aadhar: '',
         });
 

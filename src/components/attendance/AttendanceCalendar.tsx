@@ -2,7 +2,8 @@ import React from 'react';
 import { Card } from '@/components/ui/card';
 
 interface AttendanceCalendarProps {
-  user: { id: string; name: string; email: string; role: string };
+  user: any;
+  refresh?: number;
 }
 
 // Helper to get days in current month
