@@ -39,6 +39,8 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
   const [clockOutTime, setClockOutTime] = useState<string | null>(null);
   const [isClockedIn, setIsClockedIn] = useState(false);
   const [elapsedMs, setElapsedMs] = useState<number>(0);
+  const [employees, setEmployees] = useState<any[]>([]);
+  const [welcomeName, setWelcomeName] = useState<string>('');
 
   useEffect(() => {
     // Fetch login time for the current user
@@ -206,6 +208,22 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
     }
   }, [isClockedIn, clockInTime, clockOutTime]);
 
+  // Fetch employees
+  const fetchEmployees = async () => {
+    const res = await fetch('http://localhost:5050/api/employees');
+    const data = await res.json();
+    setEmployees(data);
+    if (data.length > 0) {
+      // Find the latest added employee (assuming last in array is latest)
+      const latest = data[data.length - 1];
+      setWelcomeName(`${latest.firstname} ${latest.lastname}`);
+    }
+  };
+
+  useEffect(() => {
+    fetchEmployees();
+  }, []);
+
   // Unified dashboard for all roles
   const renderContent = () => {
     switch (activeTab) {
@@ -281,8 +299,15 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                 </CardHeader>
                 <CardContent>
                   <ul className="text-gray-700 space-y-1">
-                    <li>Priya Sharma (HR)</li>
-                    <li>Rohit Mehra (Dev)</li>
+                    {employees.length === 0 ? (
+                      <li>No employees found.</li>
+                    ) : (
+                      employees.map(emp => (
+                        <li key={emp._id}>
+                          {emp.firstname} {emp.lastname} ({emp.department || 'N/A'})
+                        </li>
+                      ))
+                    )}
                   </ul>
                 </CardContent>
               </Card>
@@ -350,13 +375,13 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
       case 'employees':
         return <EmployeeList userRole={user.role} />;
       case 'add-employee':
-        return (user.role === 'super_admin' || user.role === 'admin') ? <EmployeeForm /> : <EmployeeList userRole={user.role} />;
+        return (user.role === 'super_admin' || user.role === 'admin') ? <EmployeeForm onEmployeeAdded={fetchEmployees} /> : <EmployeeList userRole={user.role} />;
       case 'admin-panel':
         return <AdminPanel userRole={user.role} />;
       case 'reports':
         return <Reports userRole={user.role} />;
       case 'settings':
-        return <Settings userRole={user.role} />;
+        return <Settings userRole={user.role} userId={userId} />;
       case 'attendance':
         // If employee, show calendar attendance view
         if (user.role === 'employee') {

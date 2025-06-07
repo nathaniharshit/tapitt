@@ -40,7 +40,7 @@ const employeeSchema = new mongoose.Schema({
     enum: ['employee', 'intern'],
     required: true
   }
-});  
+}, { timestamps: true }); // <-- Add this option
 
 const Employee = mongoose.model('Employee', employeeSchema);
 app.use(cors()); // allow all origins for now
@@ -95,7 +95,8 @@ app.post('/api/employees', async (req, res) => {
 
 app.get('/api/employees', async (req, res) => {
   try {
-    const employees = await Employee.find();
+    // Explicitly select createdAt and updatedAt fields
+    const employees = await Employee.find().select('+createdAt +updatedAt');
     res.json(employees);
   } catch (err) {
     res.status(500).json({ error: err.message });
