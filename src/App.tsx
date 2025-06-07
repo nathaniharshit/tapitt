@@ -8,6 +8,7 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 import NotFound from "./pages/NotFound";
 import EmployeeSetPassword from "./pages/EmployeeSetPassword";
+import AdminUsersPage from './pages/AdminUsersPage';
 
 const queryClient = new QueryClient();
 
@@ -22,6 +23,7 @@ const App = () => (
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/employee-set-password" element={<EmployeeSetPassword />} />
+          <Route path="/admin/users" element={<AdminUsersPage />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

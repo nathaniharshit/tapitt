@@ -15,6 +15,7 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
     lastName: '',
     email: '',
     phone: '',
+    countryCode: '+91', // Add country code
     department: '',
     position: '',
     role: '',
@@ -28,6 +29,7 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
 
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
+  const [phoneError, setPhoneError] = useState(''); // Add phone error state
 
   useEffect(() => {
     if (message) {
@@ -42,6 +44,15 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
       // Remove all non-digit except dot, then format with commas for display
       const numericValue = value.replace(/[^0-9.]/g, '');
       setFormData({ ...formData, [name]: numericValue });
+    } else if (name === 'phone') {
+      // Only allow digits, max 10
+      const digits = value.replace(/\D/g, '').slice(0, 10);
+      setFormData({ ...formData, phone: digits });
+      if (digits.length > 0 && digits.length !== 10) {
+        setPhoneError('Phone number must be exactly 10 digits');
+      } else {
+        setPhoneError('');
+      }
     } else {
       setFormData({ ...formData, [name]: value });
     }
@@ -59,6 +70,13 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
     e.preventDefault();
     setLoading(true);
 
+    // Phone validation
+    if (formData.phone.length !== 10) {
+      setPhoneError('Phone number must be exactly 10 digits');
+      setLoading(false);
+      return;
+    }
+
     try {
       const response = await fetch('http://localhost:5050/api/employees', {
         method: 'POST',
@@ -69,7 +87,7 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
           firstname: formData.firstName,
           lastname: formData.lastName,
           email: formData.email,
-          phone: formData.phone,
+          phone: `${formData.countryCode}${formData.phone}`,
           department: formData.department,
           position: formData.position,
           role: formData.role,
@@ -89,6 +107,7 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
           lastName: '',
           email: '',
           phone: '',
+          countryCode: '+91', // Reset to default value
           department: '',
           position: '',
           role: '',
@@ -139,7 +158,36 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
             </div>
             <div>
               <Label htmlFor="phone">Phone</Label>
-              <Input name="phone" value={formData.phone} onChange={handleChange} />
+              <div className="flex">
+                <select
+                  name="countryCode"
+                  value={formData.countryCode}
+                  onChange={handleChange}
+                  className="border rounded-l px-2 py-2 bg-gray-50 font-bold text-lg"
+                  style={{ minWidth: 80 }}
+                >
+                  <option value="+91">🇮🇳 +91</option>
+                  <option value="+1">🇺🇸 +1</option>
+                  <option value="+44">🇬🇧 +44</option>
+                  <option value="+61">🇦🇺 +61</option>
+                  <option value="+81">🇯🇵 +81</option>
+                  <option value="+971">🇦🇪 +971</option>
+                  {/* Add more as needed */}
+                </select>
+                <Input
+                  name="phone"
+                  value={formData.phone}
+                  onChange={handleChange}
+                  maxLength={10}
+                  minLength={10}
+                  pattern="\d{10}"
+                  className="rounded-l-none"
+                  required
+                  placeholder="10 digit number"
+                  type="tel"
+                />
+              </div>
+              {phoneError && <div className="text-xs text-red-600 mt-1">{phoneError}</div>}
             </div>
             <div>
               <Label htmlFor="department">Department</Label>

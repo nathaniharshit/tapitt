@@ -6,7 +6,7 @@ import EmployeeForm from '../employees/EmployeeForm';
 import AdminPanel from '../admin/AdminPanel';
 import Reports from '../reports/Reports';
 import Settings from '../settings/Settings';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import EmployeePersonalDetails from '../employees/EmployeePersonalDetails';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import AttendanceCalendar from '../attendance/AttendanceCalendar';
@@ -33,6 +33,7 @@ const ProtectedRoute = ({ user, allowedRoles, children }) => {
 };
 
 const Dashboard = ({ user, onLogout }: DashboardProps) => {
+  const location = useLocation();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [loginTime, setLoginTime] = useState<string | null>(null);
   const [clockInTime, setClockInTime] = useState<string | null>(null);
@@ -223,6 +224,14 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
   useEffect(() => {
     fetchEmployees();
   }, []);
+
+  // Set admin panel tab if navigated from View Users
+  useEffect(() => {
+    if (location.state && (location.state as any).adminPanel) {
+      setActiveTab('admin-panel');
+    }
+    // eslint-disable-next-line
+  }, [location.state]);
 
   // Unified dashboard for all roles
   const renderContent = () => {

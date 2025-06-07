@@ -1,4 +1,3 @@
-
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { LogOut, User } from 'lucide-react';

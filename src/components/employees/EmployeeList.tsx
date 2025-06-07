@@ -134,6 +134,20 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
     return `₹${num.toLocaleString('en-IN')}`;
   };
 
+  const getProfilePicUrl = (emp: any) => {
+    if (emp && emp.picture) {
+      if (typeof emp.picture === 'string') {
+        if (emp.picture.startsWith('/uploads/')) {
+          return `http://localhost:5050${emp.picture}`;
+        } else if (emp.picture.startsWith('http')) {
+          return emp.picture;
+        }
+        return emp.picture;
+      }
+    }
+    return null;
+  };
+
   return (
     <div className="space-y-6">
       {/* Show message */}
@@ -166,55 +180,70 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
 
       {/* Employee Cards Grid */}
       <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 md:grid-cols-3">
-        {filteredEmployees.map((employee) => (
-          <Card key={employee._id} className="flex flex-col h-full">
-            <CardContent className="p-6 flex flex-col flex-1">
-              <div className="flex items-center space-x-4 mb-4">
-                <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-                  <span className="text-blue-600 font-semibold">
-                    {employee.firstname && employee.lastname ? `${employee.firstname[0]}${employee.lastname[0]}`.toUpperCase() : '?'}
-                  </span>
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900">{employee.firstname} {employee.lastname}</h3>
-                  <p className="text-gray-600">{employee.position} • {employee.department}</p>
-                  <p className="text-sm text-gray-500">{employee.email}</p>
-                </div>
-              </div>
-              <div className="flex-1" />
-              <div className="flex items-center justify-between mt-2">
-                <div>
-                  <Badge variant="default">
-                    {employee.status || 'active'}
-                  </Badge>
-                  <p className="text-sm text-gray-500 mt-1">
-                    Joined: {new Date(employee.startDate).toLocaleDateString()}
-                  </p>
-                </div>
-                <div className="flex space-x-2">
-                  <Button variant="outline" size="sm" onClick={() => handleView(employee)}>
-                    <Eye className="h-4 w-4" />
-                  </Button>
-                  {canEdit && (
-                    <Button variant="outline" size="sm" onClick={() => handleEdit(employee)}>
-                      <Edit className="h-4 w-4" />
-                    </Button>
+        {filteredEmployees.map((employee) => {
+          const profilePic = getProfilePicUrl(employee);
+          const initials =
+            employee.firstname && employee.lastname
+              ? `${employee.firstname[0]}${employee.lastname[0]}`.toUpperCase()
+              : '?';
+          return (
+            <Card key={employee._id} className="flex flex-col h-full">
+              <CardContent className="p-6 flex flex-col flex-1">
+                <div className="flex items-center space-x-4 mb-4">
+                  {profilePic ? (
+                    <img
+                      src={profilePic}
+                      alt="Profile"
+                      className="w-12 h-12 rounded-full object-cover border"
+                    />
+                  ) : (
+                    <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                      <span className="text-blue-600 font-semibold">
+                        {initials}
+                      </span>
+                    </div>
                   )}
-                  {canDelete && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="text-red-600 hover:text-red-700"
-                      onClick={() => handleDelete(employee)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  )}
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900">{employee.firstname} {employee.lastname}</h3>
+                    <p className="text-gray-600">{employee.position} • {employee.department}</p>
+                    <p className="text-sm text-gray-500">{employee.email}</p>
+                  </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+                <div className="flex-1" />
+                <div className="flex items-center justify-between mt-2">
+                  <div>
+                    <Badge variant="default">
+                      {employee.status || 'active'}
+                    </Badge>
+                    <p className="text-sm text-gray-500 mt-1">
+                      Joined: {new Date(employee.startDate).toLocaleDateString()}
+                    </p>
+                  </div>
+                  <div className="flex space-x-2">
+                    <Button variant="outline" size="sm" onClick={() => handleView(employee)}>
+                      <Eye className="h-4 w-4" />
+                    </Button>
+                    {canEdit && (
+                      <Button variant="outline" size="sm" onClick={() => handleEdit(employee)}>
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                    )}
+                    {canDelete && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-red-600 hover:text-red-700"
+                        onClick={() => handleDelete(employee)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
 
       {filteredEmployees.length === 0 && (
@@ -229,11 +258,21 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
           <div className="flex-1 flex flex-col md:flex-row">
             {/* Left: Avatar and Basic Info */}
             <div className="flex flex-col items-center justify-center bg-blue-50 w-full md:w-1/3 p-8 border-b md:border-b-0 md:border-r">
-              <div className="w-32 h-32 bg-blue-200 rounded-full flex items-center justify-center mb-4">
-                <span className="text-blue-700 font-bold text-5xl">
-                  {viewedEmployee?.firstname && viewedEmployee?.lastname ? `${viewedEmployee.firstname[0]}${viewedEmployee.lastname[0]}`.toUpperCase() : '?'}
-                </span>
-              </div>
+              {viewedEmployee && getProfilePicUrl(viewedEmployee) ? (
+                <img
+                  src={getProfilePicUrl(viewedEmployee)}
+                  alt="Profile"
+                  className="w-32 h-32 rounded-full object-cover mb-4 border"
+                />
+              ) : (
+                <div className="w-32 h-32 bg-blue-200 rounded-full flex items-center justify-center mb-4">
+                  <span className="text-blue-700 font-bold text-5xl">
+                    {viewedEmployee?.firstname && viewedEmployee?.lastname
+                      ? `${viewedEmployee.firstname[0]}${viewedEmployee.lastname[0]}`.toUpperCase()
+                      : '?'}
+                  </span>
+                </div>
+              )}
               <h3 className="text-3xl font-semibold text-gray-900 mb-2">{viewedEmployee?.firstname} {viewedEmployee?.lastname}</h3>
               <p className="text-lg text-gray-600 mb-1">{viewedEmployee?.position} • {viewedEmployee?.department}</p>
               <Badge variant="default" className="text-base px-3 py-1">{viewedEmployee?.status || 'active'}</Badge>
