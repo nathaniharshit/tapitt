@@ -42,12 +42,6 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
   const [elapsedMs, setElapsedMs] = useState<number>(0);
   const [employees, setEmployees] = useState<any[]>([]);
   const [welcomeName, setWelcomeName] = useState<string>('');
-  const [holidays, setHolidays] = useState<{ name: string; date: string }[]>([]);
-  const [teams, setTeams] = useState<any[]>([]);
-  const [teamName, setTeamName] = useState('');
-  const [teamMembers, setTeamMembers] = useState<string[]>([]);
-  const [teamMsg, setTeamMsg] = useState('');
-  const [myTeams, setMyTeams] = useState<any[]>([]);
 
   useEffect(() => {
     // Fetch login time for the current user
@@ -231,45 +225,6 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
     fetchEmployees();
   }, []);
 
-  // Fetch holidays from backend or use static data
-  // Example: fetch('http://localhost:5050/api/holidays').then(...)
-  useEffect(() => {
-    setHolidays([
-      { name: 'Independence Day', date: '2025-08-15' },
-      { name: 'Raksha Bandhan', date: '2025-08-19' },
-      { name: 'Janmashtami', date: '2025-08-26' },
-      // Add more or fetch from backend
-    ]);
-  }, []);
-
-  // Fetch teams for this admin
-  const fetchTeams = async () => {
-    try {
-      const res = await fetch(`http://localhost:5050/api/teams?createdBy=${user.id}`);
-      const data = await res.json();
-      setTeams(data);
-    } catch {
-      setTeams([]);
-    }
-  };
-
-  useEffect(() => {
-    if (user.role === 'admin' || user.role === 'super_admin') {
-      fetchTeams();
-    }
-    // eslint-disable-next-line
-  }, [user.id]);
-
-  // Fetch teams for employee dashboard
-  useEffect(() => {
-    if (user.role === 'employee' && userId) {
-      fetch(`http://localhost:5050/api/teams/member/${userId}`)
-        .then(res => res.json())
-        .then(data => setMyTeams(data))
-        .catch(() => setMyTeams([]));
-    }
-  }, [user.role, userId]);
-
   // Set admin panel tab if navigated from View Users
   useEffect(() => {
     if (location.state && (location.state as any).adminPanel) {
@@ -277,15 +232,6 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
     }
     // eslint-disable-next-line
   }, [location.state]);
-
-  // Helper: Map employeeId to team names
-  const employeeTeamsMap: { [empId: string]: string[] } = {};
-  teams.forEach(team => {
-    (team.members || []).forEach((m: any) => {
-      if (!employeeTeamsMap[m._id]) employeeTeamsMap[m._id] = [];
-      employeeTeamsMap[m._id].push(team.name);
-    });
-  });
 
   // Unified dashboard for all roles
   const renderContent = () => {
@@ -347,15 +293,9 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                 </CardHeader>
                 <CardContent>
                   <ul className="text-gray-700 space-y-1">
-                    {holidays.length === 0 ? (
-                      <li>No holidays found.</li>
-                    ) : (
-                      holidays.map(h => (
-                        <li key={h.name + h.date}>
-                          {h.name} - {new Date(h.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
-                        </li>
-                      ))
-                    )}
+                    <li>Independence Day - 15 Aug</li>
+                    <li>Raksha Bandhan - 19 Aug</li>
+                    <li>Janmashtami - 26 Aug</li>
                   </ul>
                 </CardContent>
               </Card>
@@ -373,12 +313,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                     ) : (
                       employees.map(emp => (
                         <li key={emp._id}>
-                          {emp.firstname} {emp.lastname}
-                          {employeeTeamsMap[emp._id] && employeeTeamsMap[emp._id].length > 0 && (
-                            <span className="text-xs text-gray-500 ml-2">
-                              (Team: {employeeTeamsMap[emp._id].join(', ')})
-                            </span>
-                          )}
+                          {emp.firstname} {emp.lastname} ({emp.department || 'N/A'})
                         </li>
                       ))
                     )}
@@ -441,34 +376,6 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                   </ul>
                 </CardContent>
               </Card>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-              {/* Show My Teams for employees */}
-              {user.role === 'employee' && (
-                <Card className="col-span-1">
-                  <CardHeader>
-                    <CardTitle>My Teams</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    {myTeams.length === 0 ? (
-                      <div className="text-gray-500">You are not part of any team.</div>
-                    ) : (
-                      <ul className="space-y-2">
-                        {myTeams.map(team => (
-                          <li key={team._id}>
-                            <div className="font-semibold">{team.name}</div>
-                            <div className="text-xs text-gray-500">
-                              Members: {team.members && team.members.length > 0
-                                ? team.members.map((m: any) => `${m.firstname} ${m.lastname}`).join(', ')
-                                : 'None'}
-                            </div>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </CardContent>
-                </Card>
-              )}
             </div>
           </div>
         );
@@ -717,56 +624,42 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
           <div className="p-8">
             <Card className="max-w-2xl mx-auto mb-8">
               <CardHeader>
-                <CardTitle>My Teams</CardTitle>
+                <CardTitle>My Team</CardTitle>
               </CardHeader>
               <CardContent>
-                {teams.length === 0 ? (
-                  <div className="text-gray-500 mb-4">No teams found.</div>
-                ) : (
-                  <ul className="divide-y divide-gray-200 mb-4">
-                    {teams.map(team => (
-                      <li key={team._id} className="py-2">
-                        <div className="font-semibold">{team.name}</div>
-                        <div className="text-xs text-gray-500 mb-1">
-                          Members: {team.members && team.members.length > 0
-                            ? team.members.map((m: any) => `${m.firstname} ${m.lastname}`).join(', ')
-                            : 'None'}
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                <form className="space-y-2" onSubmit={handleCreateTeam}>
+                <ul className="divide-y divide-gray-200 mb-4">
+                  <li className="py-2 flex justify-between">
+                    <span>Priya Sharma</span>
+                    <span className="text-gray-500">HR</span>
+                  </li>
+                  <li className="py-2 flex justify-between">
+                    <span>Rohit Mehra</span>
+                    <span className="text-gray-500">Developer</span>
+                  </li>
+                  <li className="py-2 flex justify-between">
+                    <span>John Doe</span>
+                    <span className="text-gray-500">Designer</span>
+                  </li>
+                </ul>
+                <form className="space-y-2">
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Add Team Member</label>
+                    <input className="w-full border rounded px-3 py-2" placeholder="Enter name or email" />
+                  </div>
+                  <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded font-semibold">Add Member</button>
+                </form>
+              </CardContent>
+            </Card>
+            <Card className="max-w-2xl mx-auto">
+              <CardHeader>
+                <CardTitle>Create New Team</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <form className="space-y-2">
                   <div>
                     <label className="block text-sm font-medium mb-1">Team Name</label>
-                    <input
-                      className="w-full border rounded px-3 py-2"
-                      placeholder="Team name"
-                      value={teamName}
-                      onChange={e => setTeamName(e.target.value)}
-                    />
+                    <input className="w-full border rounded px-3 py-2" placeholder="Team name" />
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Add Members (select multiple)</label>
-                    <select
-                      className="w-full border rounded px-3 py-2"
-                      multiple
-                      value={teamMembers}
-                      onChange={e => {
-                        const options = Array.from(e.target.selectedOptions).map(opt => opt.value);
-                        setTeamMembers(options);
-                      }}
-                    >
-                      {employees
-                        .filter(emp => emp.role === 'employee')
-                        .map(emp => (
-                          <option key={emp._id} value={emp._id}>
-                            {emp.firstname} {emp.lastname}
-                          </option>
-                        ))}
-                    </select>
-                  </div>
-                  {teamMsg && <div className="text-sm mb-2 text-green-600">{teamMsg}</div>}
                   <button type="submit" className="px-4 py-2 bg-green-600 text-white rounded font-semibold">Create Team</button>
                 </form>
               </CardContent>
@@ -847,36 +740,6 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
         );
       default:
         return <div className="p-8">Coming soon...</div>;
-    }
-  };
-
-  const handleCreateTeam = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setTeamMsg('');
-    if (!teamName) {
-      setTeamMsg('Team name is required.');
-      return;
-    }
-    try {
-      const res = await fetch('http://localhost:5050/api/teams', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: teamName,
-          members: teamMembers,
-          createdBy: user.id
-        })
-      });
-      if (res.ok) {
-        setTeamMsg('Team created!');
-        setTeamName('');
-        setTeamMembers([]);
-        fetchTeams();
-      } else {
-        setTeamMsg('Failed to create team.');
-      }
-    } catch {
-      setTeamMsg('Network error.');
     }
   };
 

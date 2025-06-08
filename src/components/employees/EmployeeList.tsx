@@ -19,6 +19,7 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' | '' }>({ text: '', type: '' });
   const [deleteEmployee, setDeleteEmployee] = useState<any | null>(null); // For delete confirmation dialog
+  const [roleFilter, setRoleFilter] = useState('all');
 
   useEffect(() => {
     fetch('http://localhost:5050/api/employees')
@@ -34,11 +35,15 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
   }, []);
   
 
-  const filteredEmployees = employees.filter(employee =>
-    `${employee.firstname} ${employee.lastname}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (employee.email || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (employee.department || '').toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredEmployees = employees.filter(employee => {
+    const matchesSearch =
+      `${employee.firstname} ${employee.lastname}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (employee.email || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (employee.department || '').toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesRole =
+      roleFilter === 'all' ? true : (employee.role === roleFilter || (roleFilter === 'superadmin' && employee.role === 'super_admin'));
+    return matchesSearch && matchesRole;
+  });
 
   const canEdit = userRole === 'super_admin' || userRole === 'admin';
   const canDelete = userRole === 'super_admin';
@@ -53,10 +58,11 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
     setIsEditDialogOpen(true);
   };
 
-  const handleEditChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleEditChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
+  ) => {
     const { name, value } = e.target;
     if (name === 'salary') {
-      // Remove non-digit characters except dot, then format
       const numericValue = value.replace(/[^0-9.]/g, '');
       setEditEmployee({ ...editEmployee, [name]: numericValue });
     } else {
@@ -155,6 +161,13 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
     intern: employees.filter(e => e.role === 'intern'),
   };
 
+  const roleSections = [
+    { key: 'super_admin', label: 'Super Admins', color: 'text-blue-700' },
+    { key: 'admin', label: 'Admins', color: 'text-green-700' },
+    { key: 'employee', label: 'Employees', color: 'text-yellow-700' },
+    { key: 'intern', label: 'Interns', color: 'text-purple-700' },
+  ];
+
   return (
     <div className="space-y-6">
       {/* Show message */}
@@ -181,23 +194,36 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
               className="pl-10 w-64"
             />
           </div>
-          
+          <select
+            value={roleFilter}
+            onChange={e => setRoleFilter(e.target.value)}
+            className="border rounded px-3 py-2"
+          >
+            <option value="all">All Roles</option>
+            <option value="employee">Employee</option>
+            <option value="admin">Admin</option>
+            <option value="superadmin">Superadmin</option>
+            <option value="intern">Intern</option>
+          </select>
         </div>
       </div>
 
-      {['super_admin', 'admin', 'employee', 'intern'].map(roleKey => (
-        <div key={roleKey}>
-          <h3 className="text-xl font-bold mb-2 mt-6">
-            {roleKey === 'super_admin' ? 'Super Admins'
-              : roleKey === 'admin' ? 'Admins'
-              : roleKey === 'employee' ? 'Employees'
-              : 'Interns'}
-          </h3>
-          <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 md:grid-cols-3">
-            {groupedEmployees[roleKey].length === 0 ? (
-              <div className="text-gray-400 col-span-full">No {roleKey.replace('_', ' ')}s found.</div>
-            ) : (
-              groupedEmployees[roleKey].map((employee) => {
+      {/* Grouped Employee Sections */}
+      {roleSections.map(section => {
+        const group = groupedEmployees[section.key].filter(employee => {
+          // Apply search filter
+          return (
+            `${employee.firstname} ${employee.lastname}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (employee.email || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (employee.department || '').toLowerCase().includes(searchTerm.toLowerCase())
+          );
+        });
+        if (group.length === 0) return null;
+        return (
+          <div key={section.key}>
+            <h3 className={`text-xl font-bold mb-4 ${section.color}`}>{section.label}</h3>
+            <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 md:grid-cols-3">
+              {group.map((employee) => {
                 const profilePic = getProfilePicUrl(employee);
                 const initials =
                   employee.firstname && employee.lastname
@@ -260,13 +286,20 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
                     </CardContent>
                   </Card>
                 );
-              })
-            )}
+              })}
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
 
-      {filteredEmployees.length === 0 && (
+      {/* No employees found */}
+      {roleSections.every(section =>
+        groupedEmployees[section.key].filter(employee =>
+          `${employee.firstname} ${employee.lastname}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          (employee.email || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+          (employee.department || '').toLowerCase().includes(searchTerm.toLowerCase())
+        ).length === 0
+      ) && (
         <div className="text-center py-12">
           <p className="text-gray-500">No employees found matching your search.</p>
         </div>
@@ -402,10 +435,9 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
                   >
                     <option value="">Select role</option>
                     <option value="employee">Employee</option>
-                    <option value="intern">Intern</option>
                     <option value="admin">Admin</option>
                     <option value="superadmin">Superadmin</option>
-                    <option value="super_admin">Super Admin</option>
+                    <option value="intern">Intern</option>
                   </select>
                 </div>
                 <div>

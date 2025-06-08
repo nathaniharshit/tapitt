@@ -35,24 +35,14 @@ const employeeSchema = new mongoose.Schema({
   github: String,
   status: String,
   picture: String, // Store as URL or base64 string
-  employmentType: {
+  role: {
     type: String,
-    enum: ['employee', 'intern'],
+    enum: ['employee', 'admin', 'super_admin', 'superadmin', 'intern'],
     required: true
   }
 }, { timestamps: true }); // <-- Add this option
 
 const Employee = mongoose.model('Employee', employeeSchema);
-
-// Team schema and model
-const teamSchema = new mongoose.Schema({
-  name: { type: String, required: true },
-  members: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Employee' }],
-  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', required: true },
-  createdAt: { type: Date, default: Date.now }
-});
-const Team = mongoose.model('Team', teamSchema);
-
 app.use(cors()); // allow all origins for now
 app.use(express.json());
 
@@ -78,7 +68,7 @@ app.get('/', (req, res) => {
 const allowedFields = [
   'firstname', 'lastname', 'email', 'phone', 'dob', 'city', 'state', 'zipcode', 'country',
   'emergencyContact', 'upi', 'ifsc', 'experience', 'currentCompany', 'previousCompany', 'skills',
-  'linkedin', 'github', 'status', 'picture', 'employmentType'
+  'linkedin', 'github', 'status', 'picture', 'role'
 ];
 
 app.post('/api/employees', async (req, res) => {
@@ -95,8 +85,6 @@ app.post('/api/employees', async (req, res) => {
     });
     employeeData.password = hashedPassword;
     employeeData.mustChangePassword = true;
-    // Ensure employmentType is always set (default to 'employee' if not provided)
-    if (!employeeData.employmentType) employeeData.employmentType = 'employee';
     const employee = new Employee(employeeData);
     await employee.save();
     res.status(201).json(employee);
@@ -118,7 +106,6 @@ app.get('/api/employees', async (req, res) => {
 // Update employee with file upload
 app.put('/api/employees/:id', upload.fields([
   { name: 'picture', maxCount: 1 }
-  // Remove aadhar from multer fields
 ]), async (req, res) => {
   try {
     let updateData = {};
@@ -130,8 +117,6 @@ app.put('/api/employees/:id', upload.fields([
     if (req.files && req.files['picture']) {
       updateData.picture = `/uploads/${req.files['picture'][0].filename}`;
     }
-    // Ensure employmentType is always set (default to 'employee' if not provided)
-    if (!updateData.employmentType) updateData.employmentType = 'employee';
     Object.keys(updateData).forEach(key => {
       if (updateData[key] === '') updateData[key] = undefined;
     });
@@ -289,93 +274,6 @@ app.get('/api/employees/roles-count', async (req, res) => {
       else if (item._id === 'employee') result.employee = item.count;
     });
     res.json(result);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// Create a new team
-app.post('/api/teams', async (req, res) => {
-  try {
-    let { name, members, createdBy } = req.body;
-    console.log('POST /api/teams', { name, members, createdBy, typeofMembers: typeof members });
-
-    if (!name || !createdBy) {
-      return res.status(400).json({ error: 'Team name and createdBy are required.' });
-    }
-
-    // If members is undefined/null/empty, use empty array
-    if (!members) members = [];
-    // If members is a string (single select), convert to array
-    if (typeof members === 'string') {
-      try {
-        // Try to parse as JSON array (if frontend sends as stringified array)
-        const parsed = JSON.parse(members);
-        if (Array.isArray(parsed)) {
-          members = parsed;
-        } else if (members.trim() !== '') {
-          members = [members];
-        } else {
-          members = [];
-        }
-      } catch {
-        if (members.trim() !== '') {
-          members = [members];
-        } else {
-          members = [];
-        }
-      }
-    }
-    // Ensure members is an array of non-empty strings
-    if (!Array.isArray(members)) members = [];
-    members = members.filter(id => typeof id === 'string' && id.trim() !== '');
-
-    // Convert to ObjectIds
-    try {
-      members = members.map(id => mongoose.Types.ObjectId(id));
-    } catch (err) {
-      return res.status(400).json({ error: 'Invalid member ID(s).' });
-    }
-
-    // Validate createdBy
-    try {
-      createdBy = mongoose.Types.ObjectId(createdBy);
-    } catch (err) {
-      return res.status(400).json({ error: 'Invalid createdBy ID.' });
-    }
-
-    const team = new Team({
-      name,
-      members,
-      createdBy
-    });
-    await team.save();
-    res.status(201).json(team);
-  } catch (err) {
-    console.error('Error creating team:', err);
-    res.status(400).json({ error: err.message });
-  }
-});
-
-// Get all teams (optionally filter by createdBy)
-app.get('/api/teams', async (req, res) => {
-  try {
-    const filter = {};
-    if (req.query.createdBy) {
-      filter.createdBy = req.query.createdBy;
-    }
-    const teams = await Team.find(filter).populate('members', 'firstname lastname email department');
-    res.json(teams);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// Get all teams an employee is a member of
-app.get('/api/teams/member/:employeeId', async (req, res) => {
-  try {
-    const teams = await Team.find({ members: req.params.employeeId }).populate('members', 'firstname lastname email department');
-    res.json(teams);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
