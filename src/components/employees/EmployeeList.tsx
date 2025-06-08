@@ -53,7 +53,7 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
     setIsEditDialogOpen(true);
   };
 
-  const handleEditChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleEditChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     if (name === 'salary') {
       // Remove non-digit characters except dot, then format
@@ -148,6 +148,13 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
     return null;
   };
 
+  const groupedEmployees = {
+    super_admin: employees.filter(e => e.role === 'super_admin' || e.role === 'superadmin'),
+    admin: employees.filter(e => e.role === 'admin'),
+    employee: employees.filter(e => e.role === 'employee'),
+    intern: employees.filter(e => e.role === 'intern'),
+  };
+
   return (
     <div className="space-y-6">
       {/* Show message */}
@@ -178,73 +185,86 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
         </div>
       </div>
 
-      {/* Employee Cards Grid */}
-      <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 md:grid-cols-3">
-        {filteredEmployees.map((employee) => {
-          const profilePic = getProfilePicUrl(employee);
-          const initials =
-            employee.firstname && employee.lastname
-              ? `${employee.firstname[0]}${employee.lastname[0]}`.toUpperCase()
-              : '?';
-          return (
-            <Card key={employee._id} className="flex flex-col h-full">
-              <CardContent className="p-6 flex flex-col flex-1">
-                <div className="flex items-center space-x-4 mb-4">
-                  {profilePic ? (
-                    <img
-                      src={profilePic}
-                      alt="Profile"
-                      className="w-12 h-12 rounded-full object-cover border"
-                    />
-                  ) : (
-                    <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-                      <span className="text-blue-600 font-semibold">
-                        {initials}
-                      </span>
-                    </div>
-                  )}
-                  <div>
-                    <h3 className="text-lg font-semibold text-gray-900">{employee.firstname} {employee.lastname}</h3>
-                    <p className="text-gray-600">{employee.position} • {employee.department}</p>
-                    <p className="text-sm text-gray-500">{employee.email}</p>
-                  </div>
-                </div>
-                <div className="flex-1" />
-                <div className="flex items-center justify-between mt-2">
-                  <div>
-                    <Badge variant="default">
-                      {employee.status || 'active'}
-                    </Badge>
-                    <p className="text-sm text-gray-500 mt-1">
-                      Joined: {new Date(employee.startDate).toLocaleDateString()}
-                    </p>
-                  </div>
-                  <div className="flex space-x-2">
-                    <Button variant="outline" size="sm" onClick={() => handleView(employee)}>
-                      <Eye className="h-4 w-4" />
-                    </Button>
-                    {canEdit && (
-                      <Button variant="outline" size="sm" onClick={() => handleEdit(employee)}>
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                    )}
-                    {canDelete && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="text-red-600 hover:text-red-700"
-                        onClick={() => handleDelete(employee)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
+      {['super_admin', 'admin', 'employee', 'intern'].map(roleKey => (
+        <div key={roleKey}>
+          <h3 className="text-xl font-bold mb-2 mt-6">
+            {roleKey === 'super_admin' ? 'Super Admins'
+              : roleKey === 'admin' ? 'Admins'
+              : roleKey === 'employee' ? 'Employees'
+              : 'Interns'}
+          </h3>
+          <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 md:grid-cols-3">
+            {groupedEmployees[roleKey].length === 0 ? (
+              <div className="text-gray-400 col-span-full">No {roleKey.replace('_', ' ')}s found.</div>
+            ) : (
+              groupedEmployees[roleKey].map((employee) => {
+                const profilePic = getProfilePicUrl(employee);
+                const initials =
+                  employee.firstname && employee.lastname
+                    ? `${employee.firstname[0]}${employee.lastname[0]}`.toUpperCase()
+                    : '?';
+                return (
+                  <Card key={employee._id} className="flex flex-col h-full">
+                    <CardContent className="p-6 flex flex-col flex-1">
+                      <div className="flex items-center space-x-4 mb-4">
+                        {profilePic ? (
+                          <img
+                            src={profilePic}
+                            alt="Profile"
+                            className="w-12 h-12 rounded-full object-cover border"
+                          />
+                        ) : (
+                          <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                            <span className="text-blue-600 font-semibold">
+                              {initials}
+                            </span>
+                          </div>
+                        )}
+                        <div>
+                          <h3 className="text-lg font-semibold text-gray-900">{employee.firstname} {employee.lastname}</h3>
+                          <p className="text-gray-600">{employee.position} • {employee.department}</p>
+                          <p className="text-sm text-gray-500">{employee.email}</p>
+                        </div>
+                      </div>
+                      <div className="flex-1" />
+                      <div className="flex items-center justify-between mt-2">
+                        <div>
+                          <Badge variant="default">
+                            {employee.status || 'active'}
+                          </Badge>
+                          <p className="text-sm text-gray-500 mt-1">
+                            Joined: {new Date(employee.startDate).toLocaleDateString()}
+                          </p>
+                        </div>
+                        <div className="flex space-x-2">
+                          <Button variant="outline" size="sm" onClick={() => handleView(employee)}>
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          {canEdit && (
+                            <Button variant="outline" size="sm" onClick={() => handleEdit(employee)}>
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                          )}
+                          {canDelete && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="text-red-600 hover:text-red-700"
+                              onClick={() => handleDelete(employee)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })
+            )}
+          </div>
+        </div>
+      ))}
 
       {filteredEmployees.length === 0 && (
         <div className="text-center py-12">
@@ -350,7 +370,22 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
                 </div>
                 <div>
                   <label className="text-sm text-gray-500">Department</label>
-                  <Input name="department" value={editEmployee.department || ''} onChange={handleEditChange} />
+                  <select
+                    name="department"
+                    value={editEmployee.department || ''}
+                    onChange={handleEditChange}
+                    className="w-full mt-1 mb-2 border rounded-md px-3 py-2"
+                    required
+                  >
+                    <option value="">Select department</option>
+                    <option value="HR">HR</option>
+                    <option value="Engineering">Engineering</option>
+                    <option value="Sales">Sales</option>
+                    <option value="Marketing">Marketing</option>
+                    <option value="Finance">Finance</option>
+                    <option value="Support">Support</option>
+                    <option value="Other">Other</option>
+                  </select>
                 </div>
                 <div>
                   <label className="text-sm text-gray-500">Position</label>
@@ -358,7 +393,20 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
                 </div>
                 <div>
                   <label className="text-sm text-gray-500">Role</label>
-                  <Input name="role" value={editEmployee.role || ''} onChange={handleEditChange} />
+                  <select
+                    name="role"
+                    value={editEmployee.role || ''}
+                    onChange={handleEditChange}
+                    className="w-full mt-1 mb-2 border rounded-md px-3 py-2"
+                    required
+                  >
+                    <option value="">Select role</option>
+                    <option value="employee">Employee</option>
+                    <option value="intern">Intern</option>
+                    <option value="admin">Admin</option>
+                    <option value="superadmin">Superadmin</option>
+                    <option value="super_admin">Super Admin</option>
+                  </select>
                 </div>
                 <div>
                   <label className="text-sm text-gray-500">Salary</label>

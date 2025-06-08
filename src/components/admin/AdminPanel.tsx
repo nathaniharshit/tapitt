@@ -10,10 +10,11 @@ interface AdminPanelProps {
 }
 
 const AdminPanel = ({ userRole }: AdminPanelProps) => {
-  const [counts, setCounts] = useState<{ super_admin: number; admin: number; employee: number }>({
+  const [counts, setCounts] = useState<{ super_admin: number; admin: number; employee: number; intern: number }>({
     super_admin: 0,
     admin: 0,
     employee: 0,
+    intern: 0,
   });
   const [loading, setLoading] = useState(true);
   const [allEmployees, setAllEmployees] = useState<any[]>([]);
@@ -32,11 +33,12 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
       const res = await fetch('http://localhost:5050/api/employees');
       const employees = await res.json();
       setAllEmployees(employees);
-      const roleCounts = { super_admin: 0, admin: 0, employee: 0 };
+      const roleCounts = { super_admin: 0, admin: 0, employee: 0, intern: 0 };
       employees.forEach((emp: any) => {
         if (emp.role === 'super_admin' || emp.role === 'superadmin') roleCounts.super_admin += 1;
         else if (emp.role === 'admin') roleCounts.admin += 1;
         else if (emp.role === 'employee') roleCounts.employee += 1;
+        else if (emp.role === 'intern') roleCounts.intern += 1;
       });
       setCounts(roleCounts);
       // Set initial editRoles state
@@ -44,7 +46,7 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
       employees.forEach((emp: any) => { rolesObj[emp._id] = emp.role; });
       setEditRoles(rolesObj);
     } catch {
-      setCounts({ super_admin: 0, admin: 0, employee: 0 });
+      setCounts({ super_admin: 0, admin: 0, employee: 0, intern: 0 });
       setAllEmployees([]);
       setEditRoles({});
     }
@@ -105,6 +107,7 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
     super_admin: allEmployees.filter(e => e.role === 'super_admin' || e.role === 'superadmin'),
     admin: allEmployees.filter(e => e.role === 'admin'),
     employee: allEmployees.filter(e => e.role === 'employee'),
+    intern: allEmployees.filter(e => e.role === 'intern'),
   };
 
   const handleRoleSelect = (id: string, value: string) => {
@@ -226,6 +229,12 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
               </div>
               <div className="text-sm text-gray-600">Employees</div>
             </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-purple-600">
+                {loading ? '...' : counts.intern}
+              </div>
+              <div className="text-sm text-gray-600">Interns</div>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -263,6 +272,7 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
                       <option value="super_admin">Super Admin</option>
                       <option value="admin">Admin</option>
                       <option value="employee">Employee</option>
+                      <option value="intern">Intern</option>
                     </select>
                   </div>
                 ))

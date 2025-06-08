@@ -23,7 +23,6 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
     startDate: '',
     address: '',
     password: '',
-    employmentType: 'employee', // Set default value to 'employee'
     aadhar: '', // Add this field for the number
   });
 
@@ -77,9 +76,6 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
       return;
     }
 
-    // Always send employmentType, fallback to 'employee' if empty
-    const employmentTypeToSend = formData.employmentType || 'employee';
-
     try {
       const response = await fetch('http://localhost:5050/api/employees', {
         method: 'POST',
@@ -98,7 +94,6 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
           startDate: formData.startDate,
           address: formData.address,
           password: formData.password,
-          employmentType: employmentTypeToSend, // Always send this
           aadhar: formData.aadhar, // Add this field to the POST body
         })
       });
@@ -118,7 +113,6 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
           startDate: '',
           address: '',
           password: '',
-          employmentType: '', // Reset to default value, not empty string
           aadhar: '',
         });
 
@@ -226,22 +220,9 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
               >
                 <option value="">Select role</option>
                 <option value="employee">Employee</option>
+                <option value="intern">Intern</option>
                 <option value="admin">Admin</option>
                 <option value="superadmin">Superadmin</option>
-              </select>
-            </div>
-            <div>
-              <Label htmlFor="employmentType">Employment Type</Label>
-              <select
-                name="employmentType"
-                value={formData.employmentType}
-                onChange={handleChange}
-                required
-                className="w-full mt-1 mb-2 border rounded-md px-3 py-2"
-              >
-                <option value="">Select type</option>
-                <option value="employee">Employee</option>
-                <option value="intern">Intern</option>
               </select>
             </div>
             <div>
