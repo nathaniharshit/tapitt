@@ -7,7 +7,7 @@ import Index from "./pages/Index";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import NotFound from "./pages/NotFound";
-import EmployeeSetPassword from "./pages/EmployeeSetPassword";
+import EmployeeSetPassword from "./components/auth/EmployeeSetPassword";
 import AdminUsersPage from './pages/AdminUsersPage';
 
 const queryClient = new QueryClient();

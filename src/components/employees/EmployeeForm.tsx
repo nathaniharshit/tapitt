@@ -29,6 +29,7 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const [phoneError, setPhoneError] = useState(''); // Add phone error state
+  const [showPassword, setShowPassword] = useState(false); // Add this state
 
   useEffect(() => {
     if (message) {
@@ -83,18 +84,17 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          firstname: formData.firstName,
-          lastname: formData.lastName,
+          firstname: formData.firstName, // <-- correct field name
+          lastname: formData.lastName,   // <-- correct field name
           email: formData.email,
           phone: `${formData.countryCode}${formData.phone}`,
           department: formData.department,
           position: formData.position,
           role: formData.role,
-          salary: parseFloat(formData.salary.replace(/,/g, '')), // Remove commas before sending
-          startDate: formData.startDate,
+          salary: formData.salary ? parseFloat(formData.salary.replace(/,/g, '')) : undefined, // ensure number
+          startDate: formData.startDate, // (optionally convert to ISO string)
           address: formData.address,
-          password: formData.password,
-          aadhar: formData.aadhar, // Add this field to the POST body
+          password: formData.password // ensure this is present
         })
       });
 
@@ -247,9 +247,27 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
             </div>
             <div>
               <Label htmlFor="password">Temporary Password</Label>
-              <Input name="password" type="password" value={formData.password} onChange={handleChange} required minLength={8} placeholder="At least 8 characters" />
+              <div className="relative flex items-center">
+                <Input
+                  name="password"
+                  type={showPassword ? "text" : "password"}
+                  value={formData.password}
+                  onChange={handleChange}
+                  required
+                  minLength={8}
+                  placeholder="At least 8 characters"
+                  className="pr-20"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  className="absolute right-2 px-2 py-1 text-xs bg-gray-100 border rounded hover:bg-gray-200"
+                  tabIndex={-1}
+                >
+                  {showPassword ? "Hide" : "Show"}
+                </button>
+              </div>
             </div>
-           
           </div>
 
           <Button type="submit" disabled={loading}>

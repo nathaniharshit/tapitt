@@ -63,6 +63,7 @@ const EmployeePersonalDetails = ({ user }: EmployeePersonalDetailsProps) => {
     picture: null,
   });
   const [message, setMessage] = useState('');
+  const [originalData, setOriginalData] = useState(form);
 
   const resetForm = (emp: any) => {
     setForm({
@@ -113,7 +114,8 @@ const EmployeePersonalDetails = ({ user }: EmployeePersonalDetailsProps) => {
   };
 
   const handleCancel = () => {
-    resetForm(details);
+    setForm(originalData); // Reset to original values
+    setViewMode(true);       // Exit edit mode
     setMessage("");
   };
 
@@ -169,6 +171,7 @@ const EmployeePersonalDetails = ({ user }: EmployeePersonalDetailsProps) => {
   };
 
   const handleEdit = () => {
+    setOriginalData(form);
     setViewMode(false);
   };
 

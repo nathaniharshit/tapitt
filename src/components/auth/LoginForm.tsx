@@ -18,6 +18,7 @@ import {
   SelectValue
 } from '@/components/ui/select';
 import { Eye, EyeOff } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 interface LoginFormProps {
   onLogin: (userData: DemoUser) => void;
@@ -101,10 +102,9 @@ const LoginForm = ({ onLogin }: LoginFormProps) => {
           setError(data.error || 'Login failed');
           return;
         }
-        // Check mustChangePassword
+        // If mustChangePassword, redirect to set password page
         if (data.employee && data.employee.mustChangePassword) {
-          // Redirect to set password page, pass employeeId
-          navigate('/employee-set-password', { state: { employeeId: data.employee._id } });
+          navigate('/employee-set-password', { state: { employeeId: data.employee._id, email: data.employee.email } });
           return;
         }
         // Successful login

@@ -39,8 +39,16 @@ const employeeSchema = new mongoose.Schema({
     type: String,
     enum: ['employee', 'admin', 'super_admin', 'superadmin', 'intern'],
     required: true
-  }
-}, { timestamps: true }); // <-- Add this option
+  },
+  password: { type: String, select: false },
+  mustChangePassword: { type: Boolean, default: true },
+  department: String,      // <-- Add
+  position: String,        // <-- Add
+  salary: Number,          // <-- Add
+  startDate: String,       // <-- Add
+  address: String,         // <-- Add
+  aadhar: String           // <-- Add
+}, { timestamps: true });
 
 const Employee = mongoose.model('Employee', employeeSchema);
 app.use(cors()); // allow all origins for now
@@ -68,7 +76,9 @@ app.get('/', (req, res) => {
 const allowedFields = [
   'firstname', 'lastname', 'email', 'phone', 'dob', 'city', 'state', 'zipcode', 'country',
   'emergencyContact', 'upi', 'ifsc', 'experience', 'currentCompany', 'previousCompany', 'skills',
-  'linkedin', 'github', 'status', 'picture', 'role'
+  'linkedin', 'github', 'status', 'picture', 'role',
+  'department', 'position', 'salary', 'startDate', 'address', 'aadhar'
+  // DO NOT include 'password' here
 ];
 
 app.post('/api/employees', async (req, res) => {
@@ -76,9 +86,7 @@ app.post('/api/employees', async (req, res) => {
     if (!req.body.password || req.body.password.length < 8) {
       return res.status(400).json({ error: 'A temporary password of at least 8 characters is required.' });
     }
-    // Hash the password before saving
     const hashedPassword = await bcrypt.hash(req.body.password, 10);
-    // Only pick allowed fields
     const employeeData = {};
     allowedFields.forEach(field => {
       if (req.body[field] !== undefined && req.body[field] !== '') employeeData[field] = req.body[field];
@@ -87,6 +95,9 @@ app.post('/api/employees', async (req, res) => {
     employeeData.mustChangePassword = true;
     const employee = new Employee(employeeData);
     await employee.save();
+    // Debug: log the employee with password field
+    const saved = await Employee.findById(employee._id).select('+password');
+    console.log('Saved employee with password:', saved);
     res.status(201).json(employee);
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -150,7 +161,11 @@ app.delete('/api/employees/:id', async (req, res) => {
 app.post('/api/login', async (req, res) => {
   const { email, password } = req.body;
   try {
-    const employee = await Employee.findOne({ email });
+    const employee = await Employee.findOne({ email }).select('+password +mustChangePassword +firstname +lastname +role +lastLogin');
+    // Debug: log the employee password hash
+    if (employee) {
+      console.log('Employee password hash in DB:', employee.password);
+    }
     if (!employee) {
       return res.status(401).json({ error: 'Invalid email or password' });
     }
