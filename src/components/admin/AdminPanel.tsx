@@ -291,7 +291,7 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
               type="date"
               value={attendanceDate}
               onChange={e => setAttendanceDate(e.target.value)}
-              className="border rounded px-2 py-1 bg-background text-foreground"
+              className="border rounded px-2 py-1 bg-background text-foreground dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700"
               max={format(new Date(), 'yyyy-MM-dd')}
             />
           </div>

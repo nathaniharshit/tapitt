@@ -935,7 +935,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                     type="month"
                     value={calendarMonth}
                     onChange={e => setCalendarMonth(e.target.value)}
-                    className="border rounded px-2 py-1 bg-background text-foreground"
+                    className="border rounded px-2 py-1 bg-background text-foreground dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700"
                     max={new Date().toISOString().substring(0, 7)}
                   />
                 </div>
@@ -960,7 +960,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                     type="date"
                     value={attendanceDate}
                     onChange={e => setAttendanceDate(e.target.value)}
-                    className="border rounded px-2 py-1 bg-background text-foreground"
+                    className="border rounded px-2 py-1 bg-background text-foreground dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700"
                     min={calendarMonth + '-01'}
                     max={new Date().toISOString().substring(0, 10)}
                   />
@@ -1034,11 +1034,11 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                   </div>
                   <div>
                     <label className="block text-sm font-medium mb-1 text-foreground">From</label>
-                    <input type="date" className="w-full border rounded px-3 py-2 bg-background text-foreground" />
+                    <input type="date" className="w-full border rounded px-3 py-2 bg-background text-foreground dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700" />
                   </div>
                   <div>
                     <label className="block text-sm font-medium mb-1 text-foreground">To</label>
-                    <input type="date" className="w-full border rounded px-3 py-2 bg-background text-foreground" />
+                    <input type="date" className="w-full border rounded px-3 py-2 bg-background text-foreground dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700" />
                   </div>
                   <div>
                     <label className="block text-sm font-medium mb-1 text-foreground">Reason</label>
