@@ -48,10 +48,25 @@ const AttendanceCalendar: React.FC<AttendanceCalendarProps> = ({ user, month }) 
   }
   if (week.length) weeks.push([...week, ...Array(7 - week.length).fill(null)]);
 
+  // Attendance percentage calculation for the month
+  const monthStr = `${year}-${String(monthIdx + 1).padStart(2, '0')}`;
+  const monthAttendance = attendance.filter(a => a.date.startsWith(monthStr));
+  const presentDays = monthAttendance.filter(a => a.status === 'present').length;
+  const markedDays = monthAttendance.length;
+  const attendancePercent = markedDays > 0 ? Math.round((presentDays / markedDays) * 100) : 0;
+
   return (
     <div className="bg-card rounded-lg p-4 shadow-md">
       <div className="mb-2 text-center font-semibold text-lg text-foreground">
         {new Date(year, monthIdx).toLocaleString('default', { month: 'long' })} {year}
+      </div>
+      <div className="mb-2 text-center">
+        <span className="font-semibold text-blue-700 dark:text-blue-300">
+          Attendance: {markedDays > 0 ? `${attendancePercent}%` : 'N/A'}
+        </span>
+        <span className="ml-2 text-xs text-muted-foreground">
+          ({presentDays} present / {markedDays} marked)
+        </span>
       </div>
       <div className="grid grid-cols-7 gap-1 text-center text-xs font-bold mb-1">
         <div className="text-muted-foreground">Sun</div>
