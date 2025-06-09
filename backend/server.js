@@ -51,6 +51,25 @@ const employeeSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 const Employee = mongoose.model('Employee', employeeSchema);
+
+// --- Project Model ---
+const projectSchema = new mongoose.Schema({
+  name: { type: String, required: true },
+  description: { type: String, required: true },
+  team: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Employee' }],
+  lead: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee' } // Add project lead
+}, { timestamps: true });
+const Project = mongoose.model('Project', projectSchema);
+// --- End Project Model ---
+
+// --- Team Model ---
+const teamSchema = new mongoose.Schema({
+  name: { type: String, required: true },
+  members: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Employee' }]
+}, { timestamps: true });
+const Team = mongoose.model('Team', teamSchema);
+// --- End Team Model ---
+
 app.use(cors()); // allow all origins for now
 app.use(express.json());
 
@@ -104,10 +123,146 @@ app.post('/api/employees', async (req, res) => {
   }
 });
 
+// --- Projects API ---
+// Get all projects (populate team members and lead)
+app.get('/api/projects', async (req, res) => {
+  try {
+    const projects = await Project.find({})
+      .populate({ path: 'team', select: 'firstname lastname email role' })
+      .populate({ path: 'lead', select: 'firstname lastname email role' });
+    // Format team as array of IDs, and lead as ID
+    const formatted = projects.map(proj => ({
+      ...proj.toObject(),
+      team: Array.isArray(proj.team) ? proj.team.map(member => member._id.toString()) : [],
+      lead: proj.lead ? proj.lead._id.toString() : ''
+    }));
+    res.json(formatted);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch projects' });
+  }
+});
+
+// Add a new project
+app.post('/api/projects', async (req, res) => {
+  try {
+    const { name, description, team, lead } = req.body;
+    const project = new Project({
+      name,
+      description,
+      team: Array.isArray(team) ? team : [],
+      lead: lead || null
+    });
+    await project.save();
+    res.status(201).json(project);
+  } catch (err) {
+    res.status(400).json({ error: 'Failed to add project' });
+  }
+});
+
+// Update a project
+app.put('/api/projects/:id', async (req, res) => {
+  try {
+    const { name, description, team, lead } = req.body;
+    const updated = await Project.findByIdAndUpdate(
+      req.params.id,
+      {
+        name,
+        description,
+        team: Array.isArray(team) ? team : [],
+        lead: lead || null
+      },
+      { new: true, runValidators: true }
+    );
+    if (!updated) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    res.json(updated);
+  } catch (err) {
+    res.status(400).json({ error: 'Failed to update project' });
+  }
+});
+
+// Add this after the POST /api/projects endpoint
+app.delete('/api/projects/:id', async (req, res) => {
+  try {
+    const deleted = await Project.findByIdAndDelete(req.params.id);
+    if (!deleted) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    res.json({ message: 'Project deleted successfully.' });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete project' });
+  }
+});
+// --- End Projects API ---
+
+// --- Teams API ---
+app.get('/api/teams', async (req, res) => {
+  try {
+    const teams = await Team.find({}).populate({ path: 'members', select: 'firstname lastname department position' });
+    // Format members as array of IDs for frontend
+    const formatted = teams.map(team => ({
+      ...team.toObject(),
+      members: Array.isArray(team.members) ? team.members.map(m => m._id.toString()) : []
+    }));
+    res.json(formatted);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch teams' });
+  }
+});
+
+app.post('/api/teams', async (req, res) => {
+  try {
+    const { name, members } = req.body;
+    const team = new Team({ name, members: Array.isArray(members) ? members : [] });
+    await team.save();
+    res.status(201).json(team);
+  } catch (err) {
+    res.status(400).json({ error: 'Failed to create team' });
+  }
+});
+
+app.put('/api/teams/:id', async (req, res) => {
+  try {
+    const { name, members } = req.body;
+    const updated = await Team.findByIdAndUpdate(
+      req.params.id,
+      { name, members: Array.isArray(members) ? members : [] },
+      { new: true, runValidators: true }
+    );
+    if (!updated) {
+      return res.status(404).json({ error: 'Team not found' });
+    }
+    res.json(updated);
+  } catch (err) {
+    res.status(400).json({ error: 'Failed to update team' });
+  }
+});
+
+app.delete('/api/teams/:id', async (req, res) => {
+  try {
+    const deleted = await Team.findByIdAndDelete(req.params.id);
+    if (!deleted) {
+      return res.status(404).json({ error: 'Team not found' });
+    }
+    res.json({ message: 'Team deleted successfully.' });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete team' });
+  }
+});
+// --- End Teams API ---
+
+// --- Employees API: filter by role for team selection ---
 app.get('/api/employees', async (req, res) => {
   try {
+    let filter = {};
+    // Support ?roles=employee,intern for team selection
+    if (req.query.roles) {
+      const roles = req.query.roles.split(',');
+      filter.role = { $in: roles };
+    }
     // Explicitly select createdAt and updatedAt fields
-    const employees = await Employee.find().select('+createdAt +updatedAt');
+    const employees = await Employee.find(filter).select('+createdAt +updatedAt');
     res.json(employees);
   } catch (err) {
     res.status(500).json({ error: err.message });

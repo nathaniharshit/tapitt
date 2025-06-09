@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import Header from './Header';
 import Sidebar from './Sidebar';
 import EmployeeList from '../employees/EmployeeList';
@@ -10,6 +10,7 @@ import { Navigate, useLocation } from 'react-router-dom';
 import EmployeePersonalDetails from '../employees/EmployeePersonalDetails';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import AttendanceCalendar from '../attendance/AttendanceCalendar';
+import { Dialog } from '@/components/ui/dialog'; // If you use a dialog/modal component
 
 interface User {
   id: string;
@@ -42,6 +43,344 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
   const [elapsedMs, setElapsedMs] = useState<number>(0);
   const [employees, setEmployees] = useState<any[]>([]);
   const [welcomeName, setWelcomeName] = useState<string>('');
+
+  // --- Projects state and logic ---
+  const [projects, setProjects] = useState<any[]>([]);
+  const [projectForm, setProjectForm] = useState({ name: '', description: '', team: [] as string[], lead: '' });
+  const [projectMsg, setProjectMsg] = useState('');
+  const projectFormRef = useRef<HTMLFormElement>(null);
+
+  // Fetch employees and interns for team selection
+  const [teamOptions, setTeamOptions] = useState<{ value: string; label: string }[]>([]);
+  // Fetch admins/super_admins for project lead selection
+  const [leadOptions, setLeadOptions] = useState<{ value: string; label: string }[]>([]);
+  useEffect(() => {
+    const fetchTeamOptions = async () => {
+      try {
+        const res = await fetch('http://localhost:5050/api/employees');
+        const data = await res.json();
+        // Filter for employees and interns
+        const filtered = data.filter((emp: any) =>
+          emp.role === 'employee' || emp.role === 'intern'
+        );
+        setTeamOptions(
+          filtered.map((emp: any) => ({
+            value: emp._id,
+            label: `${emp.firstname} ${emp.lastname} (${emp.department || 'N/A'})`
+          }))
+        );
+        // Filter for admins and super_admins
+        const admins = data.filter((emp: any) =>
+          emp.role === 'admin' || emp.role === 'super_admin'
+        );
+        setLeadOptions(
+          admins.map((emp: any) => ({
+            value: emp._id,
+            label: `${emp.firstname} ${emp.lastname} (${emp.department || 'N/A'})`
+          }))
+        );
+      } catch {
+        setTeamOptions([]);
+        setLeadOptions([]);
+      }
+    };
+    fetchTeamOptions();
+  }, []);
+
+  const fetchProjects = async () => {
+    try {
+      const res = await fetch('http://localhost:5050/api/projects');
+      const data = await res.json();
+      setProjects(data);
+    } catch {
+      setProjects([]);
+    }
+  };
+
+  useEffect(() => {
+    fetchProjects();
+  }, []);
+
+  const handleProjectFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    setProjectForm({ ...projectForm, [e.target.name]: e.target.value });
+  };
+
+  // Handle team multi-select
+  const handleTeamSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const selected = Array.from(e.target.selectedOptions).map((opt) => opt.value);
+    setProjectForm({ ...projectForm, team: selected });
+  };
+
+  // Handle team checkbox selection
+  const handleTeamCheckbox = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    if (e.target.checked) {
+      setProjectForm((prev) => ({
+        ...prev,
+        team: [...prev.team, value]
+      }));
+    } else {
+      setProjectForm((prev) => ({
+        ...prev,
+        team: prev.team.filter((id) => id !== value)
+      }));
+    }
+  };
+
+  const handleProjectSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setProjectMsg('');
+    try {
+      const resp = await fetch('http://localhost:5050/api/projects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...projectForm,
+          team: projectForm.team, // array of employee/intern IDs
+          lead: projectForm.lead  // admin/super_admin ID
+        })
+      });
+      if (resp.ok) {
+        setProjectMsg('Project added!');
+        setProjectForm({ name: '', description: '', team: [], lead: '' });
+        fetchProjects();
+        if (projectFormRef.current) projectFormRef.current.reset();
+      } else {
+        const err = await resp.json();
+        setProjectMsg('Error: ' + (err.error || 'Could not add project'));
+      }
+    } catch {
+      setProjectMsg('Network error.');
+    }
+  };
+
+  // Delete project handler and confirmation state
+  const [deleteMsg, setDeleteMsg] = useState('');
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  const handleDeleteProject = async (projectId: string) => {
+    setDeleteMsg('');
+    setConfirmDeleteId(null);
+    try {
+      const resp = await fetch(`http://localhost:5050/api/projects/${projectId}`, {
+        method: 'DELETE'
+      });
+      if (resp.ok) {
+        setDeleteMsg('Project deleted successfully.');
+        fetchProjects();
+      } else {
+        const err = await resp.json();
+        setDeleteMsg('Failed to delete project: ' + (err.error || 'Unknown error'));
+      }
+    } catch {
+      setDeleteMsg('Network error.');
+    }
+  };
+
+  // Edit project modal state
+  const [editProject, setEditProject] = useState<any | null>(null);
+  const [editMsg, setEditMsg] = useState('');
+
+  // Edit project handler
+  const handleEditProject = (proj: any) => {
+    setEditMsg('');
+    setEditProject({
+      ...proj,
+      team: Array.isArray(proj.team) ? proj.team : [],
+      lead: proj.lead || ''
+    });
+  };
+
+  const handleEditProjectChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    if (!editProject) return;
+    setEditProject({ ...editProject, [e.target.name]: e.target.value });
+  };
+
+  const handleEditTeamCheckbox = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!editProject) return;
+    const value = e.target.value;
+    if (e.target.checked) {
+      setEditProject((prev: any) => ({
+        ...prev,
+        team: [...prev.team, value]
+      }));
+    } else {
+      setEditProject((prev: any) => ({
+        ...prev,
+        team: prev.team.filter((id: string) => id !== value)
+      }));
+    }
+  };
+
+  const handleEditProjectSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setEditMsg('');
+    try {
+      const resp = await fetch(`http://localhost:5050/api/projects/${editProject._id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: editProject.name,
+          description: editProject.description,
+          team: editProject.team,
+          lead: editProject.lead
+        })
+      });
+      if (resp.ok) {
+        setEditMsg('Project updated!');
+        setEditProject(null);
+        fetchProjects();
+      } else {
+        const err = await resp.json();
+        setEditMsg('Error: ' + (err.error || 'Could not update project'));
+      }
+    } catch {
+      setEditMsg('Network error.');
+    }
+  };
+
+  // --- End Projects logic ---
+
+  // --- Teams state and logic ---
+  const [teams, setTeams] = useState<any[]>([]);
+  const [teamForm, setTeamForm] = useState({ name: '', members: [] as string[] });
+  const [teamMsg, setTeamMsg] = useState('');
+  const [editTeam, setEditTeam] = useState<any | null>(null);
+  const [editTeamMsg, setEditTeamMsg] = useState('');
+  const [confirmDeleteTeamId, setConfirmDeleteTeamId] = useState<string | null>(null);
+
+  // Fetch teams
+  const fetchTeams = async () => {
+    try {
+      const res = await fetch('http://localhost:5050/api/teams');
+      const data = await res.json();
+      setTeams(data);
+    } catch {
+      setTeams([]);
+    }
+  };
+
+  useEffect(() => {
+    fetchTeams();
+  }, []);
+
+  // Handle team form changes
+  const handleTeamFormChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setTeamForm({ ...teamForm, [e.target.name]: e.target.value });
+  };
+  const handleTeamMemberCheckbox = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    if (e.target.checked) {
+      setTeamForm((prev) => ({
+        ...prev,
+        members: [...prev.members, value]
+      }));
+    } else {
+      setTeamForm((prev) => ({
+        ...prev,
+        members: prev.members.filter((id) => id !== value)
+      }));
+    }
+  };
+
+  // Create team
+  const handleTeamSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setTeamMsg('');
+    try {
+      const resp = await fetch('http://localhost:5050/api/teams', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: teamForm.name,
+          members: teamForm.members
+        })
+      });
+      if (resp.ok) {
+        setTeamMsg('Team created!');
+        setTeamForm({ name: '', members: [] });
+        fetchTeams();
+      } else {
+        const err = await resp.json();
+        setTeamMsg('Error: ' + (err.error || 'Could not create team'));
+      }
+    } catch {
+      setTeamMsg('Network error.');
+    }
+  };
+
+  // Edit team
+  const handleEditTeam = (team: any) => {
+    setEditTeamMsg('');
+    setEditTeam({
+      ...team,
+      members: Array.isArray(team.members) ? team.members : []
+    });
+  };
+  const handleEditTeamChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!editTeam) return;
+    setEditTeam({ ...editTeam, [e.target.name]: e.target.value });
+  };
+  const handleEditTeamMemberCheckbox = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!editTeam) return;
+    const value = e.target.value;
+    if (e.target.checked) {
+      setEditTeam((prev: any) => ({
+        ...prev,
+        members: [...prev.members, value]
+      }));
+    } else {
+      setEditTeam((prev: any) => ({
+        ...prev,
+        members: prev.members.filter((id: string) => id !== value)
+      }));
+    }
+  };
+  const handleEditTeamSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setEditTeamMsg('');
+    try {
+      const resp = await fetch(`http://localhost:5050/api/teams/${editTeam._id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: editTeam.name,
+          members: editTeam.members
+        })
+      });
+      if (resp.ok) {
+        setEditTeamMsg('Team updated!');
+        setEditTeam(null);
+        fetchTeams();
+      } else {
+        const err = await resp.json();
+        setEditTeamMsg('Error: ' + (err.error || 'Could not update team'));
+      }
+    } catch {
+      setEditTeamMsg('Network error.');
+    }
+  };
+
+  // Delete team
+  const handleDeleteTeam = async (teamId: string) => {
+    setEditTeamMsg('');
+    setConfirmDeleteTeamId(null);
+    try {
+      const resp = await fetch(`http://localhost:5050/api/teams/${teamId}`, {
+        method: 'DELETE'
+      });
+      if (resp.ok) {
+        fetchTeams();
+      } else {
+        const err = await resp.json();
+        setEditTeamMsg('Failed to delete team: ' + (err.error || 'Unknown error'));
+      }
+    } catch {
+      setEditTeamMsg('Network error.');
+    }
+  };
+
+  // --- End Teams logic ---
 
   useEffect(() => {
     // Fetch login time for the current user
@@ -569,103 +908,473 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
       case 'projects':
         return (
           <div className="p-8">
-            <Card className="max-w-3xl mx-auto mb-8 bg-card text-foreground">
-              <CardHeader>
-                <CardTitle>Add New Project</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <form className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium mb-1 text-foreground">Project Name</label>
-                    <input className="w-full border rounded px-3 py-2 bg-background text-foreground" placeholder="Enter project name" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-1 text-foreground">Description</label>
-                    <textarea className="w-full border rounded px-3 py-2 bg-background text-foreground" placeholder="Describe the project" rows={3} />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-1 text-foreground">Team</label>
-                    <input className="w-full border rounded px-3 py-2 bg-background text-foreground" placeholder="Team name or members" />
-                  </div>
-                  <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded font-semibold">Add Project</button>
-                </form>
-              </CardContent>
-            </Card>
-            <Card className="max-w-3xl mx-auto bg-card text-foreground">
-              <CardHeader>
-                <CardTitle>Ongoing Company Projects</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ul className="divide-y divide-border">
-                  <li className="py-3">
-                    <div className="font-semibold text-foreground">HR Management System</div>
-                    <div className="text-sm text-muted-foreground">Team: HR, Dev</div>
-                    <div className="text-xs text-muted-foreground">A platform for employee management, attendance, and payroll.</div>
-                  </li>
-                  <li className="py-3">
-                    <div className="font-semibold text-foreground">Client Portal</div>
-                    <div className="text-sm text-muted-foreground">Team: Client Success, Dev</div>
-                    <div className="text-xs text-muted-foreground">A portal for clients to track project progress and invoices.</div>
-                  </li>
-                  <li className="py-3">
-                    <div className="font-semibold text-foreground">Mobile App Redesign</div>
-                    <div className="text-sm text-muted-foreground">Team: Mobile, UI/UX</div>
-                    <div className="text-xs text-muted-foreground">Revamping the company mobile app for better user experience.</div>
-                  </li>
-                </ul>
-              </CardContent>
-            </Card>
+            {(user.role === 'admin' || user.role === 'super_admin') && (
+              <Card className="max-w-3xl mx-auto mb-8 bg-card text-foreground">
+                <CardHeader>
+                  <CardTitle>Add New Project</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <form className="space-y-4" onSubmit={handleProjectSubmit} ref={projectFormRef}>
+                    <div>
+                      <label className="block text-sm font-medium mb-1 text-foreground">Project Name</label>
+                      <input
+                        className="w-full border rounded px-3 py-2 bg-background text-foreground"
+                        placeholder="Enter project name"
+                        name="name"
+                        value={projectForm.name}
+                        onChange={handleProjectFormChange}
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1 text-foreground">Description</label>
+                      <textarea
+                        className="w-full border rounded px-3 py-2 bg-background text-foreground"
+                        placeholder="Describe the project"
+                        rows={3}
+                        name="description"
+                        value={projectForm.description}
+                        onChange={handleProjectFormChange}
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1 text-foreground">Project Lead (Admin/Super Admin)</label>
+                      <select
+                        name="lead"
+                        value={projectForm.lead}
+                        onChange={handleProjectFormChange}
+                        required
+                        className="w-full border rounded px-3 py-2 bg-background text-foreground"
+                      >
+                        <option value="">Select project lead</option>
+                        {leadOptions.map(opt => (
+                          <option key={opt.value} value={opt.value}>{opt.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1 text-foreground">Team (Employees & Interns)</label>
+                      <div className="border rounded bg-background px-2 py-2 max-h-64 overflow-y-auto">
+                        {teamOptions.length === 0 && (
+                          <div className="text-xs text-muted-foreground">No team members available.</div>
+                        )}
+                        <ul className="space-y-2">
+                          {teamOptions.map(opt => (
+                            <li key={opt.value} className="flex items-center gap-3 hover:bg-muted/50 rounded px-2 py-1 transition">
+                              <input
+                                type="checkbox"
+                                value={opt.value}
+                                checked={projectForm.team.includes(opt.value)}
+                                onChange={handleTeamCheckbox}
+                                className="accent-blue-600 h-4 w-4"
+                                id={`team-checkbox-${opt.value}`}
+                              />
+                              <label htmlFor={`team-checkbox-${opt.value}`} className="flex-1 cursor-pointer text-sm">
+                                {opt.label}
+                              </label>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-1">
+                        Select one or more team members.
+                      </div>
+                    </div>
+                    <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded font-semibold">Add Project</button>
+                    {projectMsg && (
+                      <div className={`mt-2 text-sm ${projectMsg.startsWith('Error') ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
+                        {projectMsg}
+                      </div>
+                    )}
+                  </form>
+                </CardContent>
+              </Card>
+            )}
+            <div className="max-w-6xl mx-auto">
+              <Card className="bg-card text-foreground mb-6">
+                <CardHeader>
+                  <CardTitle>Ongoing Company Projects</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {deleteMsg && (
+                    <div className={`mb-4 text-sm font-medium ${deleteMsg.startsWith('Project deleted') ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                      {deleteMsg}
+                    </div>
+                  )}
+                  {editMsg && (
+                    <div className={`mb-4 text-sm font-medium ${editMsg.startsWith('Project updated') ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                      {editMsg}
+                    </div>
+                  )}
+                  {projects.length === 0 ? (
+                    <div className="py-6 text-center text-muted-foreground">No projects found.</div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {projects.map((proj) => (
+                        <div key={proj._id || proj.name} className="rounded-lg border border-border bg-background shadow-md flex flex-col h-full">
+                          <div className="p-4 flex-1 flex flex-col">
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="font-semibold text-lg text-foreground truncate">{proj.name}</div>
+                              {(user.role === 'admin' || user.role === 'super_admin') && (
+                                <div className="flex gap-2">
+                                  <button
+                                    onClick={() => handleEditProject(proj)}
+                                    className="text-blue-600 hover:underline text-xs font-semibold"
+                                    title="Edit Project"
+                                  >
+                                    Edit
+                                  </button>
+                                  {confirmDeleteId === proj._id ? (
+                                    <div className="flex flex-col items-end gap-2">
+                                      <div className="text-xs text-foreground mb-1">Are you sure?</div>
+                                      <div className="flex gap-2">
+                                        <button
+                                          onClick={() => handleDeleteProject(proj._id)}
+                                          className="px-2 py-1 bg-red-600 text-white rounded text-xs font-semibold"
+                                        >
+                                          Delete
+                                        </button>
+                                        <button
+                                          onClick={() => setConfirmDeleteId(null)}
+                                          className="px-2 py-1 bg-muted text-foreground rounded text-xs font-semibold"
+                                        >
+                                          Cancel
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <button
+                                      onClick={() => setConfirmDeleteId(proj._id)}
+                                      className="text-red-600 hover:underline text-xs font-semibold"
+                                      title="Delete Project"
+                                    >
+                                      Delete
+                                    </button>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                            <div className="text-xs text-muted-foreground mb-2">{proj.description}</div>
+                            <div className="mb-2">
+                              <span className="font-semibold text-sm text-foreground">Lead: </span>
+                              <span className="text-sm text-muted-foreground">
+                                {(() => {
+                                  const lead = leadOptions.find(opt => opt.value === proj.lead);
+                                  return lead ? lead.label : (proj.lead || 'N/A');
+                                })()}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="font-semibold text-sm text-foreground">Team: </span>
+                              <span className="text-sm text-muted-foreground">
+                                {Array.isArray(proj.team) && proj.team.length > 0
+                                  ? proj.team.map((id: string) => {
+                                      const member = teamOptions.find(opt => opt.value === id);
+                                      return member ? member.label : id;
+                                    }).join(', ')
+                                  : 'N/A'}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="px-4 pb-4 mt-auto flex items-center justify-between">
+                            <span className="text-xs text-muted-foreground">
+                              Created: {proj.createdAt ? new Date(proj.createdAt).toLocaleDateString() : 'N/A'}
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              Updated: {proj.updatedAt ? new Date(proj.updatedAt).toLocaleDateString() : 'N/A'}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+            {/* Edit Project Modal */}
+            {editProject && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+                <div className="bg-card rounded-lg shadow-lg max-w-lg w-full p-6 relative">
+                  <button
+                    className="absolute top-2 right-2 text-lg text-muted-foreground hover:text-foreground"
+                    onClick={() => setEditProject(null)}
+                  >
+                    ×
+                  </button>
+                  <h2 className="text-xl font-bold mb-4">Edit Project</h2>
+                  <form className="space-y-4" onSubmit={handleEditProjectSubmit}>
+                    <div>
+                      <label className="block text-sm font-medium mb-1 text-foreground">Project Name</label>
+                      <input
+                        className="w-full border rounded px-3 py-2 bg-background text-foreground"
+                        name="name"
+                        value={editProject.name}
+                        onChange={handleEditProjectChange}
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1 text-foreground">Description</label>
+                      <textarea
+                        className="w-full border rounded px-3 py-2 bg-background text-foreground"
+                        name="description"
+                        value={editProject.description}
+                        onChange={handleEditProjectChange}
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1 text-foreground">Project Lead (Admin/Super Admin)</label>
+                      <select
+                        name="lead"
+                        value={editProject.lead}
+                        onChange={handleEditProjectChange}
+                        required
+                        className="w-full border rounded px-3 py-2 bg-background text-foreground"
+                      >
+                        <option value="">Select project lead</option>
+                        {leadOptions.map(opt => (
+                          <option key={opt.value} value={opt.value}>{opt.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1 text-foreground">Team (Employees & Interns)</label>
+                      <div className="border rounded bg-background px-2 py-2 max-h-64 overflow-y-auto">
+                        <ul className="space-y-2">
+                          {teamOptions.map(opt => (
+                            <li key={opt.value} className="flex items-center gap-3 hover:bg-muted/50 rounded px-2 py-1 transition">
+                              <input
+                                type="checkbox"
+                                value={opt.value}
+                                checked={editProject.team.includes(opt.value)}
+                                onChange={handleEditTeamCheckbox}
+                                className="accent-blue-600 h-4 w-4"
+                                id={`edit-team-checkbox-${opt.value}`}
+                              />
+                              <label htmlFor={`edit-team-checkbox-${opt.value}`} className="flex-1 cursor-pointer text-sm">
+                                {opt.label}
+                              </label>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                    <div className="flex justify-end gap-2">
+                      <button
+                        type="button"
+                        className="px-4 py-2 bg-muted text-foreground rounded font-semibold"
+                        onClick={() => setEditProject(null)}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        className="px-4 py-2 bg-blue-600 text-white rounded font-semibold"
+                      >
+                        Save Changes
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            )}
           </div>
         );
       case 'teams':
-        // Teams feature: show team members and allow team creation
+        // Teams feature: show team members and allow team creation/edit/delete
         return (
           <div className="p-8">
-            <Card className="max-w-2xl mx-auto mb-8 bg-card text-foreground">
-              <CardHeader>
-                <CardTitle>My Team</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ul className="divide-y divide-border mb-4">
-                  <li className="py-2 flex justify-between">
-                    <span>Priya Sharma</span>
-                    <span className="text-muted-foreground">HR</span>
-                  </li>
-                  <li className="py-2 flex justify-between">
-                    <span>Rohit Mehra</span>
-                    <span className="text-muted-foreground">Developer</span>
-                  </li>
-                  <li className="py-2 flex justify-between">
-                    <span>John Doe</span>
-                    <span className="text-muted-foreground">Designer</span>
-                  </li>
-                </ul>
-                {(user.role === 'super_admin' || user.role === 'admin') && (
-                  <form className="space-y-2">
-                    <div>
-                      <label className="block text-sm font-medium mb-1 text-foreground">Add Team Member</label>
-                      <input className="w-full border rounded px-3 py-2 bg-background text-foreground" placeholder="Enter name or email" />
-                    </div>
-                    <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded font-semibold">Add Member</button>
-                  </form>
-                )}
-              </CardContent>
-            </Card>
             {(user.role === 'super_admin' || user.role === 'admin') && (
-              <Card className="max-w-2xl mx-auto bg-card text-foreground">
+              <Card className="max-w-2xl mx-auto mb-8 bg-card text-foreground">
                 <CardHeader>
                   <CardTitle>Create New Team</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <form className="space-y-2">
+                  <form className="space-y-4" onSubmit={handleTeamSubmit}>
                     <div>
                       <label className="block text-sm font-medium mb-1 text-foreground">Team Name</label>
-                      <input className="w-full border rounded px-3 py-2 bg-background text-foreground" placeholder="Team name" />
+                      <input
+                        className="w-full border rounded px-3 py-2 bg-background text-foreground"
+                        name="name"
+                        value={teamForm.name}
+                        onChange={handleTeamFormChange}
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1 text-foreground">Members</label>
+                      <div className="border rounded bg-background px-2 py-2 max-h-64 overflow-y-auto">
+                        <ul className="space-y-2">
+                          {employees.map(emp => (
+                            <li key={emp._id} className="flex items-center gap-3 hover:bg-muted/50 rounded px-2 py-1 transition">
+                              <input
+                                type="checkbox"
+                                value={emp._id}
+                                checked={teamForm.members.includes(emp._id)}
+                                onChange={handleTeamMemberCheckbox}
+                                className="accent-blue-600 h-4 w-4"
+                                id={`team-member-checkbox-${emp._id}`}
+                              />
+                              <label htmlFor={`team-member-checkbox-${emp._id}`} className="flex-1 cursor-pointer text-sm">
+                                {emp.firstname} {emp.lastname} ({emp.department || 'N/A'})
+                              </label>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
                     </div>
                     <button type="submit" className="px-4 py-2 bg-green-600 text-white rounded font-semibold">Create Team</button>
+                    {teamMsg && (
+                      <div className={`mt-2 text-sm ${teamMsg.startsWith('Error') ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
+                        {teamMsg}
+                      </div>
+                    )}
                   </form>
                 </CardContent>
               </Card>
+            )}
+            <div className="max-w-4xl mx-auto">
+              <Card className="bg-card text-foreground mb-6">
+                <CardHeader>
+                  <CardTitle>Teams</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {editTeamMsg && (
+                    <div className={`mb-4 text-sm font-medium ${editTeamMsg.startsWith('Team updated') ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                      {editTeamMsg}
+                    </div>
+                  )}
+                  {teams.length === 0 ? (
+                    <div className="py-6 text-center text-muted-foreground">No teams found.</div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                      {teams.map(team => (
+                        <div key={team._id} className="rounded-lg border border-border bg-background shadow-md flex flex-col h-full">
+                          <div className="p-4 flex-1 flex flex-col">
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="font-semibold text-lg text-foreground truncate">{team.name}</div>
+                              {(user.role === 'admin' || user.role === 'super_admin') && (
+                                <div className="flex gap-2">
+                                  <button
+                                    onClick={() => handleEditTeam(team)}
+                                    className="text-blue-600 hover:underline text-xs font-semibold"
+                                    title="Edit Team"
+                                  >
+                                    Edit
+                                  </button>
+                                  {confirmDeleteTeamId === team._id ? (
+                                    <div className="flex flex-col items-end gap-2">
+                                      <div className="text-xs text-foreground mb-1">Are you sure?</div>
+                                      <div className="flex gap-2">
+                                        <button
+                                          onClick={() => handleDeleteTeam(team._id)}
+                                          className="px-2 py-1 bg-red-600 text-white rounded text-xs font-semibold"
+                                        >
+                                          Delete
+                                        </button>
+                                        <button
+                                          onClick={() => setConfirmDeleteTeamId(null)}
+                                          className="px-2 py-1 bg-muted text-foreground rounded text-xs font-semibold"
+                                        >
+                                          Cancel
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <button
+                                      onClick={() => setConfirmDeleteTeamId(team._id)}
+                                      className="text-red-600 hover:underline text-xs font-semibold"
+                                      title="Delete Team"
+                                    >
+                                      Delete
+                                    </button>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                            <div>
+                              <span className="font-semibold text-sm text-foreground">Members: </span>
+                              <span className="text-sm text-muted-foreground">
+                                {Array.isArray(team.members) && team.members.length > 0
+                                  ? team.members.map((id: string) => {
+                                      const emp = employees.find(e => e._id === id);
+                                      return emp ? `${emp.firstname} ${emp.lastname} (${emp.department || 'N/A'})` : id;
+                                    }).join(', ')
+                                  : 'N/A'}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+            {/* Edit Team Modal */}
+            {editTeam && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+                <div className="bg-card rounded-lg shadow-lg max-w-lg w-full p-6 relative">
+                  <button
+                    className="absolute top-2 right-2 text-lg text-muted-foreground hover:text-foreground"
+                    onClick={() => setEditTeam(null)}
+                  >
+                    ×
+                  </button>
+                  <h2 className="text-xl font-bold mb-4">Edit Team</h2>
+                  <form className="space-y-4" onSubmit={handleEditTeamSubmit}>
+                    <div>
+                      <label className="block text-sm font-medium mb-1 text-foreground">Team Name</label>
+                      <input
+                        className="w-full border rounded px-3 py-2 bg-background text-foreground"
+                        name="name"
+                        value={editTeam.name}
+                        onChange={handleEditTeamChange}
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1 text-foreground">Members</label>
+                      <div className="border rounded bg-background px-2 py-2 max-h-64 overflow-y-auto">
+                        <ul className="space-y-2">
+                          {employees.map(emp => (
+                            <li key={emp._id} className="flex items-center gap-3 hover:bg-muted/50 rounded px-2 py-1 transition">
+                              <input
+                                type="checkbox"
+                                value={emp._id}
+                                checked={editTeam.members.includes(emp._id)}
+                                onChange={handleEditTeamMemberCheckbox}
+                                className="accent-blue-600 h-4 w-4"
+                                id={`edit-team-member-checkbox-${emp._id}`}
+                              />
+                              <label htmlFor={`edit-team-member-checkbox-${emp._id}`} className="flex-1 cursor-pointer text-sm">
+                                {emp.firstname} {emp.lastname} ({emp.department || 'N/A'})
+                              </label>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                    <div className="flex justify-end gap-2">
+                      <button
+                        type="button"
+                        className="px-4 py-2 bg-muted text-foreground rounded font-semibold"
+                        onClick={() => setEditTeam(null)}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        className="px-4 py-2 bg-blue-600 text-white rounded font-semibold"
+                      >
+                        Save Changes
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
             )}
           </div>
         );
