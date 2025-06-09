@@ -19,7 +19,6 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' | '' }>({ text: '', type: '' });
   const [deleteEmployee, setDeleteEmployee] = useState<any | null>(null); // For delete confirmation dialog
-  const [roleFilter, setRoleFilter] = useState('all');
 
   useEffect(() => {
     fetch('http://localhost:5050/api/employees')
@@ -34,16 +33,6 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
       });
   }, []);
   
-
-  const filteredEmployees = employees.filter(employee => {
-    const matchesSearch =
-      `${employee.firstname} ${employee.lastname}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (employee.email || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (employee.department || '').toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesRole =
-      roleFilter === 'all' ? true : (employee.role === roleFilter || (roleFilter === 'superadmin' && employee.role === 'super_admin'));
-    return matchesSearch && matchesRole;
-  });
 
   const canEdit = userRole === 'super_admin' || userRole === 'admin';
   const canDelete = userRole === 'super_admin';
@@ -162,10 +151,10 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
   };
 
   const roleSections = [
-    { key: 'super_admin', label: 'Super Admins', color: 'text-blue-700' },
-    { key: 'admin', label: 'Admins', color: 'text-green-700' },
-    { key: 'employee', label: 'Employees', color: 'text-yellow-700' },
-    { key: 'intern', label: 'Interns', color: 'text-purple-700' },
+    { key: 'super_admin', label: 'Super Admins', border: 'border-blue-500', bg: 'bg-blue-50 dark:bg-card', badge: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' },
+    { key: 'admin', label: 'Admins', border: 'border-green-500', bg: 'bg-green-50 dark:bg-card', badge: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' },
+    { key: 'employee', label: 'Employees', border: 'border-yellow-500', bg: 'bg-yellow-50 dark:bg-card', badge: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200' },
+    { key: 'intern', label: 'Interns', border: 'border-purple-500', bg: 'bg-purple-50 dark:bg-card', badge: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200' },
   ];
 
   return (
@@ -210,7 +199,9 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
         if (group.length === 0) return null;
         return (
           <div key={section.key}>
-            <h3 className={`text-xl font-bold mb-4 text-foreground`}>{section.label}</h3>
+            <h3 className={`text-xl font-bold mb-4 ${section.border} text-foreground`}>
+              {section.label}
+            </h3>
             <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 md:grid-cols-3">
               {group.map((employee) => {
                 const profilePic = getProfilePicUrl(employee);
@@ -219,7 +210,10 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
                     ? `${employee.firstname[0]}${employee.lastname[0]}`.toUpperCase()
                     : '?';
                 return (
-                  <Card key={employee._id} className="flex flex-col h-full bg-card text-foreground">
+                  <Card
+                    key={employee._id}
+                    className={`flex flex-col h-full border-2 ${section.border} ${section.bg} text-foreground transition-shadow hover:shadow-lg`}
+                  >
                     <CardContent className="p-6 flex flex-col flex-1">
                       <div className="flex items-center space-x-4 mb-4">
                         {profilePic ? (
@@ -229,8 +223,8 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
                             className="w-12 h-12 rounded-full object-cover border"
                           />
                         ) : (
-                          <div className="w-12 h-12 bg-muted rounded-full flex items-center justify-center">
-                            <span className="text-primary font-semibold">
+                          <div className={`w-12 h-12 ${section.badge} rounded-full flex items-center justify-center`}>
+                            <span className="font-semibold">
                               {initials}
                             </span>
                           </div>
@@ -244,9 +238,9 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
                       <div className="flex-1" />
                       <div className="flex items-center justify-between mt-2">
                         <div>
-                          <Badge variant="default">
+                          <span className={`inline-block rounded px-2 py-1 text-xs font-semibold ${section.badge}`}>
                             {employee.status || 'active'}
-                          </Badge>
+                          </span>
                           <p className="text-xs text-muted-foreground mt-1">
                             Joined: {new Date(employee.startDate).toLocaleDateString()}
                           </p>
