@@ -124,11 +124,11 @@ const Sidebar = ({ userRole, activeTab, setActiveTab }: SidebarProps) => {
   );
 
   return (
-    <aside className="w-64 bg-white shadow-sm border-r min-h-screen">
+    <aside className="w-64 min-h-screen bg-background text-foreground border-r">
       <div className="p-4">
         <div className="flex items-center space-x-2 mb-6">
-          <Building className="h-8 w-8 text-blue-600" />
-          <span className="text-lg font-semibold text-gray-900">EMS</span>
+          <Building className="h-8 w-8 text-primary" />
+          <span className="text-lg font-semibold text-foreground">EMS</span>
         </div>
         
         <nav className="space-y-2">

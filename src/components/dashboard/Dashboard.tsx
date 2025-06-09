@@ -641,29 +641,33 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                     <span className="text-gray-500">Designer</span>
                   </li>
                 </ul>
-                <form className="space-y-2">
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Add Team Member</label>
-                    <input className="w-full border rounded px-3 py-2" placeholder="Enter name or email" />
-                  </div>
-                  <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded font-semibold">Add Member</button>
-                </form>
+                {(user.role === 'super_admin' || user.role === 'admin') && (
+                  <form className="space-y-2">
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Add Team Member</label>
+                      <input className="w-full border rounded px-3 py-2" placeholder="Enter name or email" />
+                    </div>
+                    <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded font-semibold">Add Member</button>
+                  </form>
+                )}
               </CardContent>
             </Card>
-            <Card className="max-w-2xl mx-auto">
-              <CardHeader>
-                <CardTitle>Create New Team</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <form className="space-y-2">
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Team Name</label>
-                    <input className="w-full border rounded px-3 py-2" placeholder="Team name" />
-                  </div>
-                  <button type="submit" className="px-4 py-2 bg-green-600 text-white rounded font-semibold">Create Team</button>
-                </form>
-              </CardContent>
-            </Card>
+            {(user.role === 'super_admin' || user.role === 'admin') && (
+              <Card className="max-w-2xl mx-auto">
+                <CardHeader>
+                  <CardTitle>Create New Team</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <form className="space-y-2">
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Team Name</label>
+                      <input className="w-full border rounded px-3 py-2" placeholder="Team name" />
+                    </div>
+                    <button type="submit" className="px-4 py-2 bg-green-600 text-white rounded font-semibold">Create Team</button>
+                  </form>
+                </CardContent>
+              </Card>
+            )}
           </div>
         );
       case 'awards':
@@ -685,17 +689,19 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                     <span className="text-blue-600">March 2025</span>
                   </li>
                 </ul>
-                <form className="space-y-2">
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Nominate a Colleague</label>
-                    <input className="w-full border rounded px-3 py-2" placeholder="Enter name or email" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Award</label>
-                    <input className="w-full border rounded px-3 py-2" placeholder="Award name" />
-                  </div>
-                  <button type="submit" className="px-4 py-2 bg-yellow-500 text-white rounded font-semibold">Nominate</button>
-                </form>
+                {(user.role === 'super_admin' || user.role === 'admin') && (
+                  <form className="space-y-2">
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Nominate a Colleague</label>
+                      <input className="w-full border rounded px-3 py-2" placeholder="Enter name or email" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Award</label>
+                      <input className="w-full border rounded px-3 py-2" placeholder="Award name" />
+                    </div>
+                    <button type="submit" className="px-4 py-2 bg-yellow-500 text-white rounded font-semibold">Nominate</button>
+                  </form>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -744,7 +750,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-background text-foreground">
       <Header user={user} onLogout={onLogout} />
       <div className="flex">
         <Sidebar 

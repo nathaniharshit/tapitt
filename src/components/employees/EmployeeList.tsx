@@ -175,18 +175,18 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
         <div
           className={`rounded px-4 py-2 mb-2 text-sm font-medium ${
             message.type === 'success'
-              ? 'bg-green-100 text-green-800 border border-green-200'
-              : 'bg-red-100 text-red-800 border border-red-200'
+              ? 'bg-green-100 text-green-800 border border-green-200 dark:bg-green-900 dark:text-green-200 dark:border-green-800'
+              : 'bg-red-100 text-red-800 border border-red-200 dark:bg-red-900 dark:text-red-200 dark:border-red-800'
           }`}
         >
           {message.text}
         </div>
       )}
       <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-gray-900">Employee Management</h2>
+        <h2 className="text-2xl font-bold text-foreground">Employee Management</h2>
         <div className="flex items-center space-x-4">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Search employees..."
               value={searchTerm}
@@ -194,17 +194,6 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
               className="pl-10 w-64"
             />
           </div>
-          <select
-            value={roleFilter}
-            onChange={e => setRoleFilter(e.target.value)}
-            className="border rounded px-3 py-2"
-          >
-            <option value="all">All Roles</option>
-            <option value="employee">Employee</option>
-            <option value="admin">Admin</option>
-            <option value="superadmin">Superadmin</option>
-            <option value="intern">Intern</option>
-          </select>
         </div>
       </div>
 
@@ -221,7 +210,7 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
         if (group.length === 0) return null;
         return (
           <div key={section.key}>
-            <h3 className={`text-xl font-bold mb-4 ${section.color}`}>{section.label}</h3>
+            <h3 className={`text-xl font-bold mb-4 text-foreground`}>{section.label}</h3>
             <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 md:grid-cols-3">
               {group.map((employee) => {
                 const profilePic = getProfilePicUrl(employee);
@@ -230,7 +219,7 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
                     ? `${employee.firstname[0]}${employee.lastname[0]}`.toUpperCase()
                     : '?';
                 return (
-                  <Card key={employee._id} className="flex flex-col h-full">
+                  <Card key={employee._id} className="flex flex-col h-full bg-card text-foreground">
                     <CardContent className="p-6 flex flex-col flex-1">
                       <div className="flex items-center space-x-4 mb-4">
                         {profilePic ? (
@@ -240,16 +229,16 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
                             className="w-12 h-12 rounded-full object-cover border"
                           />
                         ) : (
-                          <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-                            <span className="text-blue-600 font-semibold">
+                          <div className="w-12 h-12 bg-muted rounded-full flex items-center justify-center">
+                            <span className="text-primary font-semibold">
                               {initials}
                             </span>
                           </div>
                         )}
                         <div>
-                          <h3 className="text-lg font-semibold text-gray-900">{employee.firstname} {employee.lastname}</h3>
-                          <p className="text-gray-600">{employee.position} • {employee.department}</p>
-                          <p className="text-sm text-gray-500">{employee.email}</p>
+                          <h3 className="text-lg font-semibold text-foreground">{employee.firstname} {employee.lastname}</h3>
+                          <p className="text-muted-foreground">{employee.position} • {employee.department}</p>
+                          <p className="text-xs text-muted-foreground">{employee.email}</p>
                         </div>
                       </div>
                       <div className="flex-1" />
@@ -258,7 +247,7 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
                           <Badge variant="default">
                             {employee.status || 'active'}
                           </Badge>
-                          <p className="text-sm text-gray-500 mt-1">
+                          <p className="text-xs text-muted-foreground mt-1">
                             Joined: {new Date(employee.startDate).toLocaleDateString()}
                           </p>
                         </div>
@@ -275,7 +264,7 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
                             <Button
                               variant="outline"
                               size="sm"
-                              className="text-red-600 hover:text-red-700"
+                              className="text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
                               onClick={() => handleDelete(employee)}
                             >
                               <Trash2 className="h-4 w-4" />
@@ -301,16 +290,16 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
         ).length === 0
       ) && (
         <div className="text-center py-12">
-          <p className="text-gray-500">No employees found matching your search.</p>
+          <p className="text-muted-foreground">No employees found matching your search.</p>
         </div>
       )}
 
       {/* Employee Details Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="w-full max-w-none h-screen p-0 bg-white flex flex-col">
+        <DialogContent className="w-full max-w-none h-screen p-0 bg-background text-foreground flex flex-col">
           <div className="flex-1 flex flex-col md:flex-row">
             {/* Left: Avatar and Basic Info */}
-            <div className="flex flex-col items-center justify-center bg-blue-50 w-full md:w-1/3 p-8 border-b md:border-b-0 md:border-r">
+            <div className="flex flex-col items-center justify-center bg-muted w-full md:w-1/3 p-8 border-b md:border-b-0 md:border-r">
               {viewedEmployee && getProfilePicUrl(viewedEmployee) ? (
                 <img
                   src={getProfilePicUrl(viewedEmployee)}
@@ -318,58 +307,58 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
                   className="w-32 h-32 rounded-full object-cover mb-4 border"
                 />
               ) : (
-                <div className="w-32 h-32 bg-blue-200 rounded-full flex items-center justify-center mb-4">
-                  <span className="text-blue-700 font-bold text-5xl">
+                <div className="w-32 h-32 bg-primary/20 rounded-full flex items-center justify-center mb-4">
+                  <span className="text-primary font-bold text-5xl">
                     {viewedEmployee?.firstname && viewedEmployee?.lastname
                       ? `${viewedEmployee.firstname[0]}${viewedEmployee.lastname[0]}`.toUpperCase()
                       : '?'}
                   </span>
                 </div>
               )}
-              <h3 className="text-3xl font-semibold text-gray-900 mb-2">{viewedEmployee?.firstname} {viewedEmployee?.lastname}</h3>
-              <p className="text-lg text-gray-600 mb-1">{viewedEmployee?.position} • {viewedEmployee?.department}</p>
+              <h3 className="text-3xl font-semibold text-foreground mb-2">{viewedEmployee?.firstname} {viewedEmployee?.lastname}</h3>
+              <p className="text-lg text-muted-foreground mb-1">{viewedEmployee?.position} • {viewedEmployee?.department}</p>
               <Badge variant="default" className="text-base px-3 py-1">{viewedEmployee?.status || 'active'}</Badge>
             </div>
             {/* Right: Details */}
             <div className="flex-1 flex flex-col justify-center items-center p-8 overflow-y-auto">
               <DialogHeader className="w-full max-w-2xl mx-auto mb-6">
-                <DialogTitle className="text-2xl text-center">Employee Details</DialogTitle>
+                <DialogTitle className="text-2xl text-center text-foreground">Employee Details</DialogTitle>
               </DialogHeader>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-2xl">
                 <div>
-                  <p className="text-gray-500 font-medium">Email</p>
-                  <p className="text-lg font-semibold">{viewedEmployee?.email}</p>
+                  <p className="text-muted-foreground font-medium">Email</p>
+                  <p className="text-lg font-semibold text-foreground">{viewedEmployee?.email}</p>
                 </div>
                 <div>
-                  <p className="text-gray-500 font-medium">Phone</p>
-                  <p className="text-lg font-semibold">{viewedEmployee?.phone || '-'}</p>
+                  <p className="text-muted-foreground font-medium">Phone</p>
+                  <p className="text-lg font-semibold text-foreground">{viewedEmployee?.phone || '-'}</p>
                 </div>
                 <div>
-                  <p className="text-gray-500 font-medium">Department</p>
-                  <p className="text-lg font-semibold">{viewedEmployee?.department}</p>
+                  <p className="text-muted-foreground font-medium">Department</p>
+                  <p className="text-lg font-semibold text-foreground">{viewedEmployee?.department}</p>
                 </div>
                 <div>
-                  <p className="text-gray-500 font-medium">Position</p>
-                  <p className="text-lg font-semibold">{viewedEmployee?.position}</p>
+                  <p className="text-muted-foreground font-medium">Position</p>
+                  <p className="text-lg font-semibold text-foreground">{viewedEmployee?.position}</p>
                 </div>
                 <div>
-                  <p className="text-gray-500 font-medium">Role</p>
-                  <p className="text-lg font-semibold">{viewedEmployee?.role}</p>
+                  <p className="text-muted-foreground font-medium">Role</p>
+                  <p className="text-lg font-semibold text-foreground">{viewedEmployee?.role}</p>
                 </div>
                 {/* Only show salary if userRole is super_admin or admin */}
                 {(userRole === 'super_admin' || userRole === 'admin') && (
                   <div>
-                    <p className="text-gray-500 font-medium">Salary</p>
-                    <p className="text-lg font-semibold">{formatSalary(viewedEmployee?.salary)}</p>
+                    <p className="text-muted-foreground font-medium">Salary</p>
+                    <p className="text-lg font-semibold text-foreground">{formatSalary(viewedEmployee?.salary)}</p>
                   </div>
                 )}
                 <div>
-                  <p className="text-gray-500 font-medium">Start Date</p>
-                  <p className="text-lg font-semibold">{viewedEmployee?.startDate ? new Date(viewedEmployee.startDate).toLocaleDateString() : '-'}</p>
+                  <p className="text-muted-foreground font-medium">Start Date</p>
+                  <p className="text-lg font-semibold text-foreground">{viewedEmployee?.startDate ? new Date(viewedEmployee.startDate).toLocaleDateString() : '-'}</p>
                 </div>
                 <div>
-                  <p className="text-gray-500 font-medium">Address</p>
-                  <p className="text-lg font-semibold">{viewedEmployee?.address || '-'}</p>
+                  <p className="text-muted-foreground font-medium">Address</p>
+                  <p className="text-lg font-semibold text-foreground">{viewedEmployee?.address || '-'}</p>
                 </div>
               </div>
             </div>
@@ -386,23 +375,23 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
             <form className="space-y-4" onSubmit={e => { e.preventDefault(); handleEditSave(); }}>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-sm text-gray-500">First Name</label>
+                  <label className="text-sm text-muted-foreground">First Name</label>
                   <Input name="firstname" value={editEmployee.firstname || ''} onChange={handleEditChange} required />
                 </div>
                 <div>
-                  <label className="text-sm text-gray-500">Last Name</label>
+                  <label className="text-sm text-muted-foreground">Last Name</label>
                   <Input name="lastname" value={editEmployee.lastname || ''} onChange={handleEditChange} required />
                 </div>
                 <div>
-                  <label className="text-sm text-gray-500">Email</label>
+                  <label className="text-sm text-muted-foreground">Email</label>
                   <Input name="email" value={editEmployee.email || ''} onChange={handleEditChange} required />
                 </div>
                 <div>
-                  <label className="text-sm text-gray-500">Phone</label>
+                  <label className="text-sm text-muted-foreground">Phone</label>
                   <Input name="phone" value={editEmployee.phone || ''} onChange={handleEditChange} />
                 </div>
                 <div>
-                  <label className="text-sm text-gray-500">Department</label>
+                  <label className="text-sm text-muted-foreground">Department</label>
                   <select
                     name="department"
                     value={editEmployee.department || ''}
@@ -421,11 +410,11 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
                   </select>
                 </div>
                 <div>
-                  <label className="text-sm text-gray-500">Position</label>
+                  <label className="text-sm text-muted-foreground">Position</label>
                   <Input name="position" value={editEmployee.position || ''} onChange={handleEditChange} />
                 </div>
                 <div>
-                  <label className="text-sm text-gray-500">Role</label>
+                  <label className="text-sm text-muted-foreground">Role</label>
                   <select
                     name="role"
                     value={editEmployee.role || ''}
@@ -441,7 +430,7 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
                   </select>
                 </div>
                 <div>
-                  <label className="text-sm text-gray-500">Salary</label>
+                  <label className="text-sm text-muted-foreground">Salary</label>
                   <Input
                     name="salary"
                     value={
@@ -453,15 +442,15 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
                   />
                 </div>
                 <div>
-                  <label className="text-sm text-gray-500">Start Date</label>
+                  <label className="text-sm text-muted-foreground">Start Date</label>
                   <Input name="startDate" type="date" value={editEmployee.startDate ? editEmployee.startDate.substring(0, 10) : ''} onChange={handleEditChange} />
                 </div>
                 <div>
-                  <label className="text-sm text-gray-500">Address</label>
+                  <label className="text-sm text-muted-foreground">Address</label>
                   <Input name="address" value={editEmployee.address || ''} onChange={handleEditChange} />
                 </div>
                 <div>
-                  <label className="text-sm text-gray-500">Aadhar Number</label>
+                  <label className="text-sm text-muted-foreground">Aadhar Number</label>
                   <Input name="aadhar" value={editEmployee?.aadhar || ''} onChange={handleEditChange} />
                 </div>
               </div>

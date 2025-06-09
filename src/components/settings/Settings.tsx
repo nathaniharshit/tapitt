@@ -5,7 +5,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import { User, Bell, Shield, Palette, Eye, EyeOff } from 'lucide-react'; // <-- import Eye/EyeOff
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 interface SettingsProps {
   userRole: 'super_admin' | 'admin' | 'employee';
@@ -22,6 +22,16 @@ const Settings = ({ userRole, userId }: SettingsProps) => {
   const [showConfirm, setShowConfirm] = useState(false);
   const [passwordMsg, setPasswordMsg] = useState('');
   const [passwordLoading, setPasswordLoading] = useState(false);
+
+  // Theme state
+  const [theme, setTheme] = useState<'light' | 'dark'>(
+    () => (localStorage.getItem('theme') as 'light' | 'dark') || 'light'
+  );
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', theme === 'dark');
+    localStorage.setItem('theme', theme);
+  }, [theme]);
 
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -56,10 +66,10 @@ const Settings = ({ userRole, userId }: SettingsProps) => {
   };
 
   return (
-    <div className="space-y-6 max-w-4xl">
+    <div className="space-y-6 max-w-4xl bg-background text-foreground">
       <div>
-        <h2 className="text-2xl font-bold text-gray-900">Settings</h2>
-        <p className="text-gray-600">Manage your account and system preferences</p>
+        <h2 className="text-2xl font-bold text-foreground">Settings</h2>
+        <p className="text-muted-foreground">Manage your account and system preferences</p>
       </div>
 
       <div className="grid gap-6">
@@ -90,41 +100,6 @@ const Settings = ({ userRole, userId }: SettingsProps) => {
           </CardContent>
         </Card>
 
-        {/* Notification Settings */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <Bell className="h-5 w-5" />
-              <span>Notifications</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <Label>Email Notifications</Label>
-                <p className="text-sm text-gray-600">Receive email updates</p>
-              </div>
-              <Switch defaultChecked />
-            </div>
-            <Separator />
-            <div className="flex items-center justify-between">
-              <div>
-                <Label>Task Reminders</Label>
-                <p className="text-sm text-gray-600">Get reminders for tasks</p>
-              </div>
-              <Switch defaultChecked />
-            </div>
-            <Separator />
-            <div className="flex items-center justify-between">
-              <div>
-                <Label>System Updates</Label>
-                <p className="text-sm text-gray-600">Notifications about system changes</p>
-              </div>
-              <Switch />
-            </div>
-          </CardContent>
-        </Card>
-
         {/* Security Settings */}
         <Card>
           <CardHeader>
@@ -149,7 +124,7 @@ const Settings = ({ userRole, userId }: SettingsProps) => {
                   />
                   <button
                     type="button"
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground"
                     onClick={() => setShowNew(s => !s)}
                     tabIndex={-1}
                   >
@@ -171,7 +146,7 @@ const Settings = ({ userRole, userId }: SettingsProps) => {
                   />
                   <button
                     type="button"
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground"
                     onClick={() => setShowConfirm(s => !s)}
                     tabIndex={-1}
                   >
@@ -180,7 +155,7 @@ const Settings = ({ userRole, userId }: SettingsProps) => {
                 </div>
               </div>
               {passwordMsg && (
-                <div className={`text-sm mb-2 ${passwordMsg.includes('success') ? 'text-green-600' : 'text-red-600'}`}>
+                <div className={`text-sm mb-2 ${passwordMsg.includes('success') ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
                   {passwordMsg}
                 </div>
               )}
@@ -188,6 +163,35 @@ const Settings = ({ userRole, userId }: SettingsProps) => {
                 {passwordLoading ? 'Changing...' : 'Change Password'}
               </Button>
             </form>
+          </CardContent>
+        </Card>
+
+        {/* Theme Settings */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center space-x-2">
+              <Palette className="h-5 w-5" />
+              <span>Appearance</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between">
+              <Label>Theme</Label>
+              <div className="flex items-center space-x-2">
+                <Button
+                  variant={theme === 'light' ? 'default' : 'outline'}
+                  onClick={() => setTheme('light')}
+                >
+                  Light
+                </Button>
+                <Button
+                  variant={theme === 'dark' ? 'default' : 'outline'}
+                  onClick={() => setTheme('dark')}
+                >
+                  Dark
+                </Button>
+              </div>
+            </div>
           </CardContent>
         </Card>
 
@@ -204,7 +208,7 @@ const Settings = ({ userRole, userId }: SettingsProps) => {
               <div className="flex items-center justify-between">
                 <div>
                   <Label>Maintenance Mode</Label>
-                  <p className="text-sm text-gray-600">Enable system maintenance</p>
+                  <p className="text-sm text-muted-foreground">Enable system maintenance</p>
                 </div>
                 <Switch />
               </div>
@@ -212,7 +216,7 @@ const Settings = ({ userRole, userId }: SettingsProps) => {
               <div className="flex items-center justify-between">
                 <div>
                   <Label>User Registration</Label>
-                  <p className="text-sm text-gray-600">Allow new user registration</p>
+                  <p className="text-sm text-muted-foreground">Allow new user registration</p>
                 </div>
                 <Switch defaultChecked />
               </div>
