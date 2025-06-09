@@ -165,8 +165,8 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
       <div className="flex items-center space-x-3">
         <Shield className="h-8 w-8 text-red-600" />
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Super Admin Panel</h2>
-          <p className="text-gray-600">Manage system-wide settings and user permissions</p>
+          <h2 className="text-2xl font-bold text-foreground">Super Admin Panel</h2>
+          <p className="text-muted-foreground">Manage system-wide settings and user permissions</p>
         </div>
       </div>
 

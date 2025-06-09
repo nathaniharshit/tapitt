@@ -3,7 +3,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { Loader2 } from 'lucide-react';
+import { Loader2, UserPlus, Eye, EyeOff } from 'lucide-react';
 
 interface EmployeeFormProps {
   onEmployeeAdded?: () => void;
@@ -129,11 +129,15 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
   };
 
   return (
-    <Card className="max-w-2xl mx-auto mt-8 bg-card text-foreground shadow-lg">
-      <CardHeader>
-        <CardTitle>Add New Employee</CardTitle>
+    <Card className="max-w-2xl mx-auto mt-10 bg-gradient-to-br from-blue-50/60 to-indigo-100/60 dark:from-gray-900 dark:to-gray-800 border border-blue-200 dark:border-gray-700 shadow-2xl rounded-2xl">
+      <CardHeader className="flex flex-col items-center justify-center bg-blue-600 dark:bg-blue-900 rounded-t-2xl pb-6">
+        <div className="flex items-center gap-2 mb-2">
+          <UserPlus className="h-7 w-7 text-white" />
+          <CardTitle className="text-white text-2xl">Add New Employee</CardTitle>
+        </div>
+        <p className="text-blue-100 text-sm">Fill in the details to onboard a new team member</p>
       </CardHeader>
-      <CardContent>
+      <CardContent className="pt-8 pb-6 px-6">
         {message && (
           <div className={`text-sm font-medium mb-4 ${
             message.startsWith('Error') || message === 'Network error.'
@@ -143,147 +147,173 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
             {message}
           </div>
         )}
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="firstName">First Name</Label>
-              <Input name="firstName" value={formData.firstName} onChange={handleChange} required className="bg-background text-foreground" />
-            </div>
-            <div>
-              <Label htmlFor="lastName">Last Name</Label>
-              <Input name="lastName" value={formData.lastName} onChange={handleChange} required className="bg-background text-foreground" />
-            </div>
-            <div>
-              <Label htmlFor="email">Email</Label>
-              <Input type="email" name="email" value={formData.email} onChange={handleChange} required className="bg-background text-foreground" />
-            </div>
-            <div>
-              <Label htmlFor="phone">Phone</Label>
-              <div className="flex">
-                <select
-                  name="countryCode"
-                  value={formData.countryCode}
-                  onChange={handleChange}
-                  className="border rounded-l px-2 py-2 bg-background text-foreground font-bold text-lg"
-                  style={{ minWidth: 80 }}
-                >
-                  <option value="+91">🇮🇳 +91</option>
-                  <option value="+1">🇺🇸 +1</option>
-                  <option value="+44">🇬🇧 +44</option>
-                  <option value="+61">🇦🇺 +61</option>
-                  <option value="+81">🇯🇵 +81</option>
-                  <option value="+971">🇦🇪 +971</option>
-                </select>
-                <Input
-                  name="phone"
-                  value={formData.phone}
-                  onChange={handleChange}
-                  maxLength={10}
-                  minLength={10}
-                  pattern="\d{10}"
-                  className="rounded-l-none bg-background text-foreground"
-                  required
-                  placeholder="10 digit number"
-                  type="tel"
-                />
+        <form onSubmit={handleSubmit} className="space-y-8">
+          {/* Personal Info Section */}
+          <div>
+            <h3 className="text-lg font-semibold text-blue-700 dark:text-blue-300 mb-2">Personal Information</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="firstName">First Name</Label>
+                <Input name="firstName" value={formData.firstName} onChange={handleChange} required className="bg-background text-foreground rounded-lg focus:ring-2 focus:ring-blue-400" />
               </div>
-              {phoneError && <div className="text-xs text-red-600 dark:text-red-400 mt-1">{phoneError}</div>}
-            </div>
-            <div>
-              <Label htmlFor="department">Department</Label>
-              <select
-                name="department"
-                value={formData.department}
-                onChange={handleChange}
-                required
-                className="w-full mt-1 mb-2 border rounded-md px-3 py-2 bg-background text-foreground"
-              >
-                <option value="">Select department</option>
-                <option value="HR">HR</option>
-                <option value="Engineering">Engineering</option>
-                <option value="Sales">Sales</option>
-                <option value="Marketing">Marketing</option>
-                <option value="Finance">Finance</option>
-                <option value="Support">Support</option>
-                <option value="Other">Other</option>
-              </select>
-            </div>
-            <div>
-              <Label htmlFor="position">Position</Label>
-              <Input name="position" value={formData.position} onChange={handleChange} className="bg-background text-foreground" />
-            </div>
-            <div>
-              <Label htmlFor="role">Role</Label>
-              <select
-                name="role"
-                value={formData.role}
-                onChange={handleChange}
-                required
-                className="w-full mt-1 mb-2 border rounded-md px-3 py-2 bg-background text-foreground"
-              >
-                <option value="">Select role</option>
-                <option value="employee">Employee</option>
-                <option value="admin">Admin</option>
-                <option value="superadmin">Superadmin</option>
-                <option value="intern">Intern</option>
-              </select>
-            </div>
-            <div>
-              <Label htmlFor="salary">Salary</Label>
-              <Input
-                type="text"
-                name="salary"
-                value={formatSalaryInput(formData.salary)}
-                onChange={handleChange}
-                inputMode="numeric"
-                pattern="[0-9,]*"
-                autoComplete="off"
-                className="bg-background text-foreground"
-              />
-            </div>
-            <div>
-              <Label htmlFor="startDate">Start Date</Label>
-              <Input type="date" name="startDate" value={formData.startDate} onChange={handleChange} className="bg-background text-foreground" />
-            </div>
-            <div>
-              <Label htmlFor="address">Address</Label>
-              <Input name="address" value={formData.address} onChange={handleChange} className="bg-background text-foreground" />
-            </div>
-            <div>
-              <Label htmlFor="password">Temporary Password</Label>
-              <div className="relative flex items-center">
-                <Input
-                  name="password"
-                  type={showPassword ? "text" : "password"}
-                  value={formData.password}
-                  onChange={handleChange}
-                  required
-                  minLength={8}
-                  placeholder="At least 8 characters"
-                  className="pr-20 bg-background text-foreground"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword((prev) => !prev)}
-                  className="absolute right-2 px-2 py-1 text-xs bg-muted border rounded hover:bg-muted/80"
-                  tabIndex={-1}
-                >
-                  {showPassword ? "Hide" : "Show"}
-                </button>
+              <div>
+                <Label htmlFor="lastName">Last Name</Label>
+                <Input name="lastName" value={formData.lastName} onChange={handleChange} required className="bg-background text-foreground rounded-lg focus:ring-2 focus:ring-blue-400" />
+              </div>
+              <div>
+                <Label htmlFor="email">Email</Label>
+                <Input type="email" name="email" value={formData.email} onChange={handleChange} required className="bg-background text-foreground rounded-lg focus:ring-2 focus:ring-blue-400" />
+              </div>
+              <div>
+                <Label htmlFor="phone">Phone</Label>
+                <div className="flex">
+                  <select
+                    name="countryCode"
+                    value={formData.countryCode}
+                    onChange={handleChange}
+                    className="border rounded-l-lg px-2 py-2 bg-background text-foreground font-bold text-lg focus:ring-2 focus:ring-blue-400 flex-shrink-0"
+                    style={{ minWidth: 90 }}
+                  >
+                    <option value="+91">🇮🇳 +91</option>
+                    <option value="+1">🇺🇸 +1</option>
+                    <option value="+44">🇬🇧 +44</option>
+                    <option value="+61">🇦🇺 +61</option>
+                    <option value="+81">🇯🇵 +81</option>
+                    <option value="+971">🇦🇪 +971</option>
+                  </select>
+                  <Input
+                    name="phone"
+                    value={formData.phone}
+                    onChange={handleChange}
+                    maxLength={10}
+                    minLength={10}
+                    pattern="\d{10}"
+                    className="rounded-l-none rounded-r-lg bg-background text-foreground focus:ring-2 focus:ring-blue-400 flex-1"
+                    required
+                    placeholder="10 digit number"
+                    type="tel"
+                  />
+                </div>
+                {phoneError && <div className="text-xs text-red-600 dark:text-red-400 mt-1">{phoneError}</div>}
               </div>
             </div>
           </div>
-
-          <Button type="submit" disabled={loading}>
-            {loading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Saving...
-              </>
-            ) : (
-              'Add Employee'
-            )}
-          </Button>
+          <hr className="my-4 border-blue-200 dark:border-blue-900" />
+          {/* Job Info Section */}
+          <div>
+            <h3 className="text-lg font-semibold text-blue-700 dark:text-blue-300 mb-2">Job Information</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="department">Department</Label>
+                <select
+                  name="department"
+                  value={formData.department}
+                  onChange={handleChange}
+                  required
+                  className="w-full mt-1 mb-2 border rounded-lg px-3 py-2 bg-background text-foreground focus:ring-2 focus:ring-blue-400"
+                >
+                  <option value="">Select department</option>
+                  <option value="HR">HR</option>
+                  <option value="Engineering">Engineering</option>
+                  <option value="Sales">Sales</option>
+                  <option value="Marketing">Marketing</option>
+                  <option value="Finance">Finance</option>
+                  <option value="Support">Support</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+              <div>
+                <Label htmlFor="position">Position</Label>
+                <Input name="position" value={formData.position} onChange={handleChange} className="bg-background text-foreground rounded-lg focus:ring-2 focus:ring-blue-400" />
+              </div>
+              <div>
+                <Label htmlFor="role">Role</Label>
+                <select
+                  name="role"
+                  value={formData.role}
+                  onChange={handleChange}
+                  required
+                  className="w-full mt-1 mb-2 border rounded-lg px-3 py-2 bg-background text-foreground focus:ring-2 focus:ring-blue-400"
+                >
+                  <option value="">Select role</option>
+                  <option value="employee">Employee</option>
+                  <option value="admin">Admin</option>
+                  <option value="superadmin">Superadmin</option>
+                  <option value="intern">Intern</option>
+                </select>
+              </div>
+              <div>
+                <Label htmlFor="salary">Salary</Label>
+                <Input
+                  type="text"
+                  name="salary"
+                  value={formatSalaryInput(formData.salary)}
+                  onChange={handleChange}
+                  inputMode="numeric"
+                  pattern="[0-9,]*"
+                  autoComplete="off"
+                  className="bg-background text-foreground rounded-lg focus:ring-2 focus:ring-blue-400"
+                />
+              </div>
+              <div>
+                <Label htmlFor="startDate">Start Date</Label>
+                <Input type="date" name="startDate" value={formData.startDate} onChange={handleChange} className="bg-background text-foreground rounded-lg focus:ring-2 focus:ring-blue-400" />
+              </div>
+              <div>
+                <Label htmlFor="address">Address</Label>
+                <Input name="address" value={formData.address} onChange={handleChange} className="bg-background text-foreground rounded-lg focus:ring-2 focus:ring-blue-400" />
+              </div>
+            </div>
+          </div>
+          <hr className="my-4 border-blue-200 dark:border-blue-900" />
+          {/* Security Section */}
+          <div>
+            <h3 className="text-lg font-semibold text-blue-700 dark:text-blue-300 mb-2">Security</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="password">Temporary Password</Label>
+                <div className="relative flex items-center">
+                  <Input
+                    name="password"
+                    type={showPassword ? "text" : "password"}
+                    value={formData.password}
+                    onChange={handleChange}
+                    required
+                    minLength={8}
+                    placeholder="At least 8 characters"
+                    className="pr-10 bg-background text-foreground rounded-lg focus:ring-2 focus:ring-blue-400"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((prev) => !prev)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-muted-foreground hover:text-foreground"
+                    tabIndex={-1}
+                  >
+                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="flex justify-end mt-6">
+            <Button
+              type="submit"
+              disabled={loading}
+              className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-6 py-2 rounded-lg font-semibold shadow-lg transition"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <UserPlus className="mr-2 h-4 w-4" />
+                  Add Employee
+                </>
+              )}
+            </Button>
+          </div>
         </form>
       </CardContent>
     </Card>
