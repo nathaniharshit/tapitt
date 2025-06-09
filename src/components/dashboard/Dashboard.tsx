@@ -1107,7 +1107,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
               </Card>
             )}
             <div className="max-w-6xl mx-auto">
-              <Card className="bg-card text-foreground mb-6">
+              <Card className="bg-gray-50 dark:bg-gray-900 text-foreground mb-6 border-2 border-gray-300 dark:border-gray-700 shadow-lg">
                 <CardHeader>
                   <CardTitle>Ongoing Company Projects</CardTitle>
                 </CardHeader>
@@ -1125,74 +1125,79 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                   {projects.length === 0 ? (
                     <div className="py-6 text-center text-muted-foreground">No projects found.</div>
                   ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
                       {projects.map((proj) => (
-                        <div key={proj._id || proj.name} className="rounded-lg border border-border bg-background shadow-md flex flex-col h-full">
-                          <div className="p-4 flex-1 flex flex-col">
-                            <div className="flex items-center justify-between mb-2">
-                              <div className="font-semibold text-lg text-foreground truncate">{proj.name}</div>
-                              {(user.role === 'admin' || user.role === 'super_admin') && (
-                                <div className="flex gap-2">
-                                  <button
-                                    onClick={() => handleEditProject(proj)}
-                                    className="text-blue-600 hover:underline text-xs font-semibold"
-                                    title="Edit Project"
-                                  >
-                                    Edit
-                                  </button>
-                                  {confirmDeleteId === proj._id ? (
-                                    <div className="flex flex-col items-end gap-2">
-                                      <div className="text-xs text-foreground mb-1">Are you sure?</div>
-                                      <div className="flex gap-2">
-                                        <button
-                                          onClick={() => handleDeleteProject(proj._id)}
-                                          className="px-2 py-1 bg-red-600 text-white rounded text-xs font-semibold"
-                                        >
-                                          Delete
-                                        </button>
-                                        <button
-                                          onClick={() => setConfirmDeleteId(null)}
-                                          className="px-2 py-1 bg-muted text-foreground rounded text-xs font-semibold"
-                                        >
-                                          Cancel
-                                        </button>
-                                      </div>
+                        <div
+                          key={proj._id || proj.name}
+                          className="rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 p-6 flex flex-col min-h-[200px] shadow-md"
+                        >
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="font-bold text-xl text-gray-900 dark:text-gray-100 truncate">{proj.name}</div>
+                            {(user.role === 'admin' || user.role === 'super_admin') && (
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={() => handleEditProject(proj)}
+                                  className="text-blue-600 hover:underline text-xs font-semibold"
+                                  title="Edit Project"
+                                >
+                                  Edit
+                                </button>
+                                {confirmDeleteId === proj._id ? (
+                                  <div className="flex flex-col items-end gap-2">
+                                    <div className="text-xs text-foreground mb-1">Are you sure?</div>
+                                    <div className="flex gap-2">
+                                      <button
+                                        onClick={() => handleDeleteProject(proj._id)}
+                                        className="px-2 py-1 bg-red-600 text-white rounded text-xs font-semibold"
+                                      >
+                                        Delete
+                                      </button>
+                                      <button
+                                        onClick={() => setConfirmDeleteId(null)}
+                                        className="px-2 py-1 bg-muted text-foreground rounded text-xs font-semibold"
+                                      >
+                                        Cancel
+                                      </button>
                                     </div>
-                                  ) : (
-                                    <button
-                                      onClick={() => setConfirmDeleteId(proj._id)}
-                                      className="text-red-600 hover:underline text-xs font-semibold"
-                                      title="Delete Project"
-                                    >
-                                      Delete
-                                    </button>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                            <div className="text-xs text-muted-foreground mb-2">{proj.description}</div>
-                            <div className="mb-2">
-                              <span className="font-semibold text-sm text-foreground">Lead: </span>
-                              <span className="text-sm text-muted-foreground">
-                                {(() => {
-                                  const lead = leadOptions.find(opt => opt.value === proj.lead);
-                                  return lead ? lead.label : (proj.lead || 'N/A');
-                                })()}
-                              </span>
-                            </div>
-                            <div>
-                              <span className="font-semibold text-sm text-foreground">Team: </span>
-                              <span className="text-sm text-muted-foreground">
-                                {Array.isArray(proj.team) && proj.team.length > 0
-                                  ? proj.team.map((id: string) => {
-                                      const member = teamOptions.find(opt => opt.value === id);
-                                      return member ? member.label : id;
-                                    }).join(', ')
-                                  : 'N/A'}
-                              </span>
-                            </div>
+                                  </div>
+                                ) : (
+                                  <button
+                                    onClick={() => setConfirmDeleteId(proj._id)}
+                                    className="text-red-600 hover:underline text-xs font-semibold"
+                                    title="Delete Project"
+                                  >
+                                    Delete
+                                  </button>
+                                )}
+                              </div>
+                            )}
                           </div>
-                          <div className="px-4 pb-4 mt-auto flex items-center justify-between">
+                          <div className="text-xs text-muted-foreground mb-2">{proj.description}</div>
+                          <div className="mb-2">
+                            <span className="font-semibold text-base text-foreground">Lead: </span>
+                            <span className="text-base text-muted-foreground">
+                              {(() => {
+                                const lead = leadOptions.find(opt => opt.value === proj.lead);
+                                return lead ? lead.label : (proj.lead || 'N/A');
+                              })()}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="font-semibold text-base text-foreground">Team: </span>
+                            <ul className="text-base text-muted-foreground list-disc ml-6 mt-2">
+                              {Array.isArray(proj.team) && proj.team.length > 0
+                                ? proj.team.map((id: string) => {
+                                    const member = teamOptions.find(opt => opt.value === id);
+                                    return (
+                                      <li key={id}>
+                                        {member ? member.label : id}
+                                      </li>
+                                    );
+                                  })
+                                : <li>N/A</li>}
+                            </ul>
+                          </div>
+                          <div className="pt-4 mt-auto flex items-center justify-between">
                             <span className="text-xs text-muted-foreground">
                               Created: {proj.createdAt ? new Date(proj.createdAt).toLocaleDateString() : 'N/A'}
                             </span>
@@ -1351,7 +1356,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
               </Card>
             )}
             <div className="max-w-4xl mx-auto">
-              <Card className="bg-card text-foreground mb-6">
+              <Card className="bg-gray-50 dark:bg-gray-900 text-foreground mb-6 border-2 border-gray-300 dark:border-gray-700 shadow-lg">
                 <CardHeader>
                   <CardTitle>Teams</CardTitle>
                 </CardHeader>
@@ -1364,62 +1369,68 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                   {teams.length === 0 ? (
                     <div className="py-6 text-center text-muted-foreground">No teams found.</div>
                   ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
                       {teams.map(team => (
-                        <div key={team._id} className="rounded-lg border border-border bg-background shadow-md flex flex-col h-full">
-                          <div className="p-4 flex-1 flex flex-col">
-                            <div className="flex items-center justify-between mb-2">
-                              <div className="font-semibold text-lg text-foreground truncate">{team.name}</div>
-                              {(user.role === 'admin' || user.role === 'super_admin') && (
-                                <div className="flex gap-2">
-                                  <button
-                                    onClick={() => handleEditTeam(team)}
-                                    className="text-blue-600 hover:underline text-xs font-semibold"
-                                    title="Edit Team"
-                                  >
-                                    Edit
-                                  </button>
-                                  {confirmDeleteTeamId === team._id ? (
-                                    <div className="flex flex-col items-end gap-2">
-                                      <div className="text-xs text-foreground mb-1">Are you sure?</div>
-                                      <div className="flex gap-2">
-                                        <button
-                                          onClick={() => handleDeleteTeam(team._id)}
-                                          className="px-2 py-1 bg-red-600 text-white rounded text-xs font-semibold"
-                                        >
-                                          Delete
-                                        </button>
-                                        <button
-                                          onClick={() => setConfirmDeleteTeamId(null)}
-                                          className="px-2 py-1 bg-muted text-foreground rounded text-xs font-semibold"
-                                        >
-                                          Cancel
-                                        </button>
-                                      </div>
+                        <div
+                          key={team._id}
+                          className="rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 p-6 flex flex-col min-h-[200px] shadow-md"
+                        >
+                          <div className="flex items-center justify-between mb-3">
+                            <span className="font-bold text-xl text-gray-900 dark:text-gray-100 truncate">{team.name}</span>
+                            {(user.role === 'admin' || user.role === 'super_admin') && (
+                              <div className="flex gap-2">
+                                {/* ...edit/delete buttons... */}
+                                <button
+                                  onClick={() => handleEditTeam(team)}
+                                  className="text-blue-600 hover:underline text-xs font-semibold"
+                                  title="Edit Team"
+                                >
+                                  Edit
+                                </button>
+                                {confirmDeleteTeamId === team._id ? (
+                                  <div className="flex flex-col items-end gap-2">
+                                    <div className="text-xs text-foreground mb-1">Are you sure?</div>
+                                    <div className="flex gap-2">
+                                      <button
+                                        onClick={() => handleDeleteTeam(team._id)}
+                                        className="px-2 py-1 bg-red-600 text-white rounded text-xs font-semibold"
+                                      >
+                                        Delete
+                                      </button>
+                                      <button
+                                        onClick={() => setConfirmDeleteTeamId(null)}
+                                        className="px-2 py-1 bg-muted text-foreground rounded text-xs font-semibold"
+                                      >
+                                        Cancel
+                                      </button>
                                     </div>
-                                  ) : (
-                                    <button
-                                      onClick={() => setConfirmDeleteTeamId(team._id)}
-                                      className="text-red-600 hover:underline text-xs font-semibold"
-                                      title="Delete Team"
-                                    >
-                                      Delete
-                                    </button>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                            <div>
-                              <span className="font-semibold text-sm text-foreground">Members: </span>
-                              <span className="text-sm text-muted-foreground">
-                                {Array.isArray(team.members) && team.members.length > 0
-                                  ? team.members.map((id: string) => {
-                                      const emp = employees.find(e => e._id === id);
-                                      return emp ? `${emp.firstname} ${emp.lastname} (${emp.department || 'N/A'})` : id;
-                                    }).join(', ')
-                                  : 'N/A'}
-                              </span>
-                            </div>
+                                  </div>
+                                ) : (
+                                  <button
+                                    onClick={() => setConfirmDeleteTeamId(team._id)}
+                                    className="text-red-600 hover:underline text-xs font-semibold"
+                                    title="Delete Team"
+                                  >
+                                    Delete
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                          <div>
+                            <span className="font-semibold text-base text-foreground">Members:</span>
+                            <ul className="text-base text-muted-foreground list-disc ml-6 mt-2">
+                              {Array.isArray(team.members) && team.members.length > 0
+                                ? team.members.map((id: string) => {
+                                    const emp = employees.find(e => e._id === id);
+                                    return (
+                                      <li key={id}>
+                                        {emp ? `${emp.firstname} ${emp.lastname} (${emp.department || 'N/A'})` : id}
+                                      </li>
+                                    );
+                                  })
+                                : <li>N/A</li>}
+                            </ul>
                           </div>
                         </div>
                       ))}
