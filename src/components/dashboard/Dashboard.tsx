@@ -382,6 +382,73 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
 
   // --- End Teams logic ---
 
+  // --- Announcements state and logic ---
+  const [announcements, setAnnouncements] = useState<any[]>([]);
+  const [announcementMsg, setAnnouncementMsg] = useState('');
+  const [announcementInput, setAnnouncementInput] = useState('');
+  const [announcementLoading, setAnnouncementLoading] = useState(false);
+
+  const fetchAnnouncements = async () => {
+    try {
+      const res = await fetch('http://localhost:5050/api/announcements');
+      const data = await res.json();
+      setAnnouncements(data);
+    } catch {
+      setAnnouncements([]);
+    }
+  };
+
+  useEffect(() => {
+    fetchAnnouncements();
+  }, []);
+
+  const handleAddAnnouncement = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAnnouncementMsg('');
+    setAnnouncementLoading(true);
+    try {
+      // Only send createdBy if it's a valid ObjectId
+      const isValidObjectId = (id: string) => /^[a-f\d]{24}$/i.test(id);
+      const body: any = { message: announcementInput };
+      if (isValidObjectId(user.id)) {
+        body.createdBy = user.id;
+      }
+      const resp = await fetch('http://localhost:5050/api/announcements', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      if (resp.ok) {
+        setAnnouncementMsg('Announcement added!');
+        setAnnouncementInput('');
+        fetchAnnouncements();
+      } else {
+        const err = await resp.json();
+        setAnnouncementMsg('Error: ' + (err.error || 'Could not add announcement'));
+      }
+    } catch {
+      setAnnouncementMsg('Network error.');
+    }
+    setAnnouncementLoading(false);
+  };
+
+  const handleDeleteAnnouncement = async (id: string) => {
+    setAnnouncementMsg('');
+    try {
+      const resp = await fetch(`http://localhost:5050/api/announcements/${id}`, {
+        method: 'DELETE'
+      });
+      if (resp.ok) {
+        fetchAnnouncements();
+      } else {
+        const err = await resp.json();
+        setAnnouncementMsg('Error: ' + (err.error || 'Could not delete announcement'));
+      }
+    } catch {
+      setAnnouncementMsg('Network error.');
+    }
+  };
+
   useEffect(() => {
     // Fetch login time for the current user
     const fetchLoginTime = async () => {
@@ -695,7 +762,55 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                   <CardTitle>Announcements</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-muted-foreground">No new announcements.</p>
+                  {(user.role === 'admin' || user.role === 'super_admin') && (
+                    <form className="mb-4 flex gap-2" onSubmit={handleAddAnnouncement}>
+                      <input
+                        className="flex-1 border rounded px-3 py-2 bg-background text-foreground"
+                        placeholder="Write a new announcement..."
+                        value={announcementInput}
+                        onChange={e => setAnnouncementInput(e.target.value)}
+                        required
+                        disabled={announcementLoading}
+                      />
+                      <button
+                        type="submit"
+                        className="px-4 py-2 bg-blue-600 text-white rounded font-semibold"
+                        disabled={announcementLoading}
+                      >
+                        {announcementLoading ? 'Posting...' : 'Post'}
+                      </button>
+                    </form>
+                  )}
+                  {announcementMsg && (
+                    <div className={`mb-2 text-sm ${announcementMsg.startsWith('Error') ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
+                      {announcementMsg}
+                    </div>
+                  )}
+                  {announcements.length === 0 ? (
+                    <p className="text-muted-foreground">No announcements yet.</p>
+                  ) : (
+                    <ul className="divide-y divide-border">
+                      {announcements.map(a => (
+                        <li key={a._id} className="py-3 flex justify-between items-start">
+                          <div>
+                            <div className="font-semibold text-foreground">{a.message}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {a.createdBy ? `By ${a.createdBy}` : ''} &middot; {new Date(a.createdAt).toLocaleDateString()}
+                            </div>
+                          </div>
+                          {(user.role === 'admin' || user.role === 'super_admin') && (
+                            <button
+                              className="ml-4 text-xs text-red-600 hover:underline"
+                              onClick={() => handleDeleteAnnouncement(a._id)}
+                              title="Delete announcement"
+                            >
+                              Delete
+                            </button>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </CardContent>
               </Card>
               {/* Quick Links Widget */}

@@ -70,6 +70,15 @@ const teamSchema = new mongoose.Schema({
 const Team = mongoose.model('Team', teamSchema);
 // --- End Team Model ---
 
+// --- Announcement Model ---
+const announcementSchema = new mongoose.Schema({
+  message: { type: String, required: true },
+  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', required: false },
+  createdAt: { type: Date, default: Date.now }
+});
+const Announcement = mongoose.model('Announcement', announcementSchema);
+// --- End Announcement Model ---
+
 app.use(cors()); // allow all origins for now
 app.use(express.json());
 
@@ -251,6 +260,55 @@ app.delete('/api/teams/:id', async (req, res) => {
   }
 });
 // --- End Teams API ---
+
+// --- Announcements API ---
+app.get('/api/announcements', async (req, res) => {
+  try {
+    const announcements = await Announcement.find({})
+      .sort({ createdAt: -1 })
+      .populate({ path: 'createdBy', select: 'firstname lastname email role' });
+    res.json(announcements.map(a => ({
+      _id: a._id,
+      message: a.message,
+      createdAt: a.createdAt,
+      createdBy: a.createdBy
+        ? `${a.createdBy.firstname} ${a.createdBy.lastname}`
+        : 'Admin'
+    })));
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch announcements' });
+  }
+});
+
+app.post('/api/announcements', async (req, res) => {
+  try {
+    const { message, createdBy } = req.body;
+    if (!message) return res.status(400).json({ error: 'Message is required' });
+    // Validate createdBy as a MongoDB ObjectId or set to null
+    let createdByValue = null;
+    if (createdBy && /^[a-f\d]{24}$/i.test(createdBy)) {
+      createdByValue = createdBy;
+    }
+    const announcement = new Announcement({ message, createdBy: createdByValue });
+    await announcement.save();
+    res.status(201).json(announcement);
+  } catch (err) {
+    res.status(400).json({ error: 'Failed to add announcement' });
+  }
+});
+
+app.delete('/api/announcements/:id', async (req, res) => {
+  try {
+    const deleted = await Announcement.findByIdAndDelete(req.params.id);
+    if (!deleted) {
+      return res.status(404).json({ error: 'Announcement not found' });
+    }
+    res.json({ message: 'Announcement deleted successfully.' });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete announcement' });
+  }
+});
+// --- End Announcements API ---
 
 // --- Employees API: filter by role for team selection ---
 app.get('/api/employees', async (req, res) => {
