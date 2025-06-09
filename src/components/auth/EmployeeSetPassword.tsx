@@ -67,22 +67,22 @@ const EmployeeSetPassword = () => {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
-      <Card className="w-full max-w-md">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-800 dark:to-gray-900 p-4">
+      <Card className="w-full max-w-md bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 shadow-lg">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl font-bold text-gray-900">
+          <CardTitle className="text-2xl font-bold text-gray-900 dark:text-gray-100">
             Set Your New Password
           </CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             {email && (
-              <div className="mb-2 text-center text-gray-600 text-sm">
+              <div className="mb-2 text-center text-gray-600 dark:text-gray-400 text-sm">
                 For: <span className="font-semibold">{email}</span>
               </div>
             )}
             <div>
-              <Label htmlFor="new-password">New Password</Label>
+              <Label htmlFor="new-password" className="dark:text-gray-300">New Password</Label>
               <div className="relative">
                 <Input
                   id="new-password"
@@ -92,12 +92,12 @@ const EmployeeSetPassword = () => {
                   minLength={8}
                   required
                   placeholder="At least 8 characters"
-                  className="pr-10"
+                  className="pr-10 dark:bg-gray-800 dark:text-gray-100 dark:placeholder-gray-400"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword((v) => !v)}
-                  className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                  className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
                   tabIndex={-1}
                 >
                   {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
@@ -105,7 +105,7 @@ const EmployeeSetPassword = () => {
               </div>
             </div>
             <div>
-              <Label htmlFor="confirm-password">Confirm Password</Label>
+              <Label htmlFor="confirm-password" className="dark:text-gray-300">Confirm Password</Label>
               <div className="relative">
                 <Input
                   id="confirm-password"
@@ -115,21 +115,21 @@ const EmployeeSetPassword = () => {
                   minLength={8}
                   required
                   placeholder="Re-enter new password"
-                  className="pr-10"
+                  className="pr-10 dark:bg-gray-800 dark:text-gray-100 dark:placeholder-gray-400"
                 />
                 <button
                   type="button"
                   onClick={() => setShowConfirm((v) => !v)}
-                  className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                  className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
                   tabIndex={-1}
                 >
                   {showConfirm ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
               </div>
             </div>
-            {error && <div className="text-red-600 text-sm">{error}</div>}
-            {success && <div className="text-green-600 text-sm">{success}</div>}
-            <Button type="submit" className="w-full">
+            {error && <div className="text-red-600 dark:text-red-400 text-sm">{error}</div>}
+            {success && <div className="text-green-600 dark:text-green-400 text-sm">{success}</div>}
+            <Button type="submit" className="w-full dark:bg-indigo-700 dark:hover:bg-indigo-800">
               Set Password
             </Button>
           </form>
