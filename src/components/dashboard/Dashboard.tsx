@@ -257,7 +257,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                 </CardHeader>
                 <CardContent>
                   <div className="text-4xl font-bold text-blue-600 mb-2">{timesheetDisplay}</div>
-                  <div className="text-gray-600 mb-2">{isClockedIn ? 'Clocked in' : clockInTime && clockOutTime ? 'Clocked out' : 'Not clocked in yet'}</div>
+                  <div className="text-muted-foreground mb-2">{isClockedIn ? 'Clocked in' : clockInTime && clockOutTime ? 'Clocked out' : 'Not clocked in yet'}</div>
                   <div className="flex space-x-2">
                     <button
                       className="px-4 py-2 rounded bg-green-600 text-white font-semibold disabled:opacity-50"
@@ -283,7 +283,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                 </CardHeader>
                 <CardContent>
                   <div className="text-3xl font-bold text-yellow-600 mb-2">2</div>
-                  <div className="text-gray-600">Employees on leave</div>
+                  <div className="text-muted-foreground">Employees on leave</div>
                 </CardContent>
               </Card>
               {/* Holidays Widget */}
@@ -292,7 +292,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                   <CardTitle>Upcoming Holidays</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <ul className="text-gray-700 space-y-1">
+                  <ul className="text-muted-foreground space-y-1">
                     <li>Independence Day - 15 Aug</li>
                     <li>Raksha Bandhan - 19 Aug</li>
                     <li>Janmashtami - 26 Aug</li>
@@ -307,7 +307,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                   <CardTitle>Welcome New Employees</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <ul className="text-gray-700 space-y-1">
+                  <ul className="text-muted-foreground space-y-1">
                     {employees.length === 0 ? (
                       <li>No employees found.</li>
                     ) : (
@@ -327,7 +327,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                 </CardHeader>
                 <CardContent>
                   <div className="text-3xl font-bold text-green-600 mb-2">4</div>
-                  <div className="text-gray-600">Employees remote today</div>
+                  <div className="text-muted-foreground">Employees remote today</div>
                 </CardContent>
               </Card>
               {/* Attendance Widget */}
@@ -339,11 +339,11 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                   <div className="flex items-center space-x-4">
                     <div>
                       <div className="text-2xl font-bold text-green-600">96%</div>
-                      <div className="text-gray-600 text-sm">Present</div>
+                      <div className="text-muted-foreground text-sm">Present</div>
                     </div>
                     <div>
                       <div className="text-2xl font-bold text-red-500">4%</div>
-                      <div className="text-gray-600 text-sm">Absent</div>
+                      <div className="text-muted-foreground text-sm">Absent</div>
                     </div>
                   </div>
                 </CardContent>
@@ -356,7 +356,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                   <CardTitle>Announcements</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-gray-600">No new announcements.</p>
+                  <p className="text-muted-foreground">No new announcements.</p>
                 </CardContent>
               </Card>
               {/* Quick Links Widget */}
@@ -365,7 +365,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                   <CardTitle>Quick Links</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <ul className="list-disc ml-6 text-blue-700 space-y-1">
+                  <ul className="list-disc ml-6 text-blue-700 dark:text-blue-400 space-y-1">
                     <li className="cursor-pointer hover:underline" onClick={() => setActiveTab('attendance')}>Attendance</li>
                     <li className="cursor-pointer hover:underline" onClick={() => setActiveTab('leaves')}>Leaves</li>
                     <li className="cursor-pointer hover:underline" onClick={() => setActiveTab('payroll')}>Payroll</li>
@@ -418,29 +418,28 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
               <CardContent>
                 <div className="mb-4 text-lg font-semibold">Today's Attendance</div>
                 <div className="grid grid-cols-2 gap-4 mb-6">
-                  <div className="bg-green-100 rounded-lg p-4 text-center">
-                    <div className="text-2xl font-bold text-green-700">Present</div>
-                    <div className="text-3xl font-bold">{/* Example: 12 */}12</div>
+                  <div className="bg-green-100 dark:bg-green-900 rounded-lg p-4 text-center">
+                    <div className="text-2xl font-bold text-green-700 dark:text-green-200">Present</div>
+                    <div className="text-3xl font-bold text-foreground">12</div>
                   </div>
-                  <div className="bg-red-100 rounded-lg p-4 text-center">
-                    <div className="text-2xl font-bold text-red-700">Absent</div>
-                    <div className="text-3xl font-bold">{/* Example: 3 */}3</div>
+                  <div className="bg-red-100 dark:bg-red-900 rounded-lg p-4 text-center">
+                    <div className="text-2xl font-bold text-red-700 dark:text-red-200">Absent</div>
+                    <div className="text-3xl font-bold text-foreground">3</div>
                   </div>
                 </div>
                 <div className="mb-2 font-semibold">Recent Clock-ins</div>
-                <ul className="divide-y divide-gray-200">
-                  {/* Example static list, replace with real data if available */}
+                <ul className="divide-y divide-border">
                   <li className="py-2 flex justify-between">
                     <span>John Doe</span>
-                    <span className="text-gray-500">09:05 AM</span>
+                    <span className="text-muted-foreground">09:05 AM</span>
                   </li>
                   <li className="py-2 flex justify-between">
                     <span>Priya Sharma</span>
-                    <span className="text-gray-500">09:10 AM</span>
+                    <span className="text-muted-foreground">09:10 AM</span>
                   </li>
                   <li className="py-2 flex justify-between">
                     <span>Rohit Mehra</span>
-                    <span className="text-gray-500">09:12 AM</span>
+                    <span className="text-muted-foreground">09:12 AM</span>
                   </li>
                 </ul>
               </CardContent>
@@ -457,57 +456,57 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-2 gap-4 mb-4">
-                  <div className="bg-blue-100 rounded-lg p-4 text-center">
-                    <div className="text-2xl font-bold text-blue-700">12</div>
-                    <div className="text-gray-600 text-sm">Annual Leaves</div>
+                  <div className="bg-blue-100 dark:bg-blue-900 rounded-lg p-4 text-center">
+                    <div className="text-2xl font-bold text-blue-700 dark:text-blue-200">12</div>
+                    <div className="text-muted-foreground text-sm">Annual Leaves</div>
                   </div>
-                  <div className="bg-green-100 rounded-lg p-4 text-center">
-                    <div className="text-2xl font-bold text-green-700">5</div>
-                    <div className="text-gray-600 text-sm">Sick Leaves</div>
+                  <div className="bg-green-100 dark:bg-green-900 rounded-lg p-4 text-center">
+                    <div className="text-2xl font-bold text-green-700 dark:text-green-200">5</div>
+                    <div className="text-muted-foreground text-sm">Sick Leaves</div>
                   </div>
                 </div>
                 <form className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium mb-1">Leave Type</label>
-                    <select className="w-full border rounded px-3 py-2">
+                    <label className="block text-sm font-medium mb-1 text-foreground">Leave Type</label>
+                    <select className="w-full border rounded px-3 py-2 bg-background text-foreground">
                       <option>Annual</option>
                       <option>Sick</option>
                       <option>Unpaid</option>
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium mb-1">From</label>
-                    <input type="date" className="w-full border rounded px-3 py-2" />
+                    <label className="block text-sm font-medium mb-1 text-foreground">From</label>
+                    <input type="date" className="w-full border rounded px-3 py-2 bg-background text-foreground" />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium mb-1">To</label>
-                    <input type="date" className="w-full border rounded px-3 py-2" />
+                    <label className="block text-sm font-medium mb-1 text-foreground">To</label>
+                    <input type="date" className="w-full border rounded px-3 py-2 bg-background text-foreground" />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium mb-1">Reason</label>
-                    <textarea className="w-full border rounded px-3 py-2" rows={2} placeholder="Reason for leave" />
+                    <label className="block text-sm font-medium mb-1 text-foreground">Reason</label>
+                    <textarea className="w-full border rounded px-3 py-2 bg-background text-foreground" rows={2} placeholder="Reason for leave" />
                   </div>
                   <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded font-semibold">Request Leave</button>
                 </form>
               </CardContent>
             </Card>
-            <Card className="max-w-2xl mx-auto">
+            <Card className="max-w-2xl mx-auto bg-card text-foreground">
               <CardHeader>
                 <CardTitle>Leave History</CardTitle>
               </CardHeader>
               <CardContent>
-                <ul className="divide-y divide-gray-200">
+                <ul className="divide-y divide-border">
                   <li className="py-2 flex justify-between">
                     <span>2025-05-10 to 2025-05-12</span>
-                    <span className="text-green-600">Approved</span>
+                    <span className="text-green-600 dark:text-green-400">Approved</span>
                   </li>
                   <li className="py-2 flex justify-between">
                     <span>2025-04-01 to 2025-04-01</span>
-                    <span className="text-yellow-600">Pending</span>
+                    <span className="text-yellow-600 dark:text-yellow-400">Pending</span>
                   </li>
                   <li className="py-2 flex justify-between">
                     <span>2025-03-15 to 2025-03-16</span>
-                    <span className="text-red-600">Rejected</span>
+                    <span className="text-red-600 dark:text-red-400">Rejected</span>
                   </li>
                 </ul>
               </CardContent>
@@ -544,23 +543,23 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                 <button className="px-4 py-2 bg-green-600 text-white rounded font-semibold">Download Payslip (PDF)</button>
               </CardContent>
             </Card>
-            <Card className="max-w-2xl mx-auto">
+            <Card className="max-w-2xl mx-auto bg-card text-foreground">
               <CardHeader>
                 <CardTitle>Payslip History</CardTitle>
               </CardHeader>
               <CardContent>
-                <ul className="divide-y divide-gray-200">
+                <ul className="divide-y divide-border">
                   <li className="py-2 flex justify-between">
                     <span>May 2025</span>
-                    <button className="text-blue-600 underline">Download</button>
+                    <button className="text-blue-600 dark:text-blue-400 underline">Download</button>
                   </li>
                   <li className="py-2 flex justify-between">
                     <span>April 2025</span>
-                    <button className="text-blue-600 underline">Download</button>
+                    <button className="text-blue-600 dark:text-blue-400 underline">Download</button>
                   </li>
                   <li className="py-2 flex justify-between">
                     <span>March 2025</span>
-                    <button className="text-blue-600 underline">Download</button>
+                    <button className="text-blue-600 dark:text-blue-400 underline">Download</button>
                   </li>
                 </ul>
               </CardContent>
@@ -570,48 +569,48 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
       case 'projects':
         return (
           <div className="p-8">
-            <Card className="max-w-3xl mx-auto mb-8">
+            <Card className="max-w-3xl mx-auto mb-8 bg-card text-foreground">
               <CardHeader>
                 <CardTitle>Add New Project</CardTitle>
               </CardHeader>
               <CardContent>
                 <form className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium mb-1">Project Name</label>
-                    <input className="w-full border rounded px-3 py-2" placeholder="Enter project name" />
+                    <label className="block text-sm font-medium mb-1 text-foreground">Project Name</label>
+                    <input className="w-full border rounded px-3 py-2 bg-background text-foreground" placeholder="Enter project name" />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium mb-1">Description</label>
-                    <textarea className="w-full border rounded px-3 py-2" placeholder="Describe the project" rows={3} />
+                    <label className="block text-sm font-medium mb-1 text-foreground">Description</label>
+                    <textarea className="w-full border rounded px-3 py-2 bg-background text-foreground" placeholder="Describe the project" rows={3} />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium mb-1">Team</label>
-                    <input className="w-full border rounded px-3 py-2" placeholder="Team name or members" />
+                    <label className="block text-sm font-medium mb-1 text-foreground">Team</label>
+                    <input className="w-full border rounded px-3 py-2 bg-background text-foreground" placeholder="Team name or members" />
                   </div>
                   <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded font-semibold">Add Project</button>
                 </form>
               </CardContent>
             </Card>
-            <Card className="max-w-3xl mx-auto">
+            <Card className="max-w-3xl mx-auto bg-card text-foreground">
               <CardHeader>
                 <CardTitle>Ongoing Company Projects</CardTitle>
               </CardHeader>
               <CardContent>
-                <ul className="divide-y divide-gray-200">
+                <ul className="divide-y divide-border">
                   <li className="py-3">
-                    <div className="font-semibold">HR Management System</div>
-                    <div className="text-sm text-gray-500">Team: HR, Dev</div>
-                    <div className="text-xs text-gray-400">A platform for employee management, attendance, and payroll.</div>
+                    <div className="font-semibold text-foreground">HR Management System</div>
+                    <div className="text-sm text-muted-foreground">Team: HR, Dev</div>
+                    <div className="text-xs text-muted-foreground">A platform for employee management, attendance, and payroll.</div>
                   </li>
                   <li className="py-3">
-                    <div className="font-semibold">Client Portal</div>
-                    <div className="text-sm text-gray-500">Team: Client Success, Dev</div>
-                    <div className="text-xs text-gray-400">A portal for clients to track project progress and invoices.</div>
+                    <div className="font-semibold text-foreground">Client Portal</div>
+                    <div className="text-sm text-muted-foreground">Team: Client Success, Dev</div>
+                    <div className="text-xs text-muted-foreground">A portal for clients to track project progress and invoices.</div>
                   </li>
                   <li className="py-3">
-                    <div className="font-semibold">Mobile App Redesign</div>
-                    <div className="text-sm text-gray-500">Team: Mobile, UI/UX</div>
-                    <div className="text-xs text-gray-400">Revamping the company mobile app for better user experience.</div>
+                    <div className="font-semibold text-foreground">Mobile App Redesign</div>
+                    <div className="text-sm text-muted-foreground">Team: Mobile, UI/UX</div>
+                    <div className="text-xs text-muted-foreground">Revamping the company mobile app for better user experience.</div>
                   </li>
                 </ul>
               </CardContent>
@@ -622,30 +621,30 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
         // Teams feature: show team members and allow team creation
         return (
           <div className="p-8">
-            <Card className="max-w-2xl mx-auto mb-8">
+            <Card className="max-w-2xl mx-auto mb-8 bg-card text-foreground">
               <CardHeader>
                 <CardTitle>My Team</CardTitle>
               </CardHeader>
               <CardContent>
-                <ul className="divide-y divide-gray-200 mb-4">
+                <ul className="divide-y divide-border mb-4">
                   <li className="py-2 flex justify-between">
                     <span>Priya Sharma</span>
-                    <span className="text-gray-500">HR</span>
+                    <span className="text-muted-foreground">HR</span>
                   </li>
                   <li className="py-2 flex justify-between">
                     <span>Rohit Mehra</span>
-                    <span className="text-gray-500">Developer</span>
+                    <span className="text-muted-foreground">Developer</span>
                   </li>
                   <li className="py-2 flex justify-between">
                     <span>John Doe</span>
-                    <span className="text-gray-500">Designer</span>
+                    <span className="text-muted-foreground">Designer</span>
                   </li>
                 </ul>
                 {(user.role === 'super_admin' || user.role === 'admin') && (
                   <form className="space-y-2">
                     <div>
-                      <label className="block text-sm font-medium mb-1">Add Team Member</label>
-                      <input className="w-full border rounded px-3 py-2" placeholder="Enter name or email" />
+                      <label className="block text-sm font-medium mb-1 text-foreground">Add Team Member</label>
+                      <input className="w-full border rounded px-3 py-2 bg-background text-foreground" placeholder="Enter name or email" />
                     </div>
                     <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded font-semibold">Add Member</button>
                   </form>
@@ -653,15 +652,15 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
               </CardContent>
             </Card>
             {(user.role === 'super_admin' || user.role === 'admin') && (
-              <Card className="max-w-2xl mx-auto">
+              <Card className="max-w-2xl mx-auto bg-card text-foreground">
                 <CardHeader>
                   <CardTitle>Create New Team</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <form className="space-y-2">
                     <div>
-                      <label className="block text-sm font-medium mb-1">Team Name</label>
-                      <input className="w-full border rounded px-3 py-2" placeholder="Team name" />
+                      <label className="block text-sm font-medium mb-1 text-foreground">Team Name</label>
+                      <input className="w-full border rounded px-3 py-2 bg-background text-foreground" placeholder="Team name" />
                     </div>
                     <button type="submit" className="px-4 py-2 bg-green-600 text-white rounded font-semibold">Create Team</button>
                   </form>
@@ -674,12 +673,12 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
         // Awards feature: show awards and allow nomination
         return (
           <div className="p-8">
-            <Card className="max-w-2xl mx-auto mb-8">
+            <Card className="max-w-2xl mx-auto mb-8 bg-card text-foreground">
               <CardHeader>
                 <CardTitle>My Awards</CardTitle>
               </CardHeader>
               <CardContent>
-                <ul className="divide-y divide-gray-200 mb-4">
+                <ul className="divide-y divide-border mb-4">
                   <li className="py-2 flex justify-between">
                     <span>Employee of the Month</span>
                     <span className="text-green-600">May 2025</span>
@@ -692,12 +691,12 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                 {(user.role === 'super_admin' || user.role === 'admin') && (
                   <form className="space-y-2">
                     <div>
-                      <label className="block text-sm font-medium mb-1">Nominate a Colleague</label>
-                      <input className="w-full border rounded px-3 py-2" placeholder="Enter name or email" />
+                      <label className="block text-sm font-medium mb-1 text-foreground">Nominate a Colleague</label>
+                      <input className="w-full border rounded px-3 py-2 bg-background text-foreground" placeholder="Enter name or email" />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium mb-1">Award</label>
-                      <input className="w-full border rounded px-3 py-2" placeholder="Award name" />
+                      <label className="block text-sm font-medium mb-1 text-foreground">Award</label>
+                      <input className="w-full border rounded px-3 py-2 bg-background text-foreground" placeholder="Award name" />
                     </div>
                     <button type="submit" className="px-4 py-2 bg-yellow-500 text-white rounded font-semibold">Nominate</button>
                   </form>
@@ -710,7 +709,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
         // Performance feature: show performance summary and feedback
         return (
           <div className="p-8">
-            <Card className="max-w-2xl mx-auto mb-8">
+            <Card className="max-w-2xl mx-auto mb-8 bg-card text-foreground">
               <CardHeader>
                 <CardTitle>Performance Summary</CardTitle>
               </CardHeader>
@@ -730,13 +729,13 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                   </div>
                 </div>
                 <div className="mb-2 font-semibold">Manager Feedback</div>
-                <div className="bg-gray-100 rounded p-3 mb-4 text-gray-700">
+                <div className="bg-muted rounded p-3 mb-4 text-muted-foreground">
                   Great work this quarter! Keep up the excellent performance and teamwork.
                 </div>
                 <form className="space-y-2">
                   <div>
-                    <label className="block text-sm font-medium mb-1">Self-Review</label>
-                    <textarea className="w-full border rounded px-3 py-2" rows={2} placeholder="Write your self-review..." />
+                    <label className="block text-sm font-medium mb-1 text-foreground">Self-Review</label>
+                    <textarea className="w-full border rounded px-3 py-2 bg-background text-foreground" rows={2} placeholder="Write your self-review..." />
                   </div>
                   <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded font-semibold">Submit Review</button>
                 </form>
