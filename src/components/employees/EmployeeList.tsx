@@ -180,7 +180,7 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
               placeholder="Search employees..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10 w-64"
+              className="pl-10 w-64 bg-background text-foreground placeholder:text-muted-foreground"
             />
           </div>
         </div>
