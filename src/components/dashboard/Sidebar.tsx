@@ -85,14 +85,17 @@ const Sidebar = ({ userRole, activeTab, setActiveTab }: SidebarProps) => {
     <>
       {items.map((item) => {
         const Icon = item.icon;
+        const isActive = activeTab === item.id;
         if (item.children) {
           return (
             <div key={item.id}>
               <Button
-                variant={activeTab === item.id ? "default" : "ghost"}
+                variant="ghost"
                 className={cn(
                   "w-full justify-start",
-                  activeTab === item.id && "bg-blue-600 text-white"
+                  isActive
+                    ? "bg-primary text-primary-foreground"
+                    : "hover:bg-muted"
                 )}
                 onClick={() => setActiveTab(item.id)}
               >
@@ -108,10 +111,12 @@ const Sidebar = ({ userRole, activeTab, setActiveTab }: SidebarProps) => {
         return (
           <Button
             key={item.id}
-            variant={activeTab === item.id ? "default" : "ghost"}
+            variant="ghost"
             className={cn(
               "w-full justify-start",
-              activeTab === item.id && "bg-blue-600 text-white"
+              isActive
+                ? "bg-primary text-primary-foreground"
+                : "hover:bg-muted"
             )}
             onClick={() => setActiveTab(item.id)}
           >

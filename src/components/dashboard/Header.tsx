@@ -29,11 +29,11 @@ const Header = ({ user, onLogout }: HeaderProps) => {
   };
 
   return (
-    <header className="bg-white shadow-sm border-b">
+    <header className="bg-background shadow-sm border-b border-border">
       <div className="px-6 py-4 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Employee Management</h1>
-          <p className="text-sm text-gray-600">Welcome back, {user.name}</p>
+          <h1 className="text-2xl font-bold text-foreground">Employee Management</h1>
+          <p className="text-sm text-muted-foreground">Welcome back, {user.name}</p>
         </div>
         
         <div className="flex items-center space-x-4">
@@ -44,8 +44,8 @@ const Header = ({ user, onLogout }: HeaderProps) => {
               </AvatarFallback>
             </Avatar>
             <div className="text-right">
-              <p className="text-sm font-medium text-gray-900">{user.name}</p>
-              <p className="text-xs text-gray-500">{getRoleDisplay(user.role)}</p>
+              <p className="text-sm font-medium text-foreground">{user.name}</p>
+              <p className="text-xs text-muted-foreground">{getRoleDisplay(user.role)}</p>
             </div>
           </div>
           

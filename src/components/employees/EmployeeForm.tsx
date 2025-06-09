@@ -129,13 +129,17 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
   };
 
   return (
-    <Card className="max-w-2xl mx-auto mt-8">
+    <Card className="max-w-2xl mx-auto mt-8 bg-card text-foreground shadow-lg">
       <CardHeader>
         <CardTitle>Add New Employee</CardTitle>
       </CardHeader>
       <CardContent>
         {message && (
-          <div className={`text-sm font-medium mb-4 ${message.startsWith('Error') || message === 'Network error.' ? 'text-red-600' : 'text-green-600'}`}>
+          <div className={`text-sm font-medium mb-4 ${
+            message.startsWith('Error') || message === 'Network error.'
+              ? 'text-red-600 dark:text-red-400'
+              : 'text-green-600 dark:text-green-400'
+          }`}>
             {message}
           </div>
         )}
@@ -143,15 +147,15 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label htmlFor="firstName">First Name</Label>
-              <Input name="firstName" value={formData.firstName} onChange={handleChange} required />
+              <Input name="firstName" value={formData.firstName} onChange={handleChange} required className="bg-background text-foreground" />
             </div>
             <div>
               <Label htmlFor="lastName">Last Name</Label>
-              <Input name="lastName" value={formData.lastName} onChange={handleChange} required />
+              <Input name="lastName" value={formData.lastName} onChange={handleChange} required className="bg-background text-foreground" />
             </div>
             <div>
               <Label htmlFor="email">Email</Label>
-              <Input type="email" name="email" value={formData.email} onChange={handleChange} required />
+              <Input type="email" name="email" value={formData.email} onChange={handleChange} required className="bg-background text-foreground" />
             </div>
             <div>
               <Label htmlFor="phone">Phone</Label>
@@ -160,7 +164,7 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
                   name="countryCode"
                   value={formData.countryCode}
                   onChange={handleChange}
-                  className="border rounded-l px-2 py-2 bg-gray-50 font-bold text-lg"
+                  className="border rounded-l px-2 py-2 bg-background text-foreground font-bold text-lg"
                   style={{ minWidth: 80 }}
                 >
                   <option value="+91">🇮🇳 +91</option>
@@ -169,7 +173,6 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
                   <option value="+61">🇦🇺 +61</option>
                   <option value="+81">🇯🇵 +81</option>
                   <option value="+971">🇦🇪 +971</option>
-                  {/* Add more as needed */}
                 </select>
                 <Input
                   name="phone"
@@ -178,13 +181,13 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
                   maxLength={10}
                   minLength={10}
                   pattern="\d{10}"
-                  className="rounded-l-none"
+                  className="rounded-l-none bg-background text-foreground"
                   required
                   placeholder="10 digit number"
                   type="tel"
                 />
               </div>
-              {phoneError && <div className="text-xs text-red-600 mt-1">{phoneError}</div>}
+              {phoneError && <div className="text-xs text-red-600 dark:text-red-400 mt-1">{phoneError}</div>}
             </div>
             <div>
               <Label htmlFor="department">Department</Label>
@@ -193,7 +196,7 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
                 value={formData.department}
                 onChange={handleChange}
                 required
-                className="w-full mt-1 mb-2 border rounded-md px-3 py-2"
+                className="w-full mt-1 mb-2 border rounded-md px-3 py-2 bg-background text-foreground"
               >
                 <option value="">Select department</option>
                 <option value="HR">HR</option>
@@ -207,7 +210,7 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
             </div>
             <div>
               <Label htmlFor="position">Position</Label>
-              <Input name="position" value={formData.position} onChange={handleChange} />
+              <Input name="position" value={formData.position} onChange={handleChange} className="bg-background text-foreground" />
             </div>
             <div>
               <Label htmlFor="role">Role</Label>
@@ -216,7 +219,7 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
                 value={formData.role}
                 onChange={handleChange}
                 required
-                className="w-full mt-1 mb-2 border rounded-md px-3 py-2"
+                className="w-full mt-1 mb-2 border rounded-md px-3 py-2 bg-background text-foreground"
               >
                 <option value="">Select role</option>
                 <option value="employee">Employee</option>
@@ -235,15 +238,16 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
                 inputMode="numeric"
                 pattern="[0-9,]*"
                 autoComplete="off"
+                className="bg-background text-foreground"
               />
             </div>
             <div>
               <Label htmlFor="startDate">Start Date</Label>
-              <Input type="date" name="startDate" value={formData.startDate} onChange={handleChange} />
+              <Input type="date" name="startDate" value={formData.startDate} onChange={handleChange} className="bg-background text-foreground" />
             </div>
             <div>
               <Label htmlFor="address">Address</Label>
-              <Input name="address" value={formData.address} onChange={handleChange} />
+              <Input name="address" value={formData.address} onChange={handleChange} className="bg-background text-foreground" />
             </div>
             <div>
               <Label htmlFor="password">Temporary Password</Label>
@@ -256,12 +260,12 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
                   required
                   minLength={8}
                   placeholder="At least 8 characters"
-                  className="pr-20"
+                  className="pr-20 bg-background text-foreground"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword((prev) => !prev)}
-                  className="absolute right-2 px-2 py-1 text-xs bg-gray-100 border rounded hover:bg-gray-200"
+                  className="absolute right-2 px-2 py-1 text-xs bg-muted border rounded hover:bg-muted/80"
                   tabIndex={-1}
                 >
                   {showPassword ? "Hide" : "Show"}

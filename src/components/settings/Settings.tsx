@@ -74,7 +74,7 @@ const Settings = ({ userRole, userId }: SettingsProps) => {
 
       <div className="grid gap-6">
         {/* Profile Settings */}
-        <Card>
+        <Card className="bg-card text-foreground">
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
               <User className="h-5 w-5" />
@@ -85,23 +85,23 @@ const Settings = ({ userRole, userId }: SettingsProps) => {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="firstName">First Name</Label>
-                <Input id="firstName" defaultValue="John" />
+                <Input id="firstName" defaultValue="John" className="bg-background text-foreground" />
               </div>
               <div>
                 <Label htmlFor="lastName">Last Name</Label>
-                <Input id="lastName" defaultValue="Smith" />
+                <Input id="lastName" defaultValue="Smith" className="bg-background text-foreground" />
               </div>
             </div>
             <div>
               <Label htmlFor="email">Email</Label>
-              <Input id="email" type="email" defaultValue="john@company.com" />
+              <Input id="email" type="email" defaultValue="john@company.com" className="bg-background text-foreground" />
             </div>
             <Button>Update Profile</Button>
           </CardContent>
         </Card>
 
         {/* Security Settings */}
-        <Card>
+        <Card className="bg-card text-foreground">
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
               <Shield className="h-5 w-5" />
@@ -121,6 +121,7 @@ const Settings = ({ userRole, userId }: SettingsProps) => {
                     minLength={8}
                     autoComplete="new-password"
                     required
+                    className="bg-background text-foreground"
                   />
                   <button
                     type="button"
@@ -143,6 +144,7 @@ const Settings = ({ userRole, userId }: SettingsProps) => {
                     minLength={8}
                     autoComplete="new-password"
                     required
+                    className="bg-background text-foreground"
                   />
                   <button
                     type="button"
@@ -167,7 +169,7 @@ const Settings = ({ userRole, userId }: SettingsProps) => {
         </Card>
 
         {/* Theme Settings */}
-        <Card>
+        <Card className="bg-card text-foreground">
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
               <Palette className="h-5 w-5" />
@@ -197,7 +199,7 @@ const Settings = ({ userRole, userId }: SettingsProps) => {
 
         {/* System Settings (Admin/Super Admin only) */}
         {canEditSystemSettings && (
-          <Card>
+          <Card className="bg-card text-foreground">
             <CardHeader>
               <CardTitle className="flex items-center space-x-2">
                 <Palette className="h-5 w-5" />
@@ -223,7 +225,7 @@ const Settings = ({ userRole, userId }: SettingsProps) => {
               <Separator />
               <div>
                 <Label htmlFor="companyName">Company Name</Label>
-                <Input id="companyName" defaultValue="Your Company Name" />
+                <Input id="companyName" defaultValue="Your Company Name" className="bg-background text-foreground" />
               </div>
               <Button>Save System Settings</Button>
             </CardContent>

@@ -361,7 +361,7 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
       </Dialog>
       {/* Edit Employee Dialog (Super Admin only) */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent>
+        <DialogContent className="bg-background text-foreground">
           <DialogHeader>
             <DialogTitle>Edit Employee</DialogTitle>
           </DialogHeader>
@@ -370,19 +370,19 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-sm text-muted-foreground">First Name</label>
-                  <Input name="firstname" value={editEmployee.firstname || ''} onChange={handleEditChange} required />
+                  <Input name="firstname" value={editEmployee.firstname || ''} onChange={handleEditChange} required className="bg-background text-foreground" />
                 </div>
                 <div>
                   <label className="text-sm text-muted-foreground">Last Name</label>
-                  <Input name="lastname" value={editEmployee.lastname || ''} onChange={handleEditChange} required />
+                  <Input name="lastname" value={editEmployee.lastname || ''} onChange={handleEditChange} required className="bg-background text-foreground" />
                 </div>
                 <div>
                   <label className="text-sm text-muted-foreground">Email</label>
-                  <Input name="email" value={editEmployee.email || ''} onChange={handleEditChange} required />
+                  <Input name="email" value={editEmployee.email || ''} onChange={handleEditChange} required className="bg-background text-foreground" />
                 </div>
                 <div>
                   <label className="text-sm text-muted-foreground">Phone</label>
-                  <Input name="phone" value={editEmployee.phone || ''} onChange={handleEditChange} />
+                  <Input name="phone" value={editEmployee.phone || ''} onChange={handleEditChange} className="bg-background text-foreground" />
                 </div>
                 <div>
                   <label className="text-sm text-muted-foreground">Department</label>
@@ -390,7 +390,7 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
                     name="department"
                     value={editEmployee.department || ''}
                     onChange={handleEditChange}
-                    className="w-full mt-1 mb-2 border rounded-md px-3 py-2"
+                    className="w-full mt-1 mb-2 border rounded-md px-3 py-2 bg-background text-foreground"
                     required
                   >
                     <option value="">Select department</option>
@@ -405,7 +405,7 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
                 </div>
                 <div>
                   <label className="text-sm text-muted-foreground">Position</label>
-                  <Input name="position" value={editEmployee.position || ''} onChange={handleEditChange} />
+                  <Input name="position" value={editEmployee.position || ''} onChange={handleEditChange} className="bg-background text-foreground" />
                 </div>
                 <div>
                   <label className="text-sm text-muted-foreground">Role</label>
@@ -413,7 +413,7 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
                     name="role"
                     value={editEmployee.role || ''}
                     onChange={handleEditChange}
-                    className="w-full mt-1 mb-2 border rounded-md px-3 py-2"
+                    className="w-full mt-1 mb-2 border rounded-md px-3 py-2 bg-background text-foreground"
                     required
                   >
                     <option value="">Select role</option>
@@ -433,19 +433,20 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
                         : ''
                     }
                     onChange={handleEditChange}
+                    className="bg-background text-foreground"
                   />
                 </div>
                 <div>
                   <label className="text-sm text-muted-foreground">Start Date</label>
-                  <Input name="startDate" type="date" value={editEmployee.startDate ? editEmployee.startDate.substring(0, 10) : ''} onChange={handleEditChange} />
+                  <Input name="startDate" type="date" value={editEmployee.startDate ? editEmployee.startDate.substring(0, 10) : ''} onChange={handleEditChange} className="bg-background text-foreground" />
                 </div>
                 <div>
                   <label className="text-sm text-muted-foreground">Address</label>
-                  <Input name="address" value={editEmployee.address || ''} onChange={handleEditChange} />
+                  <Input name="address" value={editEmployee.address || ''} onChange={handleEditChange} className="bg-background text-foreground" />
                 </div>
                 <div>
                   <label className="text-sm text-muted-foreground">Aadhar Number</label>
-                  <Input name="aadhar" value={editEmployee?.aadhar || ''} onChange={handleEditChange} />
+                  <Input name="aadhar" value={editEmployee?.aadhar || ''} onChange={handleEditChange} className="bg-background text-foreground" />
                 </div>
               </div>
               <div className="flex justify-end space-x-2">

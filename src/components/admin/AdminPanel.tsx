@@ -242,9 +242,9 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
       {/* Edit Roles Dialog */}
       {showEditRolesDialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
-          <div className="bg-white rounded-lg shadow-lg max-w-2xl w-full p-6 relative overflow-y-auto max-h-[90vh]">
+          <div className="bg-background text-foreground rounded-lg shadow-lg max-w-2xl w-full p-6 relative overflow-y-auto max-h-[90vh]">
             <button
-              className="absolute top-2 right-2 text-gray-500 hover:text-gray-700"
+              className="absolute top-2 right-2 text-muted-foreground hover:text-foreground"
               onClick={() => setShowEditRolesDialog(false)}
               aria-label="Close"
             >
@@ -255,18 +255,18 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
             </h3>
             <div className="space-y-4">
               {allEmployees.length === 0 ? (
-                <div className="text-gray-400 text-center">No users found.</div>
+                <div className="text-muted-foreground text-center">No users found.</div>
               ) : (
                 allEmployees.map(emp => (
-                  <div key={emp._id} className="flex items-center justify-between border-b py-2">
+                  <div key={emp._id} className="flex items-center justify-between border-b border-muted py-2">
                     <div>
                       <div className="font-semibold">{emp.firstname} {emp.lastname}</div>
-                      <div className="text-xs text-gray-500 break-all">{emp.email}</div>
+                      <div className="text-xs text-muted-foreground break-all">{emp.email}</div>
                     </div>
                     <select
                       value={editRoles[emp._id] || emp.role}
                       onChange={e => handleRoleSelect(emp._id, e.target.value)}
-                      className="border rounded px-2 py-1"
+                      className="border rounded px-2 py-1 bg-background text-foreground"
                       disabled={savingRoles}
                     >
                       <option value="super_admin">Super Admin</option>
@@ -291,9 +291,9 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
       {/* Deactivate Users Dialog */}
       {showDeactivateDialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
-          <div className="bg-white rounded-lg shadow-lg max-w-2xl w-full p-6 relative overflow-y-auto max-h-[90vh]">
+          <div className="bg-background text-foreground rounded-lg shadow-lg max-w-2xl w-full p-6 relative overflow-y-auto max-h-[90vh]">
             <button
-              className="absolute top-2 right-2 text-gray-500 hover:text-gray-700"
+              className="absolute top-2 right-2 text-muted-foreground hover:text-foreground"
               onClick={() => setShowDeactivateDialog(false)}
               aria-label="Close"
             >
@@ -304,13 +304,13 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
             </h3>
             <div className="space-y-4">
               {activeUsers.length === 0 ? (
-                <div className="text-gray-400 text-center">No active users found.</div>
+                <div className="text-muted-foreground text-center">No active users found.</div>
               ) : (
                 activeUsers.map(emp => (
-                  <div key={emp._id} className="flex items-center justify-between border-b py-2">
+                  <div key={emp._id} className="flex items-center justify-between border-b border-muted py-2">
                     <div>
                       <div className="font-semibold">{emp.firstname} {emp.lastname}</div>
-                      <div className="text-xs text-gray-500 break-all">{emp.email}</div>
+                      <div className="text-xs text-muted-foreground break-all">{emp.email}</div>
                     </div>
                     <Button
                       variant="destructive"
@@ -333,9 +333,9 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
       {/* Deactivate Confirmation Dialog */}
       {confirmUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
-          <div className="bg-white rounded-lg shadow-lg w-full max-w-xs p-6 relative">
+          <div className="bg-background text-foreground rounded-lg shadow-lg w-full max-w-xs p-6 relative">
             <button
-              className="absolute top-2 right-2 text-gray-500 hover:text-gray-700"
+              className="absolute top-2 right-2 text-muted-foreground hover:text-foreground"
               onClick={() => setConfirmUser(null)}
               aria-label="Close"
             >
