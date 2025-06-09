@@ -1177,6 +1177,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                             <span className="font-semibold text-base text-foreground">Lead: </span>
                             <span className="text-base text-muted-foreground">
                               {(() => {
+                                // Find the lead in leadOptions (includes superadmins and admins)
                                 const lead = leadOptions.find(opt => opt.value === proj.lead);
                                 return lead ? lead.label : (proj.lead || 'N/A');
                               })()}
