@@ -22,7 +22,6 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
     salary: '',
     startDate: '',
     address: '',
-    pincode: '', // <-- Add this line
     password: '',
     aadhar: '', // Add this field for the number
   });
@@ -54,10 +53,6 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
       } else {
         setPhoneError('');
       }
-    } else if (name === 'pincode') {
-      // Only allow digits, max 6
-      const digits = value.replace(/\D/g, '').slice(0, 6);
-      setFormData({ ...formData, pincode: digits });
     } else {
       setFormData({ ...formData, [name]: value });
     }
@@ -117,7 +112,6 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
           salary: '',
           startDate: '',
           address: '',
-          pincode: '',
           password: '',
           aadhar: '',
         });
@@ -254,20 +248,6 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
             <div>
               <Label htmlFor="address">Address</Label>
               <Input name="address" value={formData.address} onChange={handleChange} className="bg-background text-foreground" />
-            </div>
-            <div>
-              <Label htmlFor="pincode">Pincode</Label>
-              <Input
-                name="pincode"
-                value={formData.pincode}
-                onChange={handleChange}
-                maxLength={6}
-                minLength={6}
-                pattern="\d{6}"
-                className="bg-background text-foreground"
-                placeholder="6 digit pincode"
-                type="text"
-              />
             </div>
             <div>
               <Label htmlFor="password">Temporary Password</Label>

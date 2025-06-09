@@ -29,7 +29,7 @@ type DemoUser = {
   name: string;
   email: string;
   password: string;
-  role: 'super_admin' | 'admin' | 'employee';
+  role: 'super_admin' | 'admin' | 'employee' | 'intern'; // Added 'intern'
 };
 
 const demoUsers: Record<'super_admin' | 'admin' | 'employee', DemoUser> = {
@@ -89,8 +89,8 @@ const LoginForm = ({ onLogin }: LoginFormProps) => {
       return;
     }
 
-    // Employee login via backend
-    if (selectedRole === 'employee') {
+    // Employee/intern login via backend
+    if (selectedRole === 'employee' || selectedRole === 'intern') {
       try {
         const response = await fetch('http://localhost:5050/api/login', {
           method: 'POST',
@@ -100,6 +100,12 @@ const LoginForm = ({ onLogin }: LoginFormProps) => {
         const data = await response.json();
         if (!response.ok) {
           setError(data.error || 'Login failed');
+          return;
+        }
+        // Accept both employee and intern roles
+        const backendRole = data.employee?.role;
+        if (backendRole !== 'employee' && backendRole !== 'intern') {
+          setError('You are not authorized to login as employee/intern.');
           return;
         }
         // If mustChangePassword, redirect to set password page
@@ -113,7 +119,8 @@ const LoginForm = ({ onLogin }: LoginFormProps) => {
           name: `${data.employee.firstname} ${data.employee.lastname}`,
           email: data.employee.email,
           password: password,
-          role: data.employee.role
+          // Map intern to employee for UI/permissions
+          role: backendRole === 'intern' ? 'employee' : backendRole
         });
       } catch (err) {
         setError('Network error.');
@@ -122,18 +129,18 @@ const LoginForm = ({ onLogin }: LoginFormProps) => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
-      <Card className="w-full max-w-md">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 p-4">
+      <Card className="w-full max-w-md bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 shadow-lg">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl font-bold text-gray-900">
+          <CardTitle className="text-2xl font-bold text-gray-900 dark:text-gray-100">
             Employee Management System
           </CardTitle>
-          <CardDescription>Sign in to access your dashboard</CardDescription>
+          <CardDescription className="dark:text-gray-400">Sign in to access your dashboard</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email" className="dark:text-gray-300">Email</Label>
               <Input
                 id="email"
                 type="email"
@@ -141,10 +148,11 @@ const LoginForm = ({ onLogin }: LoginFormProps) => {
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="Enter your email"
                 required
+                className="dark:bg-gray-800 dark:text-gray-100 dark:placeholder-gray-400"
               />
             </div>
             <div>
-              <Label htmlFor="password">Password</Label>
+              <Label htmlFor="password" className="dark:text-gray-300">Password</Label>
               <div className="relative">
                 <Input
                   id="password"
@@ -153,35 +161,36 @@ const LoginForm = ({ onLogin }: LoginFormProps) => {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter your password"
                   required
-                  className="pr-10"
+                  className="pr-10 dark:bg-gray-800 dark:text-gray-100 dark:placeholder-gray-400"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                  className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
                 >
                   {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
               </div>
             </div>
             <div>
-              <Label htmlFor="role">Select your role</Label>
+              <Label htmlFor="role" className="dark:text-gray-300">Select your role</Label>
               <Select value={selectedRole} onValueChange={setSelectedRole}>
-                <SelectTrigger>
+                <SelectTrigger className="dark:bg-gray-800 dark:text-gray-100">
                   <SelectValue placeholder="Select role" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="dark:bg-gray-800 dark:text-gray-100">
                   <SelectItem value="super_admin">Super Admin</SelectItem>
                   <SelectItem value="admin">Admin</SelectItem>
                   <SelectItem value="employee">Employee</SelectItem>
+                  <SelectItem value="intern">Intern</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            <Button type="submit" className="w-full" disabled={!selectedRole}>
+            <Button type="submit" className="w-full dark:bg-indigo-700 dark:hover:bg-indigo-800" disabled={!selectedRole}>
               Sign In
             </Button>
             {error && (
-              <p className="text-red-600 text-sm text-center mt-2">{error}</p>
+              <p className="text-red-600 dark:text-red-400 text-sm text-center mt-2">{error}</p>
             )}
           </form>
         </CardContent>
