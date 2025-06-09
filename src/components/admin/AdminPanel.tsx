@@ -4,6 +4,8 @@ import { Shield, Users, Database, Settings, RefreshCw, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom'; // Add this import
 import { Edit2, Trash2 } from 'lucide-react';
+import { format, parseISO } from 'date-fns';
+import AttendanceCalendar from '../attendance/AttendanceCalendar';
 
 interface AdminPanelProps {
   userRole: 'super_admin' | 'admin' | 'employee';
@@ -25,7 +27,15 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
   const [deactivatingId, setDeactivatingId] = useState<string | null>(null);
   const [deactivateLoading, setDeactivateLoading] = useState(false);
   const [confirmUser, setConfirmUser] = useState<any | null>(null); // For confirmation dialog
+  const [attendanceMarking, setAttendanceMarking] = useState<{ [id: string]: boolean }>({});
+  const [attendanceMsg, setAttendanceMsg] = useState('');
+  const [attendanceDate, setAttendanceDate] = useState(() => format(new Date(), 'yyyy-MM-dd'));
   const navigate = useNavigate();
+  const [calendarEmployeeId, setCalendarEmployeeId] = useState<string>('');
+  const [calendarMonth, setCalendarMonth] = useState(() => {
+    const today = new Date();
+    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+  });
 
   const fetchCounts = async () => {
     setLoading(true);
@@ -155,6 +165,36 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
     }
   };
 
+  // Mark attendance for an employee (present/absent)
+  const markAttendance = async (empId: string, status: 'present' | 'absent') => {
+    setAttendanceMarking(prev => ({ ...prev, [empId]: true }));
+    setAttendanceMsg('');
+    try {
+      const resp = await fetch(`http://localhost:5050/api/employees/${empId}/attendance`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date: attendanceDate, status })
+      });
+      const data = await resp.json();
+      if (resp.ok) {
+        setAttendanceMsg('Attendance updated!');
+        fetchCounts();
+      } else {
+        setAttendanceMsg('Error: ' + (data.error || 'Failed to mark attendance'));
+      }
+    } catch {
+      setAttendanceMsg('Network error.');
+    }
+    setAttendanceMarking(prev => ({ ...prev, [empId]: false }));
+  };
+
+  // Helper: get attendance status for a given employee and date
+  const getAttendanceStatus = (emp: any) => {
+    if (!Array.isArray(emp.attendance)) return null;
+    const att = emp.attendance.find((a: any) => a.date === attendanceDate);
+    return att ? att.status : null;
+  };
+
   // Only show users with status not "resigned" (or status is empty/active)
   const activeUsers = allEmployees.filter(
     (emp: any) => !emp.status || emp.status === 'active'
@@ -235,6 +275,81 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
               </div>
               <div className="text-sm text-gray-600">Interns</div>
             </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Mark Employee Attendance</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="mb-4 flex items-center gap-4">
+            <label className="font-semibold text-foreground" htmlFor="attendance-date">Select Date:</label>
+            <input
+              id="attendance-date"
+              type="date"
+              value={attendanceDate}
+              onChange={e => setAttendanceDate(e.target.value)}
+              className="border rounded px-2 py-1 bg-background text-foreground"
+              max={format(new Date(), 'yyyy-MM-dd')}
+            />
+          </div>
+          {attendanceMsg && (
+            <div className={`mb-2 text-sm ${attendanceMsg.startsWith('Error') ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
+              {attendanceMsg}
+            </div>
+          )}
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr>
+                  <th className="px-2 py-1 text-left">Name</th>
+                  <th className="px-2 py-1 text-left">Email</th>
+                  <th className="px-2 py-1 text-left">Role</th>
+                  <th className="px-2 py-1 text-left">Status</th>
+                  <th className="px-2 py-1 text-left">Present</th>
+                  <th className="px-2 py-1 text-left">Absent</th>
+                </tr>
+              </thead>
+              <tbody>
+                {allEmployees.map(emp => {
+                  const status = getAttendanceStatus(emp);
+                  return (
+                    <tr key={emp._id}>
+                      <td className="px-2 py-1">{emp.firstname} {emp.lastname}</td>
+                      <td className="px-2 py-1">{emp.email}</td>
+                      <td className="px-2 py-1">{emp.role}</td>
+                      <td className="px-2 py-1">
+                        {status === 'present' && <span className="text-green-600 dark:text-green-400 font-semibold">Present</span>}
+                        {status === 'absent' && <span className="text-red-600 dark:text-red-400 font-semibold">Absent</span>}
+                        {!status && <span className="text-muted-foreground">Not Marked</span>}
+                      </td>
+                      <td className="px-2 py-1">
+                        <Button
+                          size="sm"
+                          className="bg-green-600 text-white"
+                          disabled={attendanceMarking[emp._id] || !!status}
+                          onClick={() => markAttendance(emp._id, 'present')}
+                        >
+                          Present
+                        </Button>
+                      </td>
+                      <td className="px-2 py-1">
+                        <Button
+                          size="sm"
+                          className="bg-red-600 text-white"
+                          disabled={attendanceMarking[emp._id] || !!status}
+                          onClick={() => markAttendance(emp._id, 'absent')}
+                        >
+                          Absent
+                        </Button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         </CardContent>
       </Card>

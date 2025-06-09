@@ -47,7 +47,13 @@ const employeeSchema = new mongoose.Schema({
   salary: Number,          // <-- Add
   startDate: String,       // <-- Add
   address: String,         // <-- Add
-  aadhar: String           // <-- Add
+  aadhar: String,          // <-- Add
+  attendance: [
+    {
+      date: { type: String, required: true }, // YYYY-MM-DD
+      status: { type: String, enum: ['present', 'absent'], required: true }
+    }
+  ]
 }, { timestamps: true });
 
 const Employee = mongoose.model('Employee', employeeSchema);
@@ -481,6 +487,42 @@ app.use(async (req, res, next) => {
     }
   }
   next();
+});
+
+// Mark attendance for an employee (admin/super_admin only)
+app.post('/api/employees/:id/attendance', async (req, res) => {
+  try {
+    const { date, status } = req.body;
+    if (!date || !['present', 'absent'].includes(status)) {
+      return res.status(400).json({ error: 'Date and valid status are required.' });
+    }
+    const employee = await Employee.findById(req.params.id);
+    if (!employee) return res.status(404).json({ error: 'Employee not found' });
+
+    // Prevent marking attendance if already marked for that date
+    if ((employee.attendance || []).some(a => a.date === date)) {
+      return res.status(400).json({ error: 'Attendance already marked for this date.' });
+    }
+
+    // Add new attendance record
+    employee.attendance = employee.attendance || [];
+    employee.attendance.push({ date, status });
+    await employee.save();
+    res.json({ message: 'Attendance marked', attendance: employee.attendance });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Get attendance for an employee
+app.get('/api/employees/:id/attendance', async (req, res) => {
+  try {
+    const employee = await Employee.findById(req.params.id).select('attendance');
+    if (!employee) return res.status(404).json({ error: 'Employee not found' });
+    res.json({ attendance: employee.attendance || [] });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
 });
 
 // Add this endpoint before app.listen

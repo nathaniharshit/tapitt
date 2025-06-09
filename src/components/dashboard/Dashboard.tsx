@@ -639,6 +639,51 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
     // eslint-disable-next-line
   }, [location.state]);
 
+  // Attendance state for admin/super_admin attendance tab
+  const [presentEmployees, setPresentEmployees] = useState<any[]>([]);
+  const [absentEmployees, setAbsentEmployees] = useState<any[]>([]);
+  const [attendanceLoading, setAttendanceLoading] = useState(true);
+  const [attendanceDate, setAttendanceDate] = useState(() => {
+    const today = new Date();
+    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  });
+  const [attendanceMonth, setAttendanceMonth] = useState(() => {
+    const today = new Date();
+    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+  });
+  // Add for admin/super_admin to select employee for calendar view
+  const [calendarEmployeeId, setCalendarEmployeeId] = useState<string>('');
+  const [calendarMonth, setCalendarMonth] = useState(() => {
+    const today = new Date();
+    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+  });
+
+  useEffect(() => {
+    if (activeTab === 'attendance' && (user.role === 'admin' || user.role === 'super_admin')) {
+      const fetchAttendance = async () => {
+        setAttendanceLoading(true);
+        try {
+          const res = await fetch('http://localhost:5050/api/employees');
+          const employees = await res.json();
+          const present: any[] = [];
+          const absent: any[] = [];
+          employees.forEach((emp: any) => {
+            const att = Array.isArray(emp.attendance) ? emp.attendance.find((a: any) => a.date === attendanceDate) : null;
+            if (att && att.status === 'present') present.push(emp);
+            else if (att && att.status === 'absent') absent.push(emp);
+          });
+          setPresentEmployees(present);
+          setAbsentEmployees(absent);
+        } catch {
+          setPresentEmployees([]);
+          setAbsentEmployees([]);
+        }
+        setAttendanceLoading(false);
+      };
+      fetchAttendance();
+    }
+  }, [activeTab, user.role, attendanceDate]);
+
   // Unified dashboard for all roles
   const renderContent = () => {
     switch (activeTab) {
@@ -846,8 +891,8 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
       case 'settings':
         return <Settings userRole={user.role} userId={userId} />;
       case 'attendance':
-        // If employee, show calendar attendance view
         if (user.role === 'employee') {
+          // ...existing code for employee calendar...
           return (
             <div className="p-8">
               <Card className="max-w-2xl mx-auto">
@@ -855,47 +900,106 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                   <CardTitle>My Attendance Calendar</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {/* Simple calendar grid for current month, mark today as present, rest as absent for demo */}
                   <AttendanceCalendar user={user} />
                 </CardContent>
               </Card>
             </div>
           );
         }
-        // Admins and super admins see the same attendance summary as before
+        // Admins and super admins: employee selector + calendar, and daily attendance
         return (
           <div className="p-8">
+            <Card className="max-w-2xl mx-auto mb-8">
+              <CardHeader>
+                <CardTitle>View Employee Attendance Calendar</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="mb-4 flex items-center gap-4">
+                  <label className="font-semibold text-foreground" htmlFor="calendar-employee">Employee:</label>
+                  <select
+                    id="calendar-employee"
+                    value={calendarEmployeeId}
+                    onChange={e => setCalendarEmployeeId(e.target.value)}
+                    className="border rounded px-2 py-1 bg-background text-foreground"
+                  >
+                    <option value="">Select employee</option>
+                    {employees.map(emp => (
+                      <option key={emp._id} value={emp._id}>
+                        {emp.firstname} {emp.lastname}
+                      </option>
+                    ))}
+                  </select>
+                  <label className="font-semibold text-foreground ml-4" htmlFor="calendar-month">Month:</label>
+                  <input
+                    id="calendar-month"
+                    type="month"
+                    value={calendarMonth}
+                    onChange={e => setCalendarMonth(e.target.value)}
+                    className="border rounded px-2 py-1 bg-background text-foreground"
+                    max={new Date().toISOString().substring(0, 7)}
+                  />
+                </div>
+                {calendarEmployeeId ? (
+                  <AttendanceCalendar
+                    user={{ id: calendarEmployeeId }}
+                    month={calendarMonth}
+                  />
+                ) : (
+                  <div className="text-muted-foreground">Select an employee to view their attendance calendar.</div>
+                )}
+              </CardContent>
+            </Card>
             <Card className="max-w-2xl mx-auto">
               <CardHeader>
                 <CardTitle>Attendance Overview</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="mb-4 text-lg font-semibold">Today's Attendance</div>
+                <div className="mb-4 flex items-center gap-4">
+                  <span className="font-semibold text-foreground">Select Date:</span>
+                  <input
+                    type="date"
+                    value={attendanceDate}
+                    onChange={e => setAttendanceDate(e.target.value)}
+                    className="border rounded px-2 py-1 bg-background text-foreground"
+                    min={calendarMonth + '-01'}
+                    max={new Date().toISOString().substring(0, 10)}
+                  />
+                </div>
+                <div className="mb-4 text-lg font-semibold">
+                  Attendance for {attendanceDate}
+                </div>
                 <div className="grid grid-cols-2 gap-4 mb-6">
                   <div className="bg-green-100 dark:bg-green-900 rounded-lg p-4 text-center">
                     <div className="text-2xl font-bold text-green-700 dark:text-green-200">Present</div>
-                    <div className="text-3xl font-bold text-foreground">12</div>
+                    <div className="text-3xl font-bold text-foreground">{presentEmployees.length}</div>
+                    <ul className="mt-2 text-sm text-green-900 dark:text-green-200 text-left max-h-32 overflow-y-auto">
+                      {attendanceLoading ? (
+                        <li>Loading...</li>
+                      ) : presentEmployees.length === 0 ? (
+                        <li>No one present</li>
+                      ) : (
+                        presentEmployees.map(emp => (
+                          <li key={emp._id}>{emp.firstname} {emp.lastname}</li>
+                        ))
+                      )}
+                    </ul>
                   </div>
                   <div className="bg-red-100 dark:bg-red-900 rounded-lg p-4 text-center">
                     <div className="text-2xl font-bold text-red-700 dark:text-red-200">Absent</div>
-                    <div className="text-3xl font-bold text-foreground">3</div>
+                    <div className="text-3xl font-bold text-foreground">{absentEmployees.length}</div>
+                    <ul className="mt-2 text-sm text-red-900 dark:text-red-200 text-left max-h-32 overflow-y-auto">
+                      {attendanceLoading ? (
+                        <li>Loading...</li>
+                      ) : absentEmployees.length === 0 ? (
+                        <li>No one absent</li>
+                      ) : (
+                        absentEmployees.map(emp => (
+                          <li key={emp._id}>{emp.firstname} {emp.lastname}</li>
+                        ))
+                      )}
+                    </ul>
                   </div>
                 </div>
-                <div className="mb-2 font-semibold">Recent Clock-ins</div>
-                <ul className="divide-y divide-border">
-                  <li className="py-2 flex justify-between">
-                    <span>John Doe</span>
-                    <span className="text-muted-foreground">09:05 AM</span>
-                  </li>
-                  <li className="py-2 flex justify-between">
-                    <span>Priya Sharma</span>
-                    <span className="text-muted-foreground">09:10 AM</span>
-                  </li>
-                  <li className="py-2 flex justify-between">
-                    <span>Rohit Mehra</span>
-                    <span className="text-muted-foreground">09:12 AM</span>
-                  </li>
-                </ul>
               </CardContent>
             </Card>
           </div>
