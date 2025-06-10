@@ -85,6 +85,35 @@ const announcementSchema = new mongoose.Schema({
 const Announcement = mongoose.model('Announcement', announcementSchema);
 // --- End Announcement Model ---
 
+// --- Awards Model ---
+const awardSchema = new mongoose.Schema({
+  name: { type: String, required: true }, // e.g. "Employee of the Month"
+  month: { type: String, required: true }, // "YYYY-MM"
+  nominees: [
+    {
+      employee: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', required: true },
+      votes: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Employee' }] // who voted for this nominee
+    }
+  ],
+  winner: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee' },
+  announced: { type: Boolean, default: false }
+}, { timestamps: true });
+const Award = mongoose.model('Award', awardSchema);
+// --- End Awards Model ---
+
+// --- Leave Model ---
+const leaveSchema = new mongoose.Schema({
+  employee: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', required: true },
+  type: { type: String, enum: ['Annual', 'Sick', 'Unpaid'], required: true },
+  from: { type: String, required: true }, // YYYY-MM-DD
+  to: { type: String, required: true },   // YYYY-MM-DD
+  reason: { type: String },
+  status: { type: String, enum: ['Pending', 'Approved', 'Rejected'], default: 'Pending' },
+  createdAt: { type: Date, default: Date.now }
+});
+const Leave = mongoose.model('Leave', leaveSchema);
+// --- End Leave Model ---
+
 app.use(cors()); // allow all origins for now
 app.use(express.json());
 
@@ -316,6 +345,213 @@ app.delete('/api/announcements/:id', async (req, res) => {
 });
 // --- End Announcements API ---
 
+// --- Awards API ---
+
+// Get all awards (for admin/super_admin: show votes, for employee: show only their votes)
+app.get('/api/awards', async (req, res) => {
+  try {
+    // Optionally filter by month and/or award name
+    const { month, name } = req.query;
+    const filter = {};
+    if (month) filter.month = month;
+    if (name) filter.name = name;
+    const awards = await Award.find(filter)
+      .populate({ path: 'nominees.employee', select: 'firstname lastname department' })
+      .populate({ path: 'winner', select: 'firstname lastname department' });
+    res.json(awards);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch awards' });
+  }
+});
+
+// Nominate an employee for an award (admin/super_admin only)
+app.post('/api/awards/nominate', async (req, res) => {
+  try {
+    const { name, month, nomineeId } = req.body;
+    if (!name || !month || !nomineeId) {
+      return res.status(400).json({ error: 'Award name, month, and nomineeId are required.' });
+    }
+    let award = await Award.findOne({ name, month });
+    if (!award) {
+      award = new Award({ name, month, nominees: [] });
+    }
+    // Prevent duplicate nomination
+    if (award.nominees.some(n => n.employee.toString() === nomineeId)) {
+      return res.status(400).json({ error: 'Employee already nominated.' });
+    }
+    award.nominees.push({ employee: nomineeId, votes: [] });
+    await award.save();
+    res.json({ message: 'Nomination successful', award });
+  } catch (err) {
+    res.status(400).json({ error: 'Failed to nominate' });
+  }
+});
+
+// Vote for a nominee (any employee, one vote per award per user)
+app.post('/api/awards/vote', async (req, res) => {
+  try {
+    const { awardId, nomineeId, voterId } = req.body;
+    if (!awardId || !nomineeId || !voterId) {
+      return res.status(400).json({ error: 'awardId, nomineeId, and voterId are required.' });
+    }
+    const award = await Award.findById(awardId);
+    if (!award) return res.status(404).json({ error: 'Award not found' });
+    // Remove previous vote by this voter
+    award.nominees.forEach(nom => {
+      nom.votes = nom.votes.filter(v => v.toString() !== voterId);
+    });
+    // Add vote to selected nominee
+    const nominee = award.nominees.find(n => n.employee.toString() === nomineeId);
+    if (!nominee) return res.status(404).json({ error: 'Nominee not found' });
+    nominee.votes.push(voterId);
+    await award.save();
+    res.json({ message: 'Vote recorded', award });
+  } catch (err) {
+    res.status(400).json({ error: 'Failed to vote' });
+  }
+});
+
+// Announce winner (admin/super_admin only)
+app.post('/api/awards/announce', async (req, res) => {
+  try {
+    const { awardId, winnerId } = req.body;
+    if (!awardId || !winnerId) {
+      return res.status(400).json({ error: 'awardId and winnerId are required.' });
+    }
+    const award = await Award.findById(awardId);
+    if (!award) return res.status(404).json({ error: 'Award not found' });
+    award.winner = winnerId;
+    award.announced = true;
+    await award.save();
+    res.json({ message: 'Winner announced', award });
+  } catch (err) {
+    res.status(400).json({ error: 'Failed to announce winner' });
+  }
+});
+
+// --- End Awards API ---
+
+// --- Leaves API ---
+
+// Create leave request (employee)
+app.post('/api/leaves', async (req, res) => {
+  try {
+    const { employeeId, type, from, to, reason } = req.body;
+    if (!employeeId || !type || !from || !to) {
+      return res.status(400).json({ error: 'All fields are required.' });
+    }
+    // Validate employee exists
+    const emp = await Employee.findById(employeeId);
+    if (!emp) return res.status(404).json({ error: 'Employee not found.' });
+    const leave = new Leave({ employee: employeeId, type, from, to, reason });
+    await leave.save();
+    // Return leave with employeeId for frontend
+    res.status(201).json({
+      ...leave.toObject(),
+      employeeId: leave.employee.toString()
+    });
+  } catch (err) {
+    res.status(400).json({ error: 'Failed to request leave' });
+  }
+});
+
+// Get leaves for an employee (self)
+app.get('/api/leaves/:employeeId', async (req, res) => {
+  try {
+    const leaves = await Leave.find({ employee: req.params.employeeId }).sort({ createdAt: -1 });
+    // Return leaves with employeeId for frontend
+    res.json(leaves.map(l => ({
+      ...l.toObject(),
+      employeeId: l.employee.toString()
+    })));
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch leaves' });
+  }
+});
+
+// Get all leaves (admin/super_admin)
+app.get('/api/leaves', async (req, res) => {
+  try {
+    const leaves = await Leave.find({})
+      .populate({ path: 'employee', select: 'firstname lastname department email' })
+      .sort({ createdAt: -1 });
+    res.json(leaves);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch all leaves' });
+  }
+});
+
+// Update leave request or status (employee or admin/super_admin)
+app.put('/api/leaves/:id', async (req, res) => {
+  try {
+    const { type, from, to, reason, employeeId, status } = req.body;
+    const leave = await Leave.findById(req.params.id);
+    if (!leave) return res.status(404).json({ error: 'Leave not found' });
+
+    // Employee editing their own leave (only if Pending)
+    if (employeeId && (!type || !from || !to)) {
+      return res.status(400).json({ error: 'All fields are required.' });
+    }
+    if (employeeId) {
+      if (leave.status !== 'Pending') return res.status(400).json({ error: 'Cannot edit leave after approval/rejection.' });
+      if (leave.employee.toString() !== employeeId) return res.status(403).json({ error: 'Not authorized.' });
+      leave.type = type;
+      leave.from = from;
+      leave.to = to;
+      leave.reason = reason;
+      await leave.save();
+      return res.json(leave);
+    }
+
+    // Admin/super_admin updating status
+    if (status && ['Pending', 'Approved', 'Rejected'].includes(status)) {
+      leave.status = status;
+      await leave.save();
+
+      // If approved, mark attendance as present for each date in the leave range
+      if (status === 'Approved') {
+        const employee = await Employee.findById(leave.employee);
+        if (employee) {
+          const fromDate = new Date(leave.from);
+          const toDate = new Date(leave.to);
+          let current = new Date(fromDate);
+          while (current <= toDate) {
+            const dateStr = current.toISOString().slice(0, 10);
+            if (!Array.isArray(employee.attendance)) employee.attendance = [];
+            if (!employee.attendance.some(a => a.date === dateStr)) {
+              employee.attendance.push({ date: dateStr, status: 'present' });
+            }
+            current.setDate(current.getDate() + 1);
+          }
+          await employee.save();
+        }
+      }
+      return res.json(leave);
+    }
+
+    return res.status(400).json({ error: 'Invalid request.' });
+  } catch (err) {
+    res.status(400).json({ error: 'Failed to update leave' });
+  }
+});
+
+// Delete leave request (employee can delete only if status is Pending)
+app.delete('/api/leaves/:id', async (req, res) => {
+  try {
+    const leave = await Leave.findById(req.params.id);
+    if (!leave) return res.status(404).json({ error: 'Leave not found' });
+    // Only allow delete if status is Pending and employee matches
+    if (leave.status !== 'Pending') return res.status(400).json({ error: 'Cannot delete leave after approval/rejection.' });
+    // Optionally, check employee identity here if needed
+    await leave.deleteOne();
+    res.json({ message: 'Leave deleted.' });
+  } catch (err) {
+    res.status(400).json({ error: 'Failed to delete leave' });
+  }
+});
+
+// --- End Leaves API ---
+
 // --- Employees API: filter by role for team selection ---
 app.get('/api/employees', async (req, res) => {
   try {
@@ -470,15 +706,16 @@ app.use(async (req, res, next) => {
   // Add this to mark attendance on login
   if (req.path === '/api/login' && req.method === 'POST') {
     // After successful login, mark today's attendance
-    const { email, password } = req.body;
+    const { email } = req.body;
     try {
       const employee = await Employee.findOne({ email });
       if (employee) {
         const today = new Date();
         const dateStr = today.toISOString().substring(0, 10); // YYYY-MM-DD
         if (!employee.attendance) employee.attendance = [];
-        if (!employee.attendance.includes(dateStr)) {
-          employee.attendance.push(dateStr);
+        // Only add if not already present for that date
+        if (!employee.attendance.some(a => (typeof a === 'object' && a.date === dateStr) || a === dateStr)) {
+          employee.attendance.push({ date: dateStr, status: 'present' });
           await employee.save();
         }
       }
@@ -546,6 +783,33 @@ app.get('/api/employees/roles-count', async (req, res) => {
     res.json(result);
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// Add this endpoint before app.listen
+app.post('/api/fix-attendance-format', async (req, res) => {
+  try {
+    const employees = await Employee.find({});
+    let fixedCount = 0;
+    for (const emp of employees) {
+      let changed = false;
+      if (Array.isArray(emp.attendance)) {
+        emp.attendance = emp.attendance.map(a => {
+          if (typeof a === 'string') {
+            changed = true;
+            return { date: a, status: 'present' };
+          }
+          return a;
+        });
+        if (changed) {
+          await emp.save();
+          fixedCount++;
+        }
+      }
+    }
+    res.json({ message: `Fixed attendance format for ${fixedCount} employees.` });
+  } catch (err) {
+    res.status(500).json({ error: 'Migration failed' });
   }
 });
 

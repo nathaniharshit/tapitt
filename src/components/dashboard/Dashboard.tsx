@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import Header from './Header';
 import Sidebar from './Sidebar';
 import EmployeeList from '../employees/EmployeeList';
@@ -658,6 +658,11 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
     return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
   });
 
+  const [employeeCalendarMonth, setEmployeeCalendarMonth] = useState(() => {
+    const today = new Date();
+    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+  });
+
   useEffect(() => {
     if (activeTab === 'attendance' && (user.role === 'admin' || user.role === 'super_admin')) {
       const fetchAttendance = async () => {
@@ -683,6 +688,192 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
       fetchAttendance();
     }
   }, [activeTab, user.role, attendanceDate]);
+
+  // Add state for today's attendance stats
+  const [todayPresent, setTodayPresent] = useState(0);
+  const [todayAbsent, setTodayAbsent] = useState(0);
+  const [todayTotalMarked, setTodayTotalMarked] = useState(0);
+
+  // Calculate today's attendance stats
+  useEffect(() => {
+    const todayStr = new Date().toISOString().slice(0, 10);
+    let present = 0;
+    let absent = 0;
+    let marked = 0;
+    employees.forEach(emp => {
+      if (Array.isArray(emp.attendance)) {
+        const att = emp.attendance.find(a => a.date === todayStr);
+        if (att) {
+          marked++;
+          if (att.status === 'present') present++;
+          else if (att.status === 'absent') absent++;
+        }
+      }
+    });
+    setTodayPresent(present);
+    setTodayAbsent(absent);
+    setTodayTotalMarked(marked);
+  }, [employees]);
+
+  // --- Leaves state and logic ---
+  const [leaves, setLeaves] = useState<any[]>([]);
+  const [leaveForm, setLeaveForm] = useState({
+    type: 'Annual',
+    from: '',
+    to: '',
+    reason: ''
+  });
+  const [leaveMsg, setLeaveMsg] = useState('');
+  const [leaveLoading, setLeaveLoading] = useState(false);
+  const [editingLeaveId, setEditingLeaveId] = useState<string | null>(null);
+  const [confirmDeleteLeaveId, setConfirmDeleteLeaveId] = useState<string | null>(null);
+
+  // Fetch leaves for current user or all if admin/super_admin
+  const fetchLeaves = useCallback(async () => {
+    try {
+      let url = '';
+      if (user.role === 'admin' || user.role === 'super_admin') {
+        url = 'http://localhost:5050/api/leaves';
+      } else {
+        url = `http://localhost:5050/api/leaves/${user.id}`;
+      }
+      const res = await fetch(url);
+      const data = await res.json();
+      setLeaves(Array.isArray(data) ? data : []);
+    } catch {
+      setLeaves([]);
+    }
+  }, [user?.id, user.role]);
+
+  useEffect(() => {
+    if (activeTab === 'leaves') fetchLeaves();
+  }, [activeTab, fetchLeaves]);
+
+  // Submit leave request
+  const handleLeaveFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    setLeaveForm({ ...leaveForm, [e.target.name]: e.target.value });
+  };
+
+  const handleLeaveSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLeaveMsg('');
+    setLeaveLoading(true);
+    try {
+      const resp = await fetch('http://localhost:5050/api/leaves', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          employeeId: user.id,
+          ...leaveForm
+        })
+      });
+      if (resp.ok) {
+        setLeaveMsg('Leave requested!');
+        setLeaveForm({ type: 'Annual', from: '', to: '', reason: '' });
+        fetchLeaves();
+      } else {
+        const err = await resp.json();
+        setLeaveMsg('Error: ' + (err.error || 'Could not request leave'));
+      }
+    } catch {
+      setLeaveMsg('Network error.');
+    }
+    setLeaveLoading(false);
+  };
+
+  // Approve/reject leave (admin/super_admin)
+  const handleLeaveStatus = async (leaveId: string, status: 'Approved' | 'Rejected') => {
+    setLeaveMsg('');
+    try {
+      const resp = await fetch(`http://localhost:5050/api/leaves/${leaveId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status })
+      });
+      if (resp.ok) {
+        setLeaveMsg(`Leave ${status.toLowerCase()}!`);
+        fetchLeaves();
+      } else {
+        const err = await resp.json();
+        setLeaveMsg('Error: ' + (err.error || `Could not ${status.toLowerCase()} leave`));
+      }
+    } catch {
+      setLeaveMsg('Network error.');
+    }
+  };
+
+  // Calculate leave balances (simple example: count by type)
+  const annualLeaves = leaves.filter(l => l.type === 'Annual' && l.status === 'Approved').length;
+  const sickLeaves = leaves.filter(l => l.type === 'Sick' && l.status === 'Approved').length;
+
+  // Edit leave
+  const handleEditLeave = (leave: any) => {
+    setEditingLeaveId(leave._id);
+    setLeaveForm({
+      type: leave.type,
+      from: leave.from,
+      to: leave.to,
+      reason: leave.reason || ''
+    });
+    setLeaveMsg('');
+  };
+
+  // Cancel edit
+  const handleCancelEditLeave = () => {
+    setEditingLeaveId(null);
+    setLeaveForm({ type: 'Annual', from: '', to: '', reason: '' });
+    setLeaveMsg('');
+  };
+
+  // Update leave
+  const handleUpdateLeave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLeaveMsg('');
+    setLeaveLoading(true);
+    try {
+      const resp = await fetch(`http://localhost:5050/api/leaves/${editingLeaveId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...leaveForm,
+          employeeId: user.id // for backend validation
+        })
+      });
+      if (resp.ok) {
+        setLeaveMsg('Leave updated!');
+        setEditingLeaveId(null);
+        setLeaveForm({ type: 'Annual', from: '', to: '', reason: '' });
+        fetchLeaves();
+      } else {
+        const err = await resp.json();
+        setLeaveMsg('Error: ' + (err.error || 'Could not update leave'));
+      }
+    } catch {
+      setLeaveMsg('Network error.');
+    }
+    setLeaveLoading(false);
+  };
+
+  // Delete leave
+  const handleDeleteLeave = async (leaveId: string) => {
+    setLeaveMsg('');
+    setLeaveLoading(true);
+    try {
+      const resp = await fetch(`http://localhost:5050/api/leaves/${leaveId}`, {
+        method: 'DELETE'
+      });
+      if (resp.ok) {
+        setLeaveMsg('Leave deleted!');
+        fetchLeaves();
+      } else {
+        const err = await resp.json();
+        setLeaveMsg('Error: ' + (err.error || 'Could not delete leave'));
+      }
+    } catch {
+      setLeaveMsg('Network error.');
+    }
+    setLeaveLoading(false);
+  };
 
   // Unified dashboard for all roles
   const renderContent = () => {
@@ -789,13 +980,24 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                 <CardContent>
                   <div className="flex items-center space-x-4">
                     <div>
-                      <div className="text-2xl font-bold text-green-600">96%</div>
+                      <div className="text-2xl font-bold text-green-600">
+                        {todayTotalMarked > 0
+                          ? `${Math.round((todayPresent / todayTotalMarked) * 100)}%`
+                          : 'N/A'}
+                      </div>
                       <div className="text-muted-foreground text-sm">Present</div>
                     </div>
                     <div>
-                      <div className="text-2xl font-bold text-red-500">4%</div>
+                      <div className="text-2xl font-bold text-red-500">
+                        {todayTotalMarked > 0
+                          ? `${Math.round((todayAbsent / todayTotalMarked) * 100)}%`
+                          : 'N/A'}
+                      </div>
                       <div className="text-muted-foreground text-sm">Absent</div>
                     </div>
+                  </div>
+                  <div className="mt-2 text-xs text-muted-foreground">
+                    {todayTotalMarked} marked today
                   </div>
                 </CardContent>
               </Card>
@@ -871,7 +1073,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                     <li className="cursor-pointer hover:underline" onClick={() => setActiveTab('projects')}>Projects</li>
                     <li className="cursor-pointer hover:underline" onClick={() => setActiveTab('teams')}>Teams</li>
                     <li className="cursor-pointer hover:underline" onClick={() => setActiveTab('awards')}>Awards</li>
-                    <li className="cursor-pointer hover:underline" onClick={() => setActiveTab('performance')}>Performance</li>
+                    {/* Removed Performance quick link */}
                   </ul>
                 </CardContent>
               </Card>
@@ -892,7 +1094,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
         return <Settings userRole={user.role} userId={userId} />;
       case 'attendance':
         if (user.role === 'employee') {
-          // ...existing code for employee calendar...
+          // Use top-level state for month selection
           return (
             <div className="p-8">
               <Card className="max-w-2xl mx-auto">
@@ -900,7 +1102,18 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                   <CardTitle>My Attendance Calendar</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <AttendanceCalendar user={user} />
+                  <div className="mb-4 flex items-center gap-4">
+                    <label className="font-semibold text-foreground" htmlFor="employee-calendar-month">Month:</label>
+                    <input
+                      id="employee-calendar-month"
+                      type="month"
+                      value={employeeCalendarMonth}
+                      onChange={e => setEmployeeCalendarMonth(e.target.value)}
+                      className="border rounded px-2 py-1 bg-background text-foreground dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700"
+                      max={new Date().toISOString().substring(0, 7)}
+                    />
+                  </div>
+                  <AttendanceCalendar user={user} month={employeeCalendarMonth} />
                 </CardContent>
               </Card>
             </div>
@@ -951,53 +1164,88 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
             </Card>
             <Card className="max-w-2xl mx-auto">
               <CardHeader>
-                <CardTitle>Attendance Overview</CardTitle>
+                <CardTitle>
+                  <span className="flex items-center gap-2">
+                    <span className="inline-block w-2 h-6 bg-blue-600 rounded-l"></span>
+                    <span>Attendance Overview</span>
+                  </span>
+                </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="mb-4 flex items-center gap-4">
-                  <span className="font-semibold text-foreground">Select Date:</span>
-                  <input
-                    type="date"
-                    value={attendanceDate}
-                    onChange={e => setAttendanceDate(e.target.value)}
-                    className="border rounded px-2 py-1 bg-background text-foreground dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700"
-                    min={calendarMonth + '-01'}
-                    max={new Date().toISOString().substring(0, 10)}
-                  />
+                <div className="mb-6 flex flex-col md:flex-row md:items-end md:justify-between gap-4">
+                  <div className="flex items-center gap-4">
+                    <span className="font-semibold text-foreground">Select Date:</span>
+                    <input
+                      type="date"
+                      value={attendanceDate}
+                      onChange={e => setAttendanceDate(e.target.value)}
+                      className="border rounded px-2 py-1 bg-background text-foreground dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700"
+                      min={calendarMonth + '-01'}
+                      max={new Date().toISOString().substring(0, 10)}
+                    />
+                  </div>
+                  <div className="text-lg font-semibold text-muted-foreground">
+                    Attendance for <span className="text-blue-700 dark:text-blue-300">{attendanceDate}</span>
+                  </div>
                 </div>
-                <div className="mb-4 text-lg font-semibold">
-                  Attendance for {attendanceDate}
-                </div>
-                <div className="grid grid-cols-2 gap-4 mb-6">
-                  <div className="bg-green-100 dark:bg-green-900 rounded-lg p-4 text-center">
-                    <div className="text-2xl font-bold text-green-700 dark:text-green-200">Present</div>
-                    <div className="text-3xl font-bold text-foreground">{presentEmployees.length}</div>
-                    <ul className="mt-2 text-sm text-green-900 dark:text-green-200 text-left max-h-32 overflow-y-auto">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                  <div className="rounded-xl bg-gradient-to-br from-green-100/80 to-green-200/60 dark:from-green-900 dark:to-green-800 shadow p-6 flex flex-col items-center">
+                    <div className="flex items-center gap-2 mb-2">
+                      <svg className="w-7 h-7 text-green-600 dark:text-green-300" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
+                      <span className="text-2xl font-bold text-green-700 dark:text-green-200">Present</span>
+                    </div>
+                    <div className="text-5xl font-extrabold text-foreground mb-2">{presentEmployees.length}</div>
+                    <div className="text-xs text-muted-foreground mb-2">Employees present</div>
+                    <ul className="mt-2 text-sm text-green-900 dark:text-green-200 text-left max-h-32 overflow-y-auto w-full">
                       {attendanceLoading ? (
                         <li>Loading...</li>
                       ) : presentEmployees.length === 0 ? (
                         <li>No one present</li>
                       ) : (
                         presentEmployees.map(emp => (
-                          <li key={emp._id}>{emp.firstname} {emp.lastname}</li>
+                          <li key={emp._id} className="truncate">{emp.firstname} {emp.lastname}</li>
                         ))
                       )}
                     </ul>
                   </div>
-                  <div className="bg-red-100 dark:bg-red-900 rounded-lg p-4 text-center">
-                    <div className="text-2xl font-bold text-red-700 dark:text-red-200">Absent</div>
-                    <div className="text-3xl font-bold text-foreground">{absentEmployees.length}</div>
-                    <ul className="mt-2 text-sm text-red-900 dark:text-red-200 text-left max-h-32 overflow-y-auto">
+                  <div className="rounded-xl bg-gradient-to-br from-red-100/80 to-red-200/60 dark:from-red-900 dark:to-red-800 shadow p-6 flex flex-col items-center">
+                    <div className="flex items-center gap-2 mb-2">
+                      <svg className="w-7 h-7 text-red-600 dark:text-red-300" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                      <span className="text-2xl font-bold text-red-700 dark:text-red-200">Absent</span>
+                    </div>
+                    <div className="text-5xl font-extrabold text-foreground mb-2">{absentEmployees.length}</div>
+                    <div className="text-xs text-muted-foreground mb-2">Employees absent</div>
+                    <ul className="mt-2 text-sm text-red-900 dark:text-red-200 text-left max-h-32 overflow-y-auto w-full">
                       {attendanceLoading ? (
                         <li>Loading...</li>
                       ) : absentEmployees.length === 0 ? (
                         <li>No one absent</li>
                       ) : (
                         absentEmployees.map(emp => (
-                          <li key={emp._id}>{emp.firstname} {emp.lastname}</li>
+                          <li key={emp._id} className="truncate">{emp.firstname} {emp.lastname}</li>
                         ))
                       )}
                     </ul>
+                  </div>
+                  <div className="rounded-xl bg-gradient-to-br from-gray-100/80 to-gray-200/60 dark:from-gray-900 dark:to-gray-800 shadow p-6 flex flex-col items-center">
+                    <div className="flex items-center gap-2 mb-2">
+                      <svg className="w-7 h-7 text-blue-600 dark:text-blue-300" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                        <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" fill="none" />
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6l4 2" />
+                      </svg>
+                      <span className="text-2xl font-bold text-blue-700 dark:text-blue-200">Total</span>
+                    </div>
+                    <div className="text-5xl font-extrabold text-foreground mb-2">{presentEmployees.length + absentEmployees.length}</div>
+                    <div className="text-xs text-muted-foreground mb-2">Total marked</div>
+                    <div className="mt-4 text-center text-sm text-muted-foreground">
+                      <span className="inline-block px-2 py-1 rounded bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-200 font-semibold">
+                        {presentEmployees.length + absentEmployees.length} / {employees.length} employees
+                      </span>
+                    </div>
                   </div>
                 </div>
               </CardContent>
@@ -1008,67 +1256,203 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
         // Leaves feature: show leave balance, request leave, and leave history
         return (
           <div className="p-8">
-            <Card className="max-w-2xl mx-auto mb-8">
-              <CardHeader>
-                <CardTitle>My Leave Balance</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 gap-4 mb-4">
-                  <div className="bg-blue-100 dark:bg-blue-900 rounded-lg p-4 text-center">
-                    <div className="text-2xl font-bold text-blue-700 dark:text-blue-200">12</div>
-                    <div className="text-muted-foreground text-sm">Annual Leaves</div>
+            {/* Only show leave request form for employees */}
+            {user.role === 'employee' && (
+              <Card className="max-w-2xl mx-auto mb-8">
+                <CardHeader>
+                  <CardTitle>My Leave Balance</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-2 gap-4 mb-4">
+                    <div className="bg-blue-100 dark:bg-blue-900 rounded-lg p-4 text-center">
+                      <div className="text-2xl font-bold text-blue-700 dark:text-blue-200">{12 - annualLeaves}</div>
+                      <div className="text-muted-foreground text-sm">Annual Leaves Left</div>
+                    </div>
+                    <div className="bg-green-100 dark:bg-green-900 rounded-lg p-4 text-center">
+                      <div className="text-2xl font-bold text-green-700 dark:text-green-200">{5 - sickLeaves}</div>
+                      <div className="text-muted-foreground text-sm">Sick Leaves Left</div>
+                    </div>
                   </div>
-                  <div className="bg-green-100 dark:bg-green-900 rounded-lg p-4 text-center">
-                    <div className="text-2xl font-bold text-green-700 dark:text-green-200">5</div>
-                    <div className="text-muted-foreground text-sm">Sick Leaves</div>
-                  </div>
-                </div>
-                <form className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium mb-1 text-foreground">Leave Type</label>
-                    <select className="w-full border rounded px-3 py-2 bg-background text-foreground">
-                      <option>Annual</option>
-                      <option>Sick</option>
-                      <option>Unpaid</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-1 text-foreground">From</label>
-                    <input type="date" className="w-full border rounded px-3 py-2 bg-background text-foreground dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-1 text-foreground">To</label>
-                    <input type="date" className="w-full border rounded px-3 py-2 bg-background text-foreground dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-1 text-foreground">Reason</label>
-                    <textarea className="w-full border rounded px-3 py-2 bg-background text-foreground" rows={2} placeholder="Reason for leave" />
-                  </div>
-                  <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded font-semibold">Request Leave</button>
-                </form>
-              </CardContent>
-            </Card>
+                  <form className="space-y-4" onSubmit={editingLeaveId ? handleUpdateLeave : handleLeaveSubmit}>
+                    <div>
+                      <label className="block text-sm font-medium mb-1 text-foreground">Leave Type</label>
+                      <select
+                        name="type"
+                        value={leaveForm.type}
+                        onChange={handleLeaveFormChange}
+                        className="w-full border rounded px-3 py-2 bg-background text-foreground"
+                        required
+                        disabled={leaveLoading}
+                      >
+                        <option value="Annual">Annual</option>
+                        <option value="Sick">Sick</option>
+                        <option value="Unpaid">Unpaid</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1 text-foreground">From</label>
+                      <input
+                        type="date"
+                        name="from"
+                        value={leaveForm.from}
+                        onChange={handleLeaveFormChange}
+                        className="w-full border rounded px-3 py-2 bg-background text-foreground dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700"
+                        required
+                        disabled={leaveLoading}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1 text-foreground">To</label>
+                      <input
+                        type="date"
+                        name="to"
+                        value={leaveForm.to}
+                        onChange={handleLeaveFormChange}
+                        className="w-full border rounded px-3 py-2 bg-background text-foreground dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700"
+                        required
+                        disabled={leaveLoading}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1 text-foreground">Reason</label>
+                      <textarea
+                        name="reason"
+                        value={leaveForm.reason}
+                        onChange={handleLeaveFormChange}
+                        className="w-full border rounded px-3 py-2 bg-background text-foreground"
+                        rows={2}
+                        placeholder="Reason for leave"
+                        required
+                        disabled={leaveLoading}
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        type="submit"
+                        className="px-4 py-2 bg-blue-600 text-white rounded font-semibold"
+                        disabled={leaveLoading}
+                      >
+                        {leaveLoading
+                          ? (editingLeaveId ? 'Updating...' : 'Requesting...')
+                          : (editingLeaveId ? 'Update Leave' : 'Request Leave')}
+                      </button>
+                      {editingLeaveId && (
+                        <button
+                          type="button"
+                          className="px-4 py-2 bg-muted text-foreground rounded font-semibold"
+                          onClick={handleCancelEditLeave}
+                          disabled={leaveLoading}
+                        >
+                          Cancel
+                        </button>
+                      )}
+                    </div>
+                    {leaveMsg && (
+                      <div className={`mt-2 text-sm ${leaveMsg.startsWith('Error') ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
+                        {leaveMsg}
+                      </div>
+                    )}
+                  </form>
+                </CardContent>
+              </Card>
+            )}
             <Card className="max-w-2xl mx-auto bg-card text-foreground">
               <CardHeader>
                 <CardTitle>Leave History</CardTitle>
               </CardHeader>
               <CardContent>
                 <ul className="divide-y divide-border">
-                  <li className="py-2 flex justify-between">
-                    <span>2025-05-10 to 2025-05-12</span>
-                    <span className="text-green-600 dark:text-green-400">Approved</span>
-                  </li>
-                  <li className="py-2 flex justify-between">
-                    <span>2025-04-01 to 2025-04-01</span>
-                    <span className="text-yellow-600 dark:text-yellow-400">Pending</span>
-                  </li>
-                  <li className="py-2 flex justify-between">
-                    <span>2025-03-15 to 2025-03-16</span>
-                    <span className="text-red-600 dark:text-red-400">Rejected</span>
-                  </li>
+                  {leaves.length === 0 && (
+                    <li className="py-2 text-muted-foreground">No leave requests yet.</li>
+                  )}
+                  {leaves.map(l => (
+                    <li key={l._id} className="py-2 flex justify-between items-center">
+                      <span>
+                        {l.from} to {l.to} ({l.type})<br />
+                        <span className="text-xs text-muted-foreground">{l.reason}</span>
+                      </span>
+                      <span className={
+                        l.status === 'Approved'
+                          ? 'text-green-600 dark:text-green-400'
+                          : l.status === 'Pending'
+                          ? 'text-yellow-600 dark:text-yellow-400'
+                          : 'text-red-600 dark:text-red-400'
+                      }>
+                        {l.status}
+                      </span>
+                      {/* Employee: show edit/delete for pending leaves */}
+                      {user.role === 'employee' && l.status === 'Pending' && (
+                        <span className="flex gap-2 ml-4">
+                          <button
+                            className="px-2 py-1 bg-blue-600 text-white rounded text-xs font-semibold"
+                            onClick={() => handleEditLeave(l)}
+                            disabled={editingLeaveId === l._id}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            className="px-2 py-1 bg-red-600 text-white rounded text-xs font-semibold"
+                            onClick={() => setConfirmDeleteLeaveId(l._id)}
+                            disabled={leaveLoading}
+                          >
+                            Delete
+                          </button>
+                        </span>
+                      )}
+                      {/* Admin/super_admin: show approve/reject buttons for pending leaves */}
+                      {(user.role === 'admin' || user.role === 'super_admin') && l.status === 'Pending' && (
+                        <span className="flex gap-2 ml-4">
+                          <button
+                            className="px-2 py-1 bg-green-600 text-white rounded text-xs font-semibold"
+                            onClick={() => handleLeaveStatus(l._id, 'Approved')}
+                          >
+                            Approve
+                          </button>
+                          <button
+                            className="px-2 py-1 bg-red-600 text-white rounded text-xs font-semibold"
+                            onClick={() => handleLeaveStatus(l._id, 'Rejected')}
+                          >
+                            Reject
+                          </button>
+                        </span>
+                      )}
+                    </li>
+                  ))}
                 </ul>
+                {leaveMsg && (
+                  <div className={`mt-2 text-sm ${leaveMsg.startsWith('Error') ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
+                    {leaveMsg}
+                  </div>
+                )}
               </CardContent>
             </Card>
+            {/* Confirmation dialog */}
+            {confirmDeleteLeaveId && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+                <div className="bg-card rounded-lg shadow-lg max-w-xs w-full p-6 relative">
+                  <div className="mb-4 text-center">
+                    Are you sure you want to delete this leave request?
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <button
+                      className="px-4 py-2 bg-muted text-foreground rounded font-semibold"
+                      onClick={() => setConfirmDeleteLeaveId(null)}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      className="px-4 py-2 bg-red-600 text-white rounded font-semibold"
+                      onClick={() => {
+                        handleDeleteLeave(confirmDeleteLeaveId);
+                        setConfirmDeleteLeaveId(null);
+                      }}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         );
       case 'payroll':
@@ -1610,75 +1994,15 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
           </div>
         );
       case 'awards':
-        // Awards feature: show awards and allow nomination
+        // Awards feature: show awards, allow nomination, voting, and winner announcement
         return (
           <div className="p-8">
             <Card className="max-w-2xl mx-auto mb-8 bg-card text-foreground">
               <CardHeader>
-                <CardTitle>My Awards</CardTitle>
+                <CardTitle>Awards & Nominations</CardTitle>
               </CardHeader>
               <CardContent>
-                <ul className="divide-y divide-border mb-4">
-                  <li className="py-2 flex justify-between">
-                    <span>Employee of the Month</span>
-                    <span className="text-green-600">May 2025</span>
-                  </li>
-                  <li className="py-2 flex justify-between">
-                    <span>Best Team Player</span>
-                    <span className="text-blue-600">March 2025</span>
-                  </li>
-                </ul>
-                {(user.role === 'super_admin' || user.role === 'admin') && (
-                  <form className="space-y-2">
-                    <div>
-                      <label className="block text-sm font-medium mb-1 text-foreground">Nominate a Colleague</label>
-                      <input className="w-full border rounded px-3 py-2 bg-background text-foreground" placeholder="Enter name or email" />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-1 text-foreground">Award</label>
-                      <input className="w-full border rounded px-3 py-2 bg-background text-foreground" placeholder="Award name" />
-                    </div>
-                    <button type="submit" className="px-4 py-2 bg-yellow-500 text-white rounded font-semibold">Nominate</button>
-                  </form>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-        );
-      case 'performance':
-        // Performance feature: show performance summary and feedback
-        return (
-          <div className="p-8">
-            <Card className="max-w-2xl mx-auto mb-8 bg-card text-foreground">
-              <CardHeader>
-                <CardTitle>Performance Summary</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="mb-4">
-                  <div className="flex justify-between mb-2">
-                    <span className="font-semibold">Attendance:</span>
-                    <span>96%</span>
-                  </div>
-                  <div className="flex justify-between mb-2">
-                    <span className="font-semibold">Projects Completed:</span>
-                    <span>8</span>
-                  </div>
-                  <div className="flex justify-between mb-2">
-                    <span className="font-semibold">Peer Rating:</span>
-                    <span>4.7/5</span>
-                  </div>
-                </div>
-                <div className="mb-2 font-semibold">Manager Feedback</div>
-                <div className="bg-muted rounded p-3 mb-4 text-muted-foreground">
-                  Great work this quarter! Keep up the excellent performance and teamwork.
-                </div>
-                <form className="space-y-2">
-                  <div>
-                    <label className="block text-sm font-medium mb-1 text-foreground">Self-Review</label>
-                    <textarea className="w-full border rounded px-3 py-2 bg-background text-foreground" rows={2} placeholder="Write your self-review..." />
-                  </div>
-                  <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded font-semibold">Submit Review</button>
-                </form>
+                <AwardsSection user={user} employees={employees} />
               </CardContent>
             </Card>
           </div>
@@ -1686,7 +2010,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
       default:
         return <div className="p-8">Coming soon...</div>;
     }
-  };
+  }; // <-- FIX: close renderContent function here
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -1703,6 +2027,276 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
       </div>
     </div>
   );
-};
+}
+
+function AwardsSection({ user, employees }) {
+  const [awards, setAwards] = useState<any[]>([]);
+  const [awardName, setAwardName] = useState('Employee of the Month');
+  const [awardMonth, setAwardMonth] = useState(() => new Date().toISOString().slice(0, 7));
+  const [nomineeId, setNomineeId] = useState('');
+  const [awardMsg, setAwardMsg] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  // Fetch awards for the selected month and award name
+  const fetchAwards = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`http://localhost:5050/api/awards?month=${awardMonth}&name=${encodeURIComponent(awardName)}`);
+      const data = await res.json();
+      setAwards(Array.isArray(data) ? data : []);
+    } catch {
+      setAwards([]);
+    }
+    setLoading(false);
+  }, [awardMonth, awardName]);
+
+  useEffect(() => {
+    fetchAwards();
+  }, [fetchAwards]);
+
+  // Nominate employee (admin/super_admin)
+  const handleNominate = async (e) => {
+    e.preventDefault();
+    setAwardMsg('');
+    if (!nomineeId) return;
+    try {
+      const resp = await fetch('http://localhost:5050/api/awards/nominate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: awardName, month: awardMonth, nomineeId })
+      });
+      const data = await resp.json();
+      if (resp.ok) {
+        setAwardMsg('Nomination successful!');
+        setNomineeId('');
+        fetchAwards();
+      } else {
+        setAwardMsg(data.error || 'Failed to nominate');
+      }
+    } catch {
+      setAwardMsg('Network error.');
+    }
+  };
+
+  // Vote for nominee (employee)
+  const handleVote = async (awardId, nomineeId) => {
+    setAwardMsg('');
+    try {
+      const resp = await fetch('http://localhost:5050/api/awards/vote', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ awardId, nomineeId, voterId: user.id })
+      });
+      const data = await resp.json();
+      if (resp.ok) {
+        setAwardMsg('Vote recorded!');
+        fetchAwards();
+      } else {
+        setAwardMsg(data.error || 'Failed to vote');
+      }
+    } catch {
+      setAwardMsg('Network error.');
+    }
+  };
+
+  // Announce winner (admin/super_admin)
+  const handleAnnounce = async (awardId, winnerId) => {
+    setAwardMsg('');
+    try {
+      const resp = await fetch('http://localhost:5050/api/awards/announce', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ awardId, winnerId })
+      });
+      const data = await resp.json();
+      if (resp.ok) {
+        setAwardMsg('Winner announced!');
+        fetchAwards();
+      } else {
+        setAwardMsg(data.error || 'Failed to announce winner');
+      }
+    } catch {
+      setAwardMsg('Network error.');
+    }
+  };
+
+  // Find current award for UI
+  const currentAward = awards.length > 0 ? awards[0] : null;
+  const nominees = currentAward?.nominees || [];
+  const winner = currentAward?.winner;
+  const announced = currentAward?.announced;
+
+  // Find who the current user voted for
+  let userVote = '';
+  if (currentAward && nominees.length > 0) {
+    for (const n of nominees) {
+      if (n.votes && n.votes.includes(user.id)) {
+        userVote = n.employee?._id || '';
+        break;
+      }
+    }
+  }
+
+  // Helper for avatar initials
+  const getInitials = (emp) =>
+    emp?.firstname && emp?.lastname
+      ? `${emp.firstname[0]}${emp.lastname[0]}`
+      : emp?.firstname?.slice(0, 2) || 'EM';
+
+  return (
+    <div>
+      <div className="mb-6 flex flex-col md:flex-row md:items-end md:justify-between gap-4">
+        <div>
+          <label className="font-semibold mr-2">Award:</label>
+          <select
+            value={awardName}
+            onChange={e => setAwardName(e.target.value)}
+            className="border rounded px-2 py-1 bg-background text-foreground dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700"
+          >
+            <option value="Employee of the Month">Employee of the Month</option>
+            <option value="Best Team Player">Best Team Player</option>
+            {/* Add more award types if needed */}
+          </select>
+        </div>
+        <div>
+          <label className="font-semibold mr-2">Month:</label>
+          <input
+            type="month"
+            value={awardMonth}
+            onChange={e => setAwardMonth(e.target.value)}
+            className="border rounded px-2 py-1 bg-background text-foreground dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700"
+            max={new Date().toISOString().substring(0, 7)}
+          />
+        </div>
+      </div>
+      {awardMsg && (
+        <div className={`mb-2 text-sm ${awardMsg.startsWith('Error') ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
+          {awardMsg}
+        </div>
+      )}
+      {/* Nomination section for admin/super_admin */}
+      {(user.role === 'admin' || user.role === 'super_admin') && (
+        <form className="mb-6 flex flex-col md:flex-row gap-4 items-end" onSubmit={handleNominate}>
+          <div>
+            <label className="font-semibold mr-2">Nominate Employee:</label>
+            <select
+              value={nomineeId}
+              onChange={e => setNomineeId(e.target.value)}
+              className="border rounded px-2 py-1 bg-background text-foreground dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700"
+            >
+              <option value="">Select employee</option>
+              {employees
+                .filter(emp => emp.role === 'employee' || emp.role === 'intern')
+                .map(emp => (
+                  <option key={emp._id} value={emp._id}>
+                    {emp.firstname} {emp.lastname} ({emp.department || 'N/A'})
+                  </option>
+                ))}
+            </select>
+          </div>
+          <button
+            type="submit"
+            className="px-4 py-2 bg-blue-600 text-white rounded font-semibold"
+            disabled={!nomineeId}
+          >
+            Nominate
+          </button>
+        </form>
+      )}
+      {/* Voting section for all employees */}
+      {currentAward && !announced && (
+        <div className="mb-6">
+          <div className="font-semibold mb-4 text-lg text-foreground flex items-center gap-2">
+            <span className="inline-block w-2 h-6 bg-yellow-400 rounded-l" />
+            Nominees
+          </div>
+          <div className="grid grid-cols-1 gap-4">
+            {nominees.length === 0 && (
+              <div className="py-4 text-muted-foreground text-center bg-muted rounded-lg shadow">No nominees yet.</div>
+            )}
+            {nominees.map(nom => (
+              <div
+                key={nom.employee?._id}
+                className={`flex items-center justify-between rounded-xl p-4 shadow border
+                  ${winner && winner._id === nom.employee?._id
+                    ? 'bg-yellow-100 dark:bg-yellow-900 border-yellow-400'
+                    : 'bg-card border-muted'}
+                `}
+              >
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 rounded-full bg-blue-200 dark:bg-blue-900 flex items-center justify-center text-lg font-bold text-blue-700 dark:text-blue-200 border border-blue-400 dark:border-blue-700">
+                    {getInitials(nom.employee)}
+                  </div>
+                  <div>
+                    <div className="font-semibold text-foreground text-base">
+                      {nom.employee?.firstname} {nom.employee?.lastname}
+                      <span className="ml-2 text-xs text-muted-foreground">
+                        ({nom.employee?.department || 'N/A'})
+                      </span>
+                      {winner && winner._id === nom.employee?._id && (
+                        <span className="ml-2 px-2 py-1 rounded bg-yellow-400 text-yellow-900 font-semibold text-xs shadow">
+                          Winner
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="inline-block px-3 py-1 rounded-full bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-200 font-semibold text-sm shadow">
+                    {nom.votes.length} vote{nom.votes.length !== 1 ? 's' : ''}
+                  </span>
+                  {/* Voting button for employees (not admin/super_admin) */}
+                  {user.role === 'employee' && (
+                    <button
+                      className={`ml-2 px-4 py-1 rounded font-semibold transition
+                        ${userVote === nom.employee?._id
+                          ? 'bg-green-600 text-white'
+                          : 'bg-muted text-foreground hover:bg-blue-100 dark:hover:bg-blue-900'}
+                      `}
+                      disabled={userVote === nom.employee?._id}
+                      onClick={() => handleVote(currentAward._id, nom.employee?._id)}
+                    >
+                      {userVote === nom.employee?._id ? 'Voted' : 'Vote'}
+                    </button>
+                  )}
+                  {/* Admin/super_admin can see votes and announce winner */}
+                  {(user.role === 'admin' || user.role === 'super_admin') && !announced && (
+                    <button
+                      className="ml-2 px-4 py-1 rounded bg-yellow-500 text-white font-semibold shadow"
+                      onClick={() => handleAnnounce(currentAward._id, nom.employee?._id)}
+                    >
+                      Announce Winner
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {/* Winner announcement */}
+      {currentAward && announced && winner && (
+        <div className="mt-8 text-center">
+          <div className="inline-block bg-gradient-to-br from-yellow-200 to-yellow-400 dark:from-yellow-900 dark:to-yellow-700 rounded-2xl px-8 py-6 shadow-lg border-2 border-yellow-400 dark:border-yellow-700">
+            <div className="text-3xl font-extrabold text-yellow-900 dark:text-yellow-200 mb-2 flex items-center justify-center gap-2">
+              🏆 {awardName} Winner ({awardMonth})
+            </div>
+            <div className="flex flex-col items-center">
+              <div className="w-16 h-16 rounded-full bg-blue-200 dark:bg-blue-900 flex items-center justify-center text-3xl font-bold text-blue-700 dark:text-blue-200 border-2 border-blue-400 dark:border-blue-700 mb-2">
+                {getInitials(winner)}
+              </div>
+              <div className="text-xl font-semibold text-foreground">
+                {winner.firstname} {winner.lastname}
+                <span className="ml-2 text-base text-muted-foreground">
+                  ({winner.department || 'N/A'})
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default Dashboard;

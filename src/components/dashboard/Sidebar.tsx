@@ -35,8 +35,7 @@ const Sidebar = ({ userRole, activeTab, setActiveTab }: SidebarProps) => {
         { id: 'payroll', label: 'Payroll', icon: CreditCard },
         { id: 'projects', label: 'Projects', icon: Briefcase },
         { id: 'teams', label: 'Teams', icon: Users },
-        { id: 'awards', label: 'Awards', icon: Award },
-        { id: 'performance', label: 'Performance', icon: Activity },
+        { id: 'awards', label: 'Awards', icon: Award }
       ]
     },
     {

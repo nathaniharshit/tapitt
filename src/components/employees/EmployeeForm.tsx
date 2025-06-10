@@ -153,25 +153,25 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
             <h3 className="text-lg font-semibold text-blue-700 dark:text-blue-300 mb-2">Personal Information</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="firstName">First Name</Label>
-                <Input name="firstName" value={formData.firstName} onChange={handleChange} required className="bg-background text-foreground rounded-lg focus:ring-2 focus:ring-blue-400" />
+                <Label htmlFor="firstName" className="dark:text-gray-200">First Name</Label>
+                <Input name="firstName" value={formData.firstName} onChange={handleChange} required className="bg-background dark:bg-gray-800 text-foreground dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-400 dark:placeholder-gray-400" />
               </div>
               <div>
-                <Label htmlFor="lastName">Last Name</Label>
-                <Input name="lastName" value={formData.lastName} onChange={handleChange} required className="bg-background text-foreground rounded-lg focus:ring-2 focus:ring-blue-400" />
+                <Label htmlFor="lastName" className="dark:text-gray-200">Last Name</Label>
+                <Input name="lastName" value={formData.lastName} onChange={handleChange} required className="bg-background dark:bg-gray-800 text-foreground dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-400 dark:placeholder-gray-400" />
               </div>
               <div>
-                <Label htmlFor="email">Email</Label>
-                <Input type="email" name="email" value={formData.email} onChange={handleChange} required className="bg-background text-foreground rounded-lg focus:ring-2 focus:ring-blue-400" />
+                <Label htmlFor="email" className="dark:text-gray-200">Email</Label>
+                <Input type="email" name="email" value={formData.email} onChange={handleChange} required className="bg-background dark:bg-gray-800 text-foreground dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-400 dark:placeholder-gray-400" />
               </div>
               <div>
-                <Label htmlFor="phone">Phone</Label>
+                <Label htmlFor="phone" className="dark:text-gray-200">Phone</Label>
                 <div className="flex">
                   <select
                     name="countryCode"
                     value={formData.countryCode}
                     onChange={handleChange}
-                    className="border rounded-l-lg px-2 py-2 bg-background text-foreground font-bold text-lg focus:ring-2 focus:ring-blue-400 flex-shrink-0"
+                    className="border rounded-l-lg px-2 py-2 bg-background dark:bg-gray-800 text-foreground dark:text-gray-100 font-bold text-lg focus:ring-2 focus:ring-blue-400 flex-shrink-0"
                     style={{ minWidth: 90 }}
                   >
                     <option value="+91">🇮🇳 +91</option>
@@ -188,7 +188,7 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
                     maxLength={10}
                     minLength={10}
                     pattern="\d{10}"
-                    className="rounded-l-none rounded-r-lg bg-background text-foreground focus:ring-2 focus:ring-blue-400 flex-1"
+                    className="rounded-l-none rounded-r-lg bg-background dark:bg-gray-800 text-foreground dark:text-gray-100 focus:ring-2 focus:ring-blue-400 flex-1 dark:placeholder-gray-400"
                     required
                     placeholder="10 digit number"
                     type="tel"
@@ -204,13 +204,13 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
             <h3 className="text-lg font-semibold text-blue-700 dark:text-blue-300 mb-2">Job Information</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="department">Department</Label>
+                <Label htmlFor="department" className="dark:text-gray-200">Department</Label>
                 <select
                   name="department"
                   value={formData.department}
                   onChange={handleChange}
                   required
-                  className="w-full mt-1 mb-2 border rounded-lg px-3 py-2 bg-background text-foreground focus:ring-2 focus:ring-blue-400"
+                  className="w-full mt-1 mb-2 border rounded-lg px-3 py-2 bg-background dark:bg-gray-800 text-foreground dark:text-gray-100 focus:ring-2 focus:ring-blue-400 dark:placeholder-gray-400"
                 >
                   <option value="">Select department</option>
                   <option value="HR">HR</option>
@@ -223,17 +223,17 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
                 </select>
               </div>
               <div>
-                <Label htmlFor="position">Position</Label>
-                <Input name="position" value={formData.position} onChange={handleChange} className="bg-background text-foreground rounded-lg focus:ring-2 focus:ring-blue-400" />
+                <Label htmlFor="position" className="dark:text-gray-200">Position</Label>
+                <Input name="position" value={formData.position} onChange={handleChange} className="bg-background dark:bg-gray-800 text-foreground dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-400 dark:placeholder-gray-400" />
               </div>
               <div>
-                <Label htmlFor="role">Role</Label>
+                <Label htmlFor="role" className="dark:text-gray-200">Role</Label>
                 <select
                   name="role"
                   value={formData.role}
                   onChange={handleChange}
                   required
-                  className="w-full mt-1 mb-2 border rounded-lg px-3 py-2 bg-background text-foreground focus:ring-2 focus:ring-blue-400"
+                  className="w-full mt-1 mb-2 border rounded-lg px-3 py-2 bg-background dark:bg-gray-800 text-foreground dark:text-gray-100 focus:ring-2 focus:ring-blue-400 dark:placeholder-gray-400"
                 >
                   <option value="">Select role</option>
                   <option value="employee">Employee</option>
@@ -243,7 +243,7 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
                 </select>
               </div>
               <div>
-                <Label htmlFor="salary">Salary</Label>
+                <Label htmlFor="salary" className="dark:text-gray-200">Salary</Label>
                 <Input
                   type="text"
                   name="salary"
@@ -252,16 +252,16 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
                   inputMode="numeric"
                   pattern="[0-9,]*"
                   autoComplete="off"
-                  className="bg-background text-foreground rounded-lg focus:ring-2 focus:ring-blue-400"
+                  className="bg-background dark:bg-gray-800 text-foreground dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-400 dark:placeholder-gray-400"
                 />
               </div>
               <div>
-                <Label htmlFor="startDate">Start Date</Label>
-                <Input type="date" name="startDate" value={formData.startDate} onChange={handleChange} className="bg-background text-foreground rounded-lg focus:ring-2 focus:ring-blue-400" />
+                <Label htmlFor="startDate" className="dark:text-gray-200">Start Date</Label>
+                <Input type="date" name="startDate" value={formData.startDate} onChange={handleChange} className="bg-background dark:bg-gray-800 text-foreground dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-400 dark:placeholder-gray-400" />
               </div>
               <div>
-                <Label htmlFor="address">Address</Label>
-                <Input name="address" value={formData.address} onChange={handleChange} className="bg-background text-foreground rounded-lg focus:ring-2 focus:ring-blue-400" />
+                <Label htmlFor="address" className="dark:text-gray-200">Address</Label>
+                <Input name="address" value={formData.address} onChange={handleChange} className="bg-background dark:bg-gray-800 text-foreground dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-400 dark:placeholder-gray-400" />
               </div>
             </div>
           </div>
@@ -271,7 +271,7 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
             <h3 className="text-lg font-semibold text-blue-700 dark:text-blue-300 mb-2">Security</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="password">Temporary Password</Label>
+                <Label htmlFor="password" className="dark:text-gray-200">Temporary Password</Label>
                 <div className="relative flex items-center">
                   <Input
                     name="password"
@@ -281,7 +281,7 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
                     required
                     minLength={8}
                     placeholder="At least 8 characters"
-                    className="pr-10 bg-background text-foreground rounded-lg focus:ring-2 focus:ring-blue-400"
+                    className="pr-10 bg-background dark:bg-gray-800 text-foreground dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-400 dark:placeholder-gray-400"
                   />
                   <button
                     type="button"
