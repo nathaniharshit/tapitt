@@ -875,6 +875,27 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
     setLeaveLoading(false);
   };
 
+  // --- Payroll state and logic ---
+  const [salary, setSalary] = useState<number | null>(null);
+  const [salaryLoading, setSalaryLoading] = useState(false);
+
+  // Fetch salary for the current user
+  const fetchSalary = useCallback(async () => {
+    setSalaryLoading(true);
+    try {
+      const res = await fetch(`http://localhost:5050/api/employees/${user.id}/salary`);
+      const data = await res.json();
+      setSalary(data.salary ?? null);
+    } catch {
+      setSalary(null);
+    }
+    setSalaryLoading(false);
+  }, [user.id]);
+
+  useEffect(() => {
+    if (activeTab === 'payroll') fetchSalary();
+  }, [activeTab, fetchSalary]);
+
   // Unified dashboard for all roles
   const renderContent = () => {
     switch (activeTab) {
@@ -1368,6 +1389,16 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                   {leaves.map(l => (
                     <li key={l._id} className="py-2 flex justify-between items-center">
                       <span>
+                        {/* Show employee name for admin/super_admin */}
+                        {(user.role === 'admin' || user.role === 'super_admin') && l.employee && (
+                          <span className="font-semibold text-foreground">
+                            {l.employee.firstname} {l.employee.lastname}
+                            <span className="text-xs text-muted-foreground ml-2">
+                              ({l.employee.email || l.employeeId})
+                            </span>
+                            <br />
+                          </span>
+                        )}
                         {l.from} to {l.to} ({l.type})<br />
                         <span className="text-xs text-muted-foreground">{l.reason}</span>
                       </span>
@@ -1464,27 +1495,23 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                 <CardTitle>My Salary Details</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="mb-4">
-                  <div className="flex justify-between mb-2">
-                    <span className="font-semibold">Base Salary:</span>
-                    <span>₹50,000</span>
+                {salaryLoading ? (
+                  <div>Loading salary...</div>
+                ) : salary !== null ? (
+                  <div className="mb-4">
+                    <div className="flex justify-between mb-2">
+                      <span className="font-semibold">Base Salary:</span>
+                      <span>₹{salary.toLocaleString()}</span>
+                    </div>
+                    {/* You can add more breakdown here if needed */}
                   </div>
-                  <div className="flex justify-between mb-2">
-                    <span className="font-semibold">Allowances:</span>
-                    <span>₹5,000</span>
-                  </div>
-                  <div className="flex justify-between mb-2">
-                    <span className="font-semibold">Deductions:</span>
-                    <span>-₹2,000</span>
-                  </div>
-                  <div className="flex justify-between font-bold text-lg">
-                    <span>Net Pay:</span>
-                    <span>₹53,000</span>
-                  </div>
-                </div>
+                ) : (
+                  <div className="mb-4 text-red-600">Salary information not available.</div>
+                )}
                 <button className="px-4 py-2 bg-green-600 text-white rounded font-semibold">Download Payslip (PDF)</button>
               </CardContent>
             </Card>
+            {/* ...existing code for payslip history... */}
             <Card className="max-w-2xl mx-auto bg-card text-foreground">
               <CardHeader>
                 <CardTitle>Payslip History</CardTitle>
