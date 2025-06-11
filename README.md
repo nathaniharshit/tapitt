@@ -64,7 +64,7 @@ The backend runs on [http://localhost:5050](http://localhost:5050).
 cd ../
 npm start
 ```
-The frontend runs on [http://localhost:3000](http://localhost:3000).
+The frontend runs on [http://localhost:8080](http://localhost:8080).
 
 ## Usage
 
