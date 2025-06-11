@@ -63,7 +63,8 @@ const projectSchema = new mongoose.Schema({
   name: { type: String, required: true },
   description: { type: String, required: true },
   team: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Employee' }],
-  lead: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee' } // Add project lead
+  lead: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee' },
+  status: { type: String, enum: ['active', 'over'], default: 'active' } // <-- Add status field
 }, { timestamps: true });
 const Project = mongoose.model('Project', projectSchema);
 // --- End Project Model ---
@@ -206,15 +207,18 @@ app.post('/api/projects', async (req, res) => {
 // Update a project
 app.put('/api/projects/:id', async (req, res) => {
   try {
-    const { name, description, team, lead } = req.body;
+    // Accept status field for project completion
+    const { name, description, team, lead, status } = req.body;
+    const updateObj = {
+      ...(name !== undefined && { name }),
+      ...(description !== undefined && { description }),
+      ...(team !== undefined && { team: Array.isArray(team) ? team : [] }),
+      ...(lead !== undefined && { lead: lead || null }),
+      ...(status !== undefined && { status })
+    };
     const updated = await Project.findByIdAndUpdate(
       req.params.id,
-      {
-        name,
-        description,
-        team: Array.isArray(team) ? team : [],
-        lead: lead || null
-      },
+      updateObj,
       { new: true, runValidators: true }
     );
     if (!updated) {

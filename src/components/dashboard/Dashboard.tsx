@@ -239,6 +239,31 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
     }
   };
 
+  // Add concluded project state
+  const [concludeMsg, setConcludeMsg] = useState('');
+
+  // Conclude project handler
+  const handleConcludeProject = async (projectId: string) => {
+    setConcludeMsg('');
+    try {
+      // Use the standard update endpoint
+      const resp = await fetch(`http://localhost:5050/api/projects/${projectId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'over' })
+      });
+      if (resp.ok) {
+        setConcludeMsg('Project marked as over.');
+        fetchProjects();
+      } else {
+        const err = await resp.json();
+        setConcludeMsg('Failed to conclude project: ' + (err.error || 'Unknown error'));
+      }
+    } catch {
+      setConcludeMsg('Network error.');
+    }
+  };
+
   // --- End Projects logic ---
 
   // --- Teams state and logic ---
@@ -1637,6 +1662,11 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                       {editMsg}
                     </div>
                   )}
+                  {concludeMsg && (
+                    <div className={`mb-4 text-sm font-medium ${concludeMsg.startsWith('Project marked') ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                      {concludeMsg}
+                    </div>
+                  )}
                   {projects.length === 0 ? (
                     <div className="py-6 text-center text-muted-foreground">No projects found.</div>
                   ) : (
@@ -1644,55 +1674,91 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                       {projects.map((proj) => (
                         <div
                           key={proj._id || proj.name}
-                          className="rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 p-6 flex flex-col min-h-[200px] shadow-md"
+                          className={`rounded-xl border p-6 flex flex-col min-h-[200px] shadow-md
+                            ${proj.status === 'over' ? 'border-gray-400 bg-gray-200 dark:bg-gray-700 opacity-70' : 'border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800'}
+                          `}
                         >
-                          <div className="flex items-center justify-between mb-3">
-                            <div className="font-bold text-xl text-gray-900 dark:text-gray-100 truncate">{proj.name}</div>
-                            {(user.role === 'admin' || user.role === 'super_admin') && (
-                              <div className="flex gap-2">
-                                <button
-                                  onClick={() => handleEditProject(proj)}
-                                  className="text-blue-600 hover:underline text-xs font-semibold"
-                                  title="Edit Project"
-                                >
-                                  Edit
-                                </button>
-                                {confirmDeleteId === proj._id ? (
-                                  <div className="flex flex-col items-end gap-2">
-                                    <div className="text-xs text-foreground mb-1">Are you sure?</div>
-                                    <div className="flex gap-2">
-                                      <button
-                                        onClick={() => handleDeleteProject(proj._id)}
-                                        className="px-2 py-1 bg-red-600 text-white rounded text-xs font-semibold"
-                                      >
-                                        Delete
-                                      </button>
-                                      <button
-                                        onClick={() => setConfirmDeleteId(null)}
-                                        className="px-2 py-1 bg-muted text-foreground rounded text-xs font-semibold"
-                                      >
-                                        Cancel
-                                      </button>
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <button
-                                    onClick={() => setConfirmDeleteId(proj._id)}
-                                    className="text-red-600 hover:underline text-xs font-semibold"
-                                    title="Delete Project"
-                                  >
-                                    Delete
-                                  </button>
-                                )}
-                              </div>
-                            )}
+                          {/* Project Name and Status */}
+                          <div className="mb-2">
+                            <div className="font-bold text-xl text-gray-900 dark:text-gray-100 truncate">
+                              {proj.name}
+                              {proj.status === 'over' && (
+                                <span className="ml-2 px-2 py-1 rounded bg-red-500 text-white text-xs font-semibold">Project Over</span>
+                              )}
+                            </div>
                           </div>
+                          {/* Show completion message if project is over */}
+                          {proj.status === 'over' && (
+                            <div className="mb-2 p-2 rounded bg-yellow-100 dark:bg-yellow-900 text-yellow-900 dark:text-yellow-200 text-sm font-semibold">
+                              This project is complete. All team members must submit a report of the completed project:
+                              <ul className="list-disc ml-6 mt-2">
+                                {Array.isArray(proj.team) && proj.team.length > 0
+                                  ? proj.team.map((id: string) => {
+                                      const member = teamOptions.find(opt => opt.value === id);
+                                      return (
+                                        <li key={id}>
+                                          {member ? member.label : id}
+                                        </li>
+                                      );
+                                    })
+                                  : <li>N/A</li>}
+                              </ul>
+                            </div>
+                          )}
+                          {/* Action Buttons */}
+                          {(user.role === 'admin' || user.role === 'super_admin') && (
+                            <div className="flex gap-2 mb-2 flex-wrap">
+                              {proj.status !== 'over' && (
+                                <button
+                                  onClick={() => handleConcludeProject(proj._id)}
+                                  className="text-orange-600 hover:underline text-xs font-semibold"
+                                  title="Conclude Project"
+                                >
+                                  Conclude
+                                </button>
+                              )}
+                              <button
+                                onClick={() => handleEditProject(proj)}
+                                className="text-blue-600 hover:underline text-xs font-semibold"
+                                title="Edit Project"
+                              >
+                                Edit
+                              </button>
+                              {confirmDeleteId === proj._id ? (
+                                <div className="flex flex-col items-end gap-2">
+                                  <div className="text-xs text-foreground mb-1">Are you sure?</div>
+                                  <div className="flex gap-2">
+                                    <button
+                                      onClick={() => handleDeleteProject(proj._id)}
+                                      className="px-2 py-1 bg-red-600 text-white rounded text-xs font-semibold"
+                                    >
+                                      Delete
+                                    </button>
+                                    <button
+                                      onClick={() => setConfirmDeleteId(null)}
+                                      className="px-2 py-1 bg-muted text-foreground rounded text-xs font-semibold"
+                                    >
+                                      Cancel
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => setConfirmDeleteId(proj._id)}
+                                  className="text-red-600 hover:underline text-xs font-semibold"
+                                  title="Delete Project"
+                                >
+                                  Delete
+                                </button>
+                              )}
+                            </div>
+                          )}
+                          {/* ...existing code for description, lead, team, created/updated... */}
                           <div className="text-xs text-muted-foreground mb-2">{proj.description}</div>
                           <div className="mb-2">
                             <span className="font-semibold text-base text-foreground">Lead: </span>
                             <span className="text-base text-muted-foreground">
                               {(() => {
-                                // Find the lead in leadOptions (includes superadmins and admins)
                                 const lead = leadOptions.find(opt => opt.value === proj.lead);
                                 return lead ? lead.label : (proj.lead || 'N/A');
                               })()}
