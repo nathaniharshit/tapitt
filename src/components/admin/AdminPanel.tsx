@@ -69,7 +69,7 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
     return () => clearInterval(interval);
   }, []);
 
-  if (userRole !== 'super_admin') {
+  if (userRole !== 'admin' && userRole !== 'super_admin') {
     return (
       <div className="text-center py-12">
         <Shield className="h-16 w-16 text-gray-400 mx-auto mb-4" />

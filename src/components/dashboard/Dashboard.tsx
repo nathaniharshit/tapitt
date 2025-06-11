@@ -457,8 +457,12 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
     setAnnouncementLoading(false);
   };
 
+  // Add state for announcement delete confirmation
+  const [confirmDeleteAnnouncementId, setConfirmDeleteAnnouncementId] = useState<string | null>(null);
+
   const handleDeleteAnnouncement = async (id: string) => {
     setAnnouncementMsg('');
+    setConfirmDeleteAnnouncementId(null); // Close confirmation dialog after delete
     try {
       const resp = await fetch(`http://localhost:5050/api/announcements/${id}`, {
         method: 'DELETE'
@@ -1092,13 +1096,39 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                             </div>
                           </div>
                           {(user.role === 'admin' || user.role === 'super_admin') && (
-                            <button
-                              className="ml-4 text-xs text-red-600 hover:underline"
-                              onClick={() => handleDeleteAnnouncement(a._id)}
-                              title="Delete announcement"
-                            >
-                              Delete
-                            </button>
+                            <>
+                              <button
+                                className="ml-4 text-xs text-red-600 hover:underline"
+                                onClick={() => setConfirmDeleteAnnouncementId(a._id)}
+                                title="Delete announcement"
+                              >
+                                Delete
+                              </button>
+                              {/* Confirmation dialog for announcement delete */}
+                              {confirmDeleteAnnouncementId === a._id && (
+                                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+                                  <div className="bg-card rounded-lg shadow-lg max-w-xs w-full p-6 relative">
+                                    <div className="mb-4 text-center">
+                                      Are you sure you want to delete this announcement?
+                                    </div>
+                                    <div className="flex justify-end gap-2">
+                                      <button
+                                        className="px-4 py-2 bg-muted text-foreground rounded font-semibold"
+                                        onClick={() => setConfirmDeleteAnnouncementId(null)}
+                                      >
+                                        Cancel
+                                      </button>
+                                      <button
+                                        className="px-4 py-2 bg-red-600 text-white rounded font-semibold"
+                                        onClick={() => handleDeleteAnnouncement(a._id)}
+                                      >
+                                        Delete
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                            </>
                           )}
                         </li>
                       ))}
@@ -1133,7 +1163,10 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
       case 'add-employee':
         return (user.role === 'super_admin' || user.role === 'admin') ? <EmployeeForm onEmployeeAdded={fetchEmployees} /> : <EmployeeList userRole={user.role} />;
       case 'admin-panel':
-        return <AdminPanel userRole={user.role} />;
+        // Allow both admin and super_admin to access AdminPanel
+        return (user.role === 'admin' || user.role === 'super_admin')
+          ? <AdminPanel userRole={user.role} />
+          : <div className="p-8">Access denied.</div>;
       case 'reports':
         return <Reports userRole={user.role} />;
       case 'settings':

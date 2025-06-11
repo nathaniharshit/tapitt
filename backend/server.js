@@ -817,6 +817,17 @@ app.post('/api/fix-attendance-format', async (req, res) => {
   }
 });
 
+// Add this endpoint before app.listen
+app.get('/api/employees/:id/salary', async (req, res) => {
+  try {
+    const emp = await Employee.findById(req.params.id);
+    if (!emp) return res.status(404).json({ error: 'Employee not found' });
+    res.json({ salary: emp.salary ?? null });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch salary' });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });

@@ -60,7 +60,7 @@ const Sidebar = ({ userRole, activeTab, setActiveTab }: SidebarProps) => {
       id: 'admin-panel',
       label: 'Admin Panel',
       icon: Shield,
-      roles: ['super_admin']
+      roles: ['super_admin', 'admin'] // <-- Allow both admin and super_admin
     },
     {
       id: 'reports',
