@@ -36,7 +36,8 @@ A full-stack Employee Management System built with React (frontend) and Node.js/
 - **Backend:**
   ```bash
   cd backend
-  npm install
+  npm install express
+  npm install multer
   ```
 
 - **Frontend:**
