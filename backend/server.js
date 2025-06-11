@@ -5,6 +5,9 @@ const authorizeRoles = require('./middleware/rbac');
 const bcrypt = require('bcrypt');
 const multer = require('multer');
 const path = require('path');
+const cron = require('node-cron');
+const nodemailer = require('nodemailer');
+const PDFDocument = require('pdfkit');
 const app = express();
 const PORT = process.env.PORT || 5050;
 
@@ -114,6 +117,17 @@ const leaveSchema = new mongoose.Schema({
 });
 const Leave = mongoose.model('Leave', leaveSchema);
 // --- End Leave Model ---
+
+// --- Scheduled Report Model ---
+const scheduledReportSchema = new mongoose.Schema({
+  type: { type: String, required: true },
+  date: { type: Date, required: true },
+  email: { type: String, required: true },
+  status: { type: String, enum: ['pending', 'sent', 'failed'], default: 'pending' },
+  createdAt: { type: Date, default: Date.now }
+});
+const ScheduledReport = mongoose.model('ScheduledReport', scheduledReportSchema);
+// --- End Scheduled Report Model ---
 
 app.use(cors()); // allow all origins for now
 app.use(express.json());
@@ -766,6 +780,113 @@ app.get('/api/employees/:id/attendance', async (req, res) => {
   }
 });
 
+// --- Reports API ---
+const { Parser } = require('json2csv');
+
+// Helper to generate a table in PDF
+function addTable(doc, headers, rows) {
+  doc.font('Helvetica-Bold').fontSize(12);
+  headers.forEach((header, i) => {
+    doc.text(header, 50 + i * 120, doc.y, { width: 120, continued: i < headers.length - 1 });
+  });
+  doc.moveDown();
+  doc.font('Helvetica').fontSize(10);
+  rows.forEach(row => {
+    headers.forEach((header, i) => {
+      doc.text(row[header] !== undefined ? String(row[header]) : '', 50 + i * 120, doc.y, { width: 120, continued: i < headers.length - 1 });
+    });
+    doc.moveDown();
+  });
+}
+
+// Download Employee Summary Report (PDF)
+app.get('/api/reports/employee-summary', async (req, res) => {
+  try {
+    const employees = await Employee.find({}, 'firstname lastname email department status role');
+    const headers = ['firstname', 'lastname', 'email', 'department', 'status', 'role'];
+    const doc = new PDFDocument();
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'attachment; filename=employee_summary.pdf');
+    doc.pipe(res);
+    doc.fontSize(16).text('Employee Summary Report', { align: 'center' });
+    doc.moveDown();
+    addTable(doc, headers, employees.map(e => e.toObject()));
+    doc.end();
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to generate employee summary report' });
+  }
+});
+
+// Download Department Analysis Report (PDF)
+app.get('/api/reports/department-analysis', async (req, res) => {
+  try {
+    const departments = await Employee.aggregate([
+      { $group: { _id: '$department', count: { $sum: 1 } } },
+      { $sort: { count: -1 } }
+    ]);
+    const headers = ['_id', 'count'];
+    const doc = new PDFDocument();
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'attachment; filename=department_analysis.pdf');
+    doc.pipe(res);
+    doc.fontSize(16).text('Department Analysis Report', { align: 'center' });
+    doc.moveDown();
+    addTable(doc, headers, departments);
+    doc.end();
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to generate department analysis report' });
+  }
+});
+
+// Download Payroll Report (PDF)
+app.get('/api/reports/payroll', async (req, res) => {
+  try {
+    const employees = await Employee.find({}, 'firstname lastname email department salary');
+    const headers = ['firstname', 'lastname', 'email', 'department', 'salary'];
+    const doc = new PDFDocument();
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'attachment; filename=payroll_report.pdf');
+    doc.pipe(res);
+    doc.fontSize(16).text('Payroll Report', { align: 'center' });
+    doc.moveDown();
+    addTable(doc, headers, employees.map(e => e.toObject()));
+    doc.end();
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to generate payroll report' });
+  }
+});
+
+// Download Attendance Report (PDF)
+app.get('/api/reports/attendance', async (req, res) => {
+  try {
+    const employees = await Employee.find({}, 'firstname lastname email attendance');
+    const rows = [];
+    employees.forEach(emp => {
+      (emp.attendance || []).forEach(a => {
+        rows.push({
+          firstname: emp.firstname,
+          lastname: emp.lastname,
+          email: emp.email,
+          date: a.date,
+          status: a.status
+        });
+      });
+    });
+    const headers = ['firstname', 'lastname', 'email', 'date', 'status'];
+    const doc = new PDFDocument();
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'attachment; filename=attendance_report.pdf');
+    doc.pipe(res);
+    doc.fontSize(16).text('Attendance Report', { align: 'center' });
+    doc.moveDown();
+    addTable(doc, headers, rows);
+    doc.end();
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to generate attendance report' });
+  }
+});
+// --- End Reports API ---
+
 // Add this endpoint before app.listen
 app.get('/api/employees/roles-count', async (req, res) => {
   try {
@@ -827,6 +948,99 @@ app.get('/api/employees/:id/salary', async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch salary' });
   }
 });
+
+// --- Schedule Report Endpoint ---
+app.post('/api/reports/schedule', async (req, res) => {
+  try {
+    const { type, date, email } = req.body;
+    if (!type || !date || !email) {
+      return res.status(400).json({ error: 'Type, date, and email are required.' });
+    }
+    await ScheduledReport.create({ type, date, email });
+    res.json({ message: 'Report scheduled successfully.' });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to schedule report.' });
+  }
+});
+// --- End Schedule Report Endpoint ---
+
+// --- Automated Scheduled Report Sender ---
+const sendScheduledReports = async () => {
+  const now = new Date();
+  // Find all pending reports scheduled for now or earlier
+  const pending = await ScheduledReport.find({ status: 'pending', date: { $lte: now } });
+  for (const report of pending) {
+    try {
+      // Generate report CSV
+      let csv, filename;
+      if (report.type === 'summary') {
+        const employees = await Employee.find({}, 'firstname lastname email department status role');
+        const fields = ['firstname', 'lastname', 'email', 'department', 'status', 'role'];
+        const parser = new (require('json2csv').Parser)({ fields });
+        csv = parser.parse(employees);
+        filename = 'employee_summary.csv';
+      } else if (report.type === 'analytics') {
+        const departments = await Employee.aggregate([
+          { $group: { _id: '$department', count: { $sum: 1 } } },
+          { $sort: { count: -1 } }
+        ]);
+        const fields = ['_id', 'count'];
+        const parser = new (require('json2csv').Parser)({ fields });
+        csv = parser.parse(departments);
+        filename = 'department_analysis.csv';
+      } else if (report.type === 'financial') {
+        const employees = await Employee.find({}, 'firstname lastname email department salary');
+        const fields = ['firstname', 'lastname', 'email', 'department', 'salary'];
+        const parser = new (require('json2csv').Parser)({ fields });
+        csv = parser.parse(employees);
+        filename = 'payroll_report.csv';
+      } else if (report.type === 'attendance') {
+        const employees = await Employee.find({}, 'firstname lastname email attendance');
+        const rows = [];
+        employees.forEach(emp => {
+          (emp.attendance || []).forEach(a => {
+            rows.push({
+              firstname: emp.firstname,
+              lastname: emp.lastname,
+              email: emp.email,
+              date: a.date,
+              status: a.status
+            });
+          });
+        });
+        const fields = ['firstname', 'lastname', 'email', 'date', 'status'];
+        const parser = new (require('json2csv').Parser)({ fields });
+        csv = parser.parse(rows);
+        filename = 'attendance_report.csv';
+      } else {
+        throw new Error('Unknown report type');
+      }
+      // Send email
+      let transporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: {
+          user: process.env.REPORT_EMAIL_USER || 'your-email@gmail.com',
+          pass: process.env.REPORT_EMAIL_PASS || 'your-app-password'
+        }
+      });
+      await transporter.sendMail({
+        from: process.env.REPORT_EMAIL_USER || 'your-email@gmail.com',
+        to: report.email,
+        subject: 'Your Scheduled Report',
+        text: 'Please find your scheduled report attached.',
+        attachments: [{ filename, content: csv }]
+      });
+      report.status = 'sent';
+      await report.save();
+    } catch (err) {
+      report.status = 'failed';
+      await report.save();
+    }
+  }
+};
+// Run every 1 minute
+cron.schedule('* * * * *', sendScheduledReports);
+// --- End Automated Scheduled Report Sender ---
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);

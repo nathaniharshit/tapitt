@@ -73,6 +73,12 @@ const Sidebar = ({ userRole, activeTab, setActiveTab }: SidebarProps) => {
       label: 'Settings',
       icon: Settings,
       roles: ['super_admin', 'admin', 'employee']
+    },
+    {
+      id: 'org-structure',
+      label: 'Org Structure',
+      icon: Building,
+      roles: ['super_admin', 'admin']
     }
   ];
 

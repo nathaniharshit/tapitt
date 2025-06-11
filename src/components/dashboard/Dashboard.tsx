@@ -11,6 +11,7 @@ import EmployeePersonalDetails from '../employees/EmployeePersonalDetails';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import AttendanceCalendar from '../attendance/AttendanceCalendar';
 import { Dialog } from '@/components/ui/dialog'; // If you use a dialog/modal component
+import OrgChart from './OrgChart';
 
 interface User {
   id: string;
@@ -1822,6 +1823,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                           </div>
                         </div>
                       ))}
+
                     </div>
                   )}
                 </CardContent>
@@ -2049,6 +2051,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                           </div>
                         </div>
                       ))}
+
                     </div>
                   )}
                 </CardContent>
@@ -2133,6 +2136,8 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
             </Card>
           </div>
         );
+      case 'org-structure':
+        return <OrgChart />;
       default:
         return <div className="p-8">Coming soon...</div>;
     }
