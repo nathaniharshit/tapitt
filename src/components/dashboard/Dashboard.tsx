@@ -908,6 +908,11 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
   // --- Payroll state and logic ---
   const [salary, setSalary] = useState<number | null>(null);
   const [salaryLoading, setSalaryLoading] = useState(false);
+  // Payslip month state
+  const [payslipMonth, setPayslipMonth] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  });
 
   // Fetch salary for the current user
   const fetchSalary = useCallback(async () => {
@@ -921,6 +926,26 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
     }
     setSalaryLoading(false);
   }, [user.id]);
+
+  // Payslip download handler
+  const handleDownloadPayslip = async () => {
+    try {
+      const response = await fetch(`http://localhost:5050/api/employees/${user.id}/payslip?month=${payslipMonth}`);
+      if (!response.ok) {
+        alert('Failed to download payslip.');
+        return;
+      }
+      const blob = await response.blob();
+      const link = document.createElement('a');
+      link.href = window.URL.createObjectURL(blob);
+      link.download = `payslip_${user.id}_${payslipMonth}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch {
+      alert('Failed to download payslip.');
+    }
+  };
 
   useEffect(() => {
     if (activeTab === 'payroll') fetchSalary();
@@ -1560,14 +1585,30 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                   <div className="mb-4">
                     <div className="flex justify-between mb-2">
                       <span className="font-semibold">Base Salary:</span>
-                      <span>₹{salary.toLocaleString()}</span>
+                      <span>₹{salary.toLocaleString("en-IN")}</span>
                     </div>
-                    {/* You can add more breakdown here if needed */}
                   </div>
                 ) : (
                   <div className="mb-4 text-red-600">Salary information not available.</div>
                 )}
-                <button className="px-4 py-2 bg-green-600 text-white rounded font-semibold">Download Payslip (PDF)</button>
+                <div className="mb-4 flex items-center gap-4">
+                  <label className="font-semibold text-foreground" htmlFor="payslip-month">Payslip Month:</label>
+                  <input
+                    id="payslip-month"
+                    type="month"
+                    value={payslipMonth}
+                    onChange={e => setPayslipMonth(e.target.value)}
+                    className="border rounded px-2 py-1 bg-background text-foreground dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700"
+                    max={new Date().toISOString().substring(0, 7)}
+                  />
+                  <button
+                    className="px-4 py-2 bg-green-600 text-white rounded font-semibold"
+                    onClick={handleDownloadPayslip}
+                    disabled={salary === null || !payslipMonth}
+                  >
+                    Download Payslip (PDF)
+                  </button>
+                </div>
               </CardContent>
             </Card>
             {/* ...existing code for payslip history... */}
@@ -2391,6 +2432,7 @@ function AwardsSection({ user, employees }) {
                     </button>
                   )}
                   {/* Admin/super_admin can see votes and announce winner */}
+                      className="ml-2 px-4 py-1 rounded bg-yellow-500 text-white font-semibold shadow"
                   {(user.role === 'admin' || user.role === 'super_admin') && !announced && (
                     <button
                       className="ml-2 px-4 py-1 rounded bg-yellow-500 text-white font-semibold shadow"

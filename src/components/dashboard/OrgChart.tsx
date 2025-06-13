@@ -1,184 +1,114 @@
-import { useState, useEffect } from 'react';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Plus } from 'lucide-react';
+import React, { useEffect, useState } from "react";
 
-interface OrgNode {
-  id: string;
-  name: string;
-  role: 'super_admin' | 'admin' | 'employee' | 'intern';
-  children?: OrgNode[];
+const MAX_EMPLOYEES_PER_ROW = 5;
+
+function buildOrgTree(employees) {
+  const superAdmins = employees.filter(e => e.role === "super_admin" || e.role === "superadmin");
+  const admins = employees.filter(e => e.role === "admin");
+  const departments = Array.from(new Set(employees.map(e => e.department).filter(Boolean)));
+  const deptMap: { [key: string]: Array<any> } = {};
+  employees.forEach(e => {
+    if (e.role === "employee" || e.role === "intern") {
+      if (!deptMap[e.department || "No Department"]) deptMap[e.department || "No Department"] = [];
+      deptMap[e.department || "No Department"].push(e);
+    }
+  });
+
+  return {
+    name: superAdmins.map(a => `${a.firstname} ${a.lastname}`).join(", ") || "Super Admin",
+    title: superAdmins.length > 0 && superAdmins[0].position ? superAdmins[0].position : "Super Admin",
+    children: admins.map(admin => ({
+      name: `${admin.firstname} ${admin.lastname}`,
+      title: admin.position || "Admin",
+      children: departments.map(dept => ({
+        name: dept,
+        title: "Department",
+        children: (deptMap[dept as string] || []).map(emp => ({
+          name: `${emp.firstname} ${emp.lastname}`,
+          title: emp.position || (emp.role.charAt(0).toUpperCase() + emp.role.slice(1))
+        }))
+      }))
+    }))
+  };
 }
 
-const OrgChart = () => {
-  const [structure, setStructure] = useState<OrgNode[]>([]);
-  const [selectedNode, setSelectedNode] = useState<OrgNode | null>(null);
-  const [newName, setNewName] = useState('');
-  const [newRole, setNewRole] = useState<'employee' | 'intern'>('employee');
+function OrgNode({ node, level = 0 }) {
+  // For department nodes, chunk children if too many employees
+  if (node.title === "Department" && node.children && node.children.length > MAX_EMPLOYEES_PER_ROW) {
+    const chunks = [];
+    for (let i = 0; i < node.children.length; i += MAX_EMPLOYEES_PER_ROW) {
+      chunks.push(node.children.slice(i, i + MAX_EMPLOYEES_PER_ROW));
+    }
+    return (
+      <div className="flex flex-col items-center relative">
+        <div className="bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg shadow px-4 py-2 mb-2 min-w-[120px] text-center">
+          <div className="font-bold text-blue-700 dark:text-blue-300">{node.name}</div>
+          <div className="text-xs text-gray-500 dark:text-gray-400">{node.title}</div>
+        </div>
+        <div className="flex flex-col gap-2">
+          {chunks.map((chunk, idx) => (
+            <div key={idx} className="flex flex-row gap-8 pt-4 z-10 justify-center">
+              {chunk.map((child, cidx) => (
+                <OrgNode key={cidx} node={child} level={level + 1} />
+              ))}
+              {idx === chunks.length - 1 && node.children.length > MAX_EMPLOYEES_PER_ROW * (idx + 1) && (
+                <div className="flex items-center justify-center text-xs text-muted-foreground">
+                  +{node.children.length - MAX_EMPLOYEES_PER_ROW * (idx + 1)} more
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
-  useEffect(() => {
-    fetch('http://localhost:5050/api/employees')
-      .then(res => res.json())
-      .then((employees) => {
-        // Group employees by role
-        const superAdmins = employees.filter((e: any) => e.role === 'super_admin' || e.role === 'superadmin');
-        const admins = employees.filter((e: any) => e.role === 'admin');
-        const employeesList = employees.filter((e: any) => e.role === 'employee');
-        const interns = employees.filter((e: any) => e.role === 'intern');
-
-        // Track assigned employees/interns
-        const assignedEmpIds = new Set<string>();
-        const assignedInternIds = new Set<string>();
-
-        // Build admin nodes with their employees/interns
-        const adminNodes = admins.map((admin: any) => {
-          const adminEmployees = employeesList.filter((emp: any) => emp.department && admin.department && emp.department === admin.department);
-          const adminInterns = interns.filter((intern: any) => intern.department && admin.department && intern.department === admin.department);
-          adminEmployees.forEach((emp: any) => assignedEmpIds.add(emp._id));
-          adminInterns.forEach((intern: any) => assignedInternIds.add(intern._id));
-          return {
-            id: admin._id,
-            name: `${admin.firstname} ${admin.lastname}`,
-            role: 'admin',
-            children: [
-              ...adminEmployees.map((emp: any) => ({
-                id: emp._id,
-                name: `${emp.firstname} ${emp.lastname}`,
-                role: 'employee',
-                children: []
-              })),
-              ...adminInterns.map((intern: any) => ({
-                id: intern._id,
-                name: `${intern.firstname} ${intern.lastname}`,
-                role: 'intern',
-                children: []
-              }))
-            ]
-          };
-        });
-
-        // Find unassigned employees/interns
-        const unassignedEmployees = employeesList.filter((emp: any) => !assignedEmpIds.has(emp._id));
-        const unassignedInterns = interns.filter((intern: any) => !assignedInternIds.has(intern._id));
-        let unassignedNode: OrgNode | null = null;
-        if (unassignedEmployees.length > 0 || unassignedInterns.length > 0) {
-          unassignedNode = {
-            id: 'unassigned',
-            name: 'Unassigned',
-            role: 'admin', // visually group as a peer to admins
-            children: [
-              ...unassignedEmployees.map((emp: any) => ({
-                id: emp._id,
-                name: `${emp.firstname} ${emp.lastname}`,
-                role: 'employee',
-                children: []
-              })),
-              ...unassignedInterns.map((intern: any) => ({
-                id: intern._id,
-                name: `${intern.firstname} ${intern.lastname}`,
-                role: 'intern',
-                children: []
-              }))
-            ]
-          };
-        }
-
-        // Attach admins (and unassigned) under each super admin
-        const superAdminNodes = superAdmins.map((sa: any) => ({
-          id: sa._id,
-          name: `${sa.firstname} ${sa.lastname}`,
-          role: 'super_admin',
-          children: [
-            ...adminNodes,
-            ...(unassignedNode ? [unassignedNode] : [])
-          ]
-        }));
-        setStructure(superAdminNodes);
-      });
-  }, []);
-
-  const handleAdd = (parent: OrgNode) => {
-    if (!newName) return;
-    const addNode = (nodes: OrgNode[]): OrgNode[] =>
-      nodes.map(node => {
-        if (node.id === parent.id) {
-          return {
-            ...node,
-            children: [
-              ...(node.children || []),
-              {
-                id: `${parent.id}-${Date.now()}`,
-                name: newName,
-                role: newRole,
-                children: []
-              }
-            ]
-          };
-        } else if (node.children) {
-          return { ...node, children: addNode(node.children) };
-        }
-        return node;
-      });
-    setStructure(addNode(structure));
-    setNewName('');
-    setSelectedNode(null);
-  };
-
-  // Only show add button for admin nodes
-  const renderNode = (node: OrgNode) => (
-    <div key={node.id} className="flex flex-col items-center">
-      <Card className="mb-2 p-2 min-w-[160px] text-center shadow-lg border-2 border-primary">
-        <CardHeader>
-          <CardTitle className="text-base font-bold text-primary capitalize">{node.name}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <span className={`text-xs font-semibold px-2 py-1 rounded ${node.role === 'super_admin' ? 'bg-blue-100 text-blue-800' : node.role === 'admin' ? 'bg-green-100 text-green-800' : node.role === 'employee' ? 'bg-yellow-100 text-yellow-800' : 'bg-purple-100 text-purple-800'}`}>{node.role.replace('_', ' ')}</span>
-          {node.role === 'admin' && (
-            <Button size="sm" className="mt-2" onClick={() => setSelectedNode(node)}>
-              <Plus className="h-4 w-4 mr-1" /> Add
-            </Button>
-          )}
-        </CardContent>
-      </Card>
+  return (
+    <div className="flex flex-col items-center relative">
+      <div className="bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg shadow px-4 py-2 mb-2 min-w-[120px] text-center">
+        <div className="font-bold text-blue-700 dark:text-blue-300">{node.name}</div>
+        <div className="text-xs text-gray-500 dark:text-gray-400">{node.title}</div>
+      </div>
       {node.children && node.children.length > 0 && (
-        <div className="flex space-x-8 border-t-2 border-dashed border-gray-300 pt-4">
-          {node.children.map(child => renderNode(child))}
+        <div className="flex flex-row justify-center items-start relative">
+          {/* Vertical line from parent to children */}
+          <div className="absolute left-1/2 top-0 w-0.5 h-4 bg-gray-400 dark:bg-gray-600 -translate-x-1/2 z-0" />
+          {/* Horizontal line connecting children */}
+          <div className="absolute top-4 left-0 right-0 h-0.5 bg-gray-400 dark:bg-gray-600 z-0" />
+          {/* Children nodes */}
+          <div className="flex flex-row gap-8 pt-4 z-10">
+            {node.children.map((child, idx) => (
+              <OrgNode key={idx} node={child} level={level + 1} />
+            ))}
+          </div>
         </div>
       )}
     </div>
   );
+}
+
+const OrgChart = () => {
+  const [employees, setEmployees] = useState([]);
+  const [orgTree, setOrgTree] = useState(null);
+
+  useEffect(() => {
+    fetch("http://localhost:5050/api/employees")
+      .then(res => res.json())
+      .then(data => {
+        setEmployees(data);
+        setOrgTree(buildOrgTree(data));
+      });
+  }, []);
 
   return (
-    <div className="p-6">
-      <h2 className="text-2xl font-bold mb-4">Organization Structure</h2>
-      <div className="flex flex-col items-center">
-        {structure.map(node => renderNode(node))}
+    <div className="p-8">
+      <h2 className="text-2xl font-bold mb-8 text-center">Organization Structure</h2>
+      <div className="flex justify-center overflow-x-auto">
+        {orgTree ? <OrgNode node={orgTree} /> : <div>Loading...</div>}
       </div>
-      {selectedNode && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-30 z-50">
-          <div className="bg-white p-6 rounded shadow-lg flex flex-col gap-4 min-w-[300px]">
-            <h3 className="font-semibold">Add under {selectedNode.name}</h3>
-            <input
-              className="border p-2 rounded"
-              placeholder="Name"
-              value={newName}
-              onChange={e => setNewName(e.target.value)}
-            />
-            <select
-              className="border p-2 rounded"
-              value={newRole}
-              onChange={e => setNewRole(e.target.value as 'employee' | 'intern')}
-            >
-              <option value="employee">Employee</option>
-              <option value="intern">Intern</option>
-            </select>
-            <div className="flex gap-2">
-              <Button onClick={() => handleAdd(selectedNode)}>Add</Button>
-              <Button variant="outline" onClick={() => setSelectedNode(null)}>Cancel</Button>
-            </div>
-          </div>
-        </div>
-      )}
+      <div className="mt-4 text-center text-xs text-muted-foreground">
+        <span>Tip: Scroll horizontally if the chart is wide. Large departments will show "+N more" if too many employees.</span>
+      </div>
     </div>
   );
 };

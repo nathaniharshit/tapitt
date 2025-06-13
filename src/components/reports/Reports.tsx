@@ -2,11 +2,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { BarChart3, Download, Calendar, TrendingUp } from 'lucide-react';
-import axios from 'axios';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { Select } from '@/components/ui/select';
 import { Bar } from 'react-chartjs-2';
 import { toast } from '@/components/ui/use-toast';
 import 'chart.js/auto';
@@ -72,35 +70,44 @@ const Reports = ({ userRole }: ReportsProps) => {
   const [filterEnd, setFilterEnd] = useState('');
   const [exportFormat, setExportFormat] = useState<'pdf' | 'csv'>('pdf');
   const [departmentsList, setDepartmentsList] = useState<string[]>([]);
+  // Add state for attendance month filter
+  const [attendanceMonth, setAttendanceMonth] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  });
   // --- Chart Data ---
   const [chartData, setChartData] = useState<any>(null);
 
   // Fetch departments for filter dropdown
   useEffect(() => {
-    axios.get('http://localhost:5050/api/employees').then(res => {
-      const arr = Array.isArray(res.data) ? res.data : [];
-      const depts = Array.from(new Set(arr.map((e: any) => String(e.department || '')).filter(Boolean)));
-      setDepartmentsList(depts);
-    });
+    fetch('http://localhost:5050/api/employees')
+      .then(res => res.json())
+      .then(data => {
+        const arr = Array.isArray(data) ? data : [];
+        const depts = Array.from(new Set(arr.map((e: any) => String(e.department || '')).filter(Boolean)));
+        setDepartmentsList(depts);
+      });
   }, []);
 
   // --- Visualization: Department Size Bar Chart ---
   useEffect(() => {
-    axios.get('http://localhost:5050/api/employees').then(res => {
-      const employees = Array.isArray(res.data) ? res.data : [];
-      const deptCounts: Record<string, number> = {};
-      employees.forEach((e: any) => {
-        if (e.department) deptCounts[e.department] = (deptCounts[e.department] || 0) + 1;
+    fetch('http://localhost:5050/api/employees')
+      .then(res => res.json())
+      .then(data => {
+        const employees = Array.isArray(data) ? data : [];
+        const deptCounts: Record<string, number> = {};
+        employees.forEach((e: any) => {
+          if (e.department) deptCounts[e.department] = (deptCounts[e.department] || 0) + 1;
+        });
+        setChartData({
+          labels: Object.keys(deptCounts),
+          datasets: [{
+            label: 'Employees per Department',
+            data: Object.values(deptCounts),
+            backgroundColor: 'rgba(59,130,246,0.5)',
+          }]
+        });
       });
-      setChartData({
-        labels: Object.keys(deptCounts),
-        datasets: [{
-          label: 'Employees per Department',
-          data: Object.values(deptCounts),
-          backgroundColor: 'rgba(59,130,246,0.5)',
-        }]
-      });
-    });
   }, []);
 
   // --- Filtered Download Handler ---
@@ -113,10 +120,13 @@ const Reports = ({ userRole }: ReportsProps) => {
       if (filterStart) params.start = filterStart;
       if (filterEnd) params.end = filterEnd;
       params.format = exportFormat;
-      const response = await axios.get(url, { params, responseType: 'blob' });
+      // If attendance report, add month param
+      if (type === 'attendance') {
+        params.month = attendanceMonth;
+      }
+      const response = await fetch(`${url}?${new URLSearchParams(params)}`, { method: 'GET' });
+      const blob = await response.blob();
       const ext = exportFormat === 'csv' ? 'csv' : 'pdf';
-      // Fix: convert response.data to correct BlobPart
-      const blob = new Blob([response.data instanceof Blob ? response.data : new Uint8Array(await response.data.arrayBuffer())], { type: exportFormat === 'csv' ? 'text/csv' : 'application/pdf' });
       const link = document.createElement('a');
       link.href = window.URL.createObjectURL(blob);
       link.download = `${type}_report_${new Date().toISOString().slice(0,10)}.${ext}`;
@@ -138,10 +148,16 @@ const Reports = ({ userRole }: ReportsProps) => {
   const handleSchedule = async () => {
     setLoading(true);
     try {
-      await axios.post('/api/reports/schedule', {
-        type: scheduleType,
-        date: scheduleDate,
-        email,
+      await fetch('http://localhost:5050/api/reports/schedule', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          type: scheduleType,
+          date: scheduleDate,
+          email,
+        })
       });
       alert('Report scheduled successfully!');
       setOpen(false);
@@ -170,8 +186,8 @@ const Reports = ({ userRole }: ReportsProps) => {
     const fetchStats = async () => {
       try {
         // Use full backend URL for dev
-        const empRes = await axios.get('http://localhost:5050/api/employees');
-        const employees = Array.isArray(empRes.data) ? empRes.data : [];
+        const empRes = await fetch('http://localhost:5050/api/employees');
+        const employees = await empRes.json(); // Only call .json() once!
         const totalEmployees = employees.length;
         const departments = new Set(employees.map((e: any) => e.department).filter(Boolean)).size;
         const totalPayroll = employees.reduce((sum: number, e: any) => sum + (e.salary || 0), 0);
@@ -192,10 +208,47 @@ const Reports = ({ userRole }: ReportsProps) => {
     fetchStats();
   }, []);
 
+  // Dark mode detection (safe for SSR)
+  const [darkMode, setDarkMode] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.matchMedia) {
+      const mq = window.matchMedia("(prefers-color-scheme: dark)");
+      setDarkMode(mq.matches);
+      const handler = (e: MediaQueryListEvent) => setDarkMode(e.matches);
+      if (mq.addEventListener) {
+        mq.addEventListener("change", handler);
+        return () => mq.removeEventListener("change", handler);
+      } else if (mq.addListener) {
+        // Safari/old browsers
+        mq.addListener(handler);
+        return () => mq.removeListener(handler);
+      }
+    }
+  }, []);
+
+  // Memoize chart options for Chart.js
+  const chartOptions = useMemo(() => ({
+    plugins: { legend: { display: false } },
+    scales: {
+      x: {
+        ticks: { color: darkMode ? '#d1d5db' : '#64748b' },
+        grid: { color: darkMode ? '#374151' : '#e5e7eb', borderColor: darkMode ? '#374151' : '#e5e7eb' }
+      },
+      y: {
+        ticks: { color: darkMode ? '#d1d5db' : '#64748b' },
+        grid: { color: darkMode ? '#374151' : '#e5e7eb', borderColor: darkMode ? '#374151' : '#e5e7eb' }
+      }
+    }
+  }), [darkMode]);
+
   return (
     <div className="space-y-6">
+      <Button onClick={() => setOpen(true)} className="mb-4">
+        Schedule Report
+      </Button>
       {/* Filters */}
-      <Card>
+      <Card className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-foreground">
         <CardHeader>
           <CardTitle className="flex items-center space-x-2">
             <BarChart3 className="h-5 w-5 text-blue-600" />
@@ -206,25 +259,36 @@ const Reports = ({ userRole }: ReportsProps) => {
           <div className="flex flex-wrap gap-4 items-end">
             <div>
               <label className="block text-xs font-semibold mb-1">Department</label>
-              <select className="border rounded px-2 py-1" value={filterDept} onChange={e => setFilterDept(e.target.value)}>
+              <select className="border rounded px-2 py-1 bg-background text-foreground dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700" value={filterDept} onChange={e => setFilterDept(e.target.value)}>
                 <option value="">All</option>
                 {departmentsList.map(d => <option key={d} value={d}>{d}</option>)}
               </select>
             </div>
             <div>
               <label className="block text-xs font-semibold mb-1">Start Date</label>
-              <Input type="date" value={filterStart} onChange={e => setFilterStart(e.target.value)} />
+              <Input type="date" value={filterStart} onChange={e => setFilterStart(e.target.value)} className="bg-background text-foreground dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700" />
             </div>
             <div>
               <label className="block text-xs font-semibold mb-1">End Date</label>
-              <Input type="date" value={filterEnd} onChange={e => setFilterEnd(e.target.value)} />
+              <Input type="date" value={filterEnd} onChange={e => setFilterEnd(e.target.value)} className="bg-background text-foreground dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700" />
             </div>
             <div>
               <label className="block text-xs font-semibold mb-1">Export Format</label>
-              <select className="border rounded px-2 py-1" value={exportFormat} onChange={e => setExportFormat(e.target.value as 'pdf' | 'csv')}>
+              <select className="border rounded px-2 py-1 bg-background text-foreground dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700" value={exportFormat} onChange={e => setExportFormat(e.target.value as 'pdf' | 'csv')}>
                 <option value="pdf">PDF</option>
                 <option value="csv">CSV</option>
               </select>
+            </div>
+            {/* Show month picker only for Attendance Report */}
+            <div>
+              <label className="block text-xs font-semibold mb-1">Attendance Month</label>
+              <Input
+                type="month"
+                value={attendanceMonth}
+                onChange={e => setAttendanceMonth(e.target.value)}
+                className="bg-background text-foreground dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700"
+                max={new Date().toISOString().substring(0, 7)}
+              />
             </div>
           </div>
         </CardContent>
@@ -232,7 +296,7 @@ const Reports = ({ userRole }: ReportsProps) => {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {reports.map((report, index) => (
-          <Card key={index} className={!report.available ? 'opacity-50' : ''}>
+          <Card key={index} className={`border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-foreground ${!report.available ? 'opacity-50' : ''}`}>
             <CardHeader>
               <CardTitle className="flex items-center justify-between">
                 <span>{report.title}</span>
@@ -242,9 +306,9 @@ const Reports = ({ userRole }: ReportsProps) => {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-gray-600 mb-4">{report.description}</p>
+              <p className="text-gray-600 dark:text-gray-300 mb-4">{report.description}</p>
               <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-500">
+                <span className="text-sm text-gray-500 dark:text-gray-400">
                   Last generated: {report.lastGenerated}
                 </span>
                 <Button 
@@ -264,7 +328,7 @@ const Reports = ({ userRole }: ReportsProps) => {
       </div>
 
       {/* Visualization/Charts */}
-      <Card>
+      <Card className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-foreground">
         <CardHeader>
           <CardTitle className="flex items-center space-x-2">
             <BarChart3 className="h-5 w-5 text-blue-600" />
@@ -273,14 +337,14 @@ const Reports = ({ userRole }: ReportsProps) => {
         </CardHeader>
         <CardContent>
           {chartData ? (
-            <Bar data={chartData} options={{ plugins: { legend: { display: false } } }} />
+            <Bar data={chartData} options={chartOptions} />
           ) : (
             <div className="text-muted-foreground">Loading chart...</div>
           )}
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-foreground">
         <CardHeader>
           <CardTitle className="flex items-center space-x-2">
             <TrendingUp className="h-5 w-5 text-green-600" />
@@ -289,39 +353,43 @@ const Reports = ({ userRole }: ReportsProps) => {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="text-center p-4 bg-blue-50 rounded-lg">
-              <div className="text-2xl font-bold text-blue-600">{stats.totalEmployees}</div>
-              <div className="text-sm text-gray-600">Total Employees</div>
+            <div className="text-center p-4 bg-blue-50 dark:bg-blue-900 rounded-lg">
+              <div className="text-2xl font-bold text-blue-600 dark:text-blue-200">{stats.totalEmployees}</div>
+              <div className="text-sm text-gray-600 dark:text-gray-300">Total Employees</div>
             </div>
-            <div className="text-center p-4 bg-green-50 rounded-lg">
-              <div className="text-2xl font-bold text-green-600">{stats.attendanceRate}%</div>
-              <div className="text-sm text-gray-600">Attendance Rate</div>
+            <div className="text-center p-4 bg-green-50 dark:bg-green-900 rounded-lg">
+              <div className="text-2xl font-bold text-green-600 dark:text-green-200">{stats.attendanceRate}%</div>
+              <div className="text-sm text-gray-600 dark:text-gray-300">Attendance Rate</div>
             </div>
-            <div className="text-center p-4 bg-yellow-50 rounded-lg">
-              <div className="text-2xl font-bold text-yellow-600">{stats.departments}</div>
-              <div className="text-sm text-gray-600">Departments</div>
+            <div className="text-center p-4 bg-yellow-50 dark:bg-yellow-900 rounded-lg">
+              <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-200">{stats.departments}</div>
+              <div className="text-sm text-gray-600 dark:text-gray-300">Departments</div>
             </div>
-            <div className="text-center p-4 bg-purple-50 rounded-lg">
-              <div className="text-2xl font-bold text-purple-600">₹{stats.totalPayroll.toLocaleString()}</div>
-              <div className="text-sm text-gray-600">Total Payroll</div>
+            <div className="text-center p-4 bg-purple-50 dark:bg-purple-900 rounded-lg">
+              <div className="text-2xl font-bold text-purple-600 dark:text-purple-200">₹{stats.totalPayroll.toLocaleString("en-IN")}</div>
+              <div className="text-sm text-gray-600 dark:text-gray-300">Total Payroll</div>
             </div>
           </div>
         </CardContent>
       </Card>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent>
+        <DialogContent className="bg-white dark:bg-gray-900 text-foreground">
           <DialogHeader>
             <DialogTitle>Schedule a Report</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            <Select value={scheduleType} onValueChange={setScheduleType}>
+            <select
+              value={scheduleType}
+              onChange={e => setScheduleType(e.target.value)}
+              className="border rounded px-2 py-1 w-full bg-background text-foreground dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700"
+            >
               {REPORT_OPTIONS.map(opt => (
                 <option key={opt.value} value={opt.value}>{opt.label}</option>
               ))}
-            </Select>
-            <Input type="datetime-local" value={scheduleDate} onChange={e => setScheduleDate(e.target.value)} />
-            <Input type="email" placeholder="Recipient Email" value={email} onChange={e => setEmail(e.target.value)} />
+            </select>
+            <Input type="datetime-local" value={scheduleDate} onChange={e => setScheduleDate(e.target.value)} className="bg-background text-foreground dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700" />
+            <Input type="email" placeholder="Recipient Email" value={email} onChange={e => setEmail(e.target.value)} className="bg-background text-foreground dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700" />
           </div>
           <DialogFooter>
             <Button onClick={handleSchedule} disabled={loading}>{loading ? 'Scheduling...' : 'Schedule'}</Button>

@@ -786,14 +786,16 @@ const { Parser } = require('json2csv');
 // Helper to generate a table in PDF
 function addTable(doc, headers, rows) {
   doc.font('Helvetica-Bold').fontSize(12);
+  // Print headers
   headers.forEach((header, i) => {
-    doc.text(header, 50 + i * 120, doc.y, { width: 120, continued: i < headers.length - 1 });
+    doc.text(header, { continued: i < headers.length - 1, width: 120 });
   });
   doc.moveDown();
   doc.font('Helvetica').fontSize(10);
+  // Print rows
   rows.forEach(row => {
     headers.forEach((header, i) => {
-      doc.text(row[header] !== undefined ? String(row[header]) : '', 50 + i * 120, doc.y, { width: 120, continued: i < headers.length - 1 });
+      doc.text(row[header] !== undefined ? String(row[header]) : '', { continued: i < headers.length - 1, width: 120 });
     });
     doc.moveDown();
   });
@@ -808,12 +810,25 @@ app.get('/api/reports/employee-summary', async (req, res) => {
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', 'attachment; filename=employee_summary.pdf');
     doc.pipe(res);
+
+    // Handle PDFKit errors
+    doc.on('error', (err) => {
+      if (!res.headersSent) {
+        res.status(500).end('Failed to generate PDF');
+      }
+    });
+
     doc.fontSize(16).text('Employee Summary Report', { align: 'center' });
     doc.moveDown();
-    addTable(doc, headers, employees.map(e => e.toObject()));
+    const rows = employees.length > 0
+      ? employees.map(e => e.toObject())
+      : [{ firstname: 'N/A', lastname: 'N/A', email: 'N/A', department: 'N/A', status: 'N/A', role: 'N/A' }];
+    addTable(doc, headers, rows);
     doc.end();
   } catch (err) {
-    res.status(500).json({ error: 'Failed to generate employee summary report' });
+    if (!res.headersSent) {
+      res.status(500).end('Failed to generate employee summary report');
+    }
   }
 });
 
@@ -829,12 +844,21 @@ app.get('/api/reports/department-analysis', async (req, res) => {
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', 'attachment; filename=department_analysis.pdf');
     doc.pipe(res);
+
+    doc.on('error', (err) => {
+      if (!res.headersSent) {
+        res.status(500).end('Failed to generate PDF');
+      }
+    });
+
     doc.fontSize(16).text('Department Analysis Report', { align: 'center' });
     doc.moveDown();
     addTable(doc, headers, departments);
     doc.end();
   } catch (err) {
-    res.status(500).json({ error: 'Failed to generate department analysis report' });
+    if (!res.headersSent) {
+      res.status(500).end('Failed to generate department analysis report');
+    }
   }
 });
 
@@ -847,42 +871,138 @@ app.get('/api/reports/payroll', async (req, res) => {
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', 'attachment; filename=payroll_report.pdf');
     doc.pipe(res);
+
+    doc.on('error', (err) => {
+      if (!res.headersSent) {
+        res.status(500).end('Failed to generate PDF');
+      }
+    });
+
     doc.fontSize(16).text('Payroll Report', { align: 'center' });
     doc.moveDown();
     addTable(doc, headers, employees.map(e => e.toObject()));
     doc.end();
   } catch (err) {
-    res.status(500).json({ error: 'Failed to generate payroll report' });
+    if (!res.headersSent) {
+      res.status(500).end('Failed to generate payroll report');
+    }
   }
 });
 
 // Download Attendance Report (PDF)
 app.get('/api/reports/attendance', async (req, res) => {
   try {
+    // Get month from query param, default to current month
+    let { month } = req.query;
+    if (!month) {
+      const now = new Date();
+      month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    }
+    // month is in format YYYY-MM
     const employees = await Employee.find({}, 'firstname lastname email attendance');
     const rows = [];
     employees.forEach(emp => {
       (emp.attendance || []).forEach(a => {
-        rows.push({
-          firstname: emp.firstname,
-          lastname: emp.lastname,
-          email: emp.email,
-          date: a.date,
-          status: a.status
-        });
+        // Only include attendance for the selected month
+        if (a.date && a.date.startsWith(month)) {
+          rows.push({
+            firstname: String(emp.firstname || ''),
+            lastname: String(emp.lastname || ''),
+            email: String(emp.email || ''),
+            date: String(a.date || ''),
+            status: String(a.status || '')
+          });
+        }
       });
     });
+    // Debug: log how many rows are being added
+    console.log(`[Attendance Report] Month: ${month}, Rows: ${rows.length}`);
     const headers = ['firstname', 'lastname', 'email', 'date', 'status'];
     const doc = new PDFDocument();
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', 'attachment; filename=attendance_report.pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=attendance_report_${month}.pdf`);
     doc.pipe(res);
-    doc.fontSize(16).text('Attendance Report', { align: 'center' });
+
+    doc.on('error', (err) => {
+      if (!res.headersSent) {
+        res.status(500).end('Failed to generate PDF');
+      }
+    });
+
+    doc.fontSize(16).text(`Attendance Report (${month})`, { align: 'center' });
     doc.moveDown();
-    addTable(doc, headers, rows);
+    addTable(
+      doc,
+      headers,
+      rows.length > 0
+        ? rows
+        : [{
+            firstname: 'No data',
+            lastname: '-',
+            email: '-',
+            date: '-',
+            status: '-'
+          }]
+    );
     doc.end();
   } catch (err) {
-    res.status(500).json({ error: 'Failed to generate attendance report' });
+    if (!res.headersSent) {
+      res.status(500).end('Failed to generate attendance report');
+    }
+  }
+});
+
+// Download Payslip PDF for an employee for a given month
+app.get('/api/employees/:id/payslip', async (req, res) => {
+  try {
+    const { id } = req.params;
+    let { month } = req.query;
+    if (!month) {
+      const now = new Date();
+      month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    }
+    const emp = await Employee.findById(id);
+    if (!emp) return res.status(404).json({ error: 'Employee not found' });
+
+    const doc = new PDFDocument();
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=payslip_${emp.firstname}_${emp.lastname}_${month}.pdf`);
+    doc.pipe(res);
+
+    doc.on('error', (err) => {
+      if (!res.headersSent) {
+        res.status(500).end('Failed to generate payslip PDF');
+      }
+    });
+
+    // Payslip Header
+    doc.fontSize(18).text('Payslip', { align: 'center' });
+    doc.moveDown();
+    doc.fontSize(12).text(`Month: ${month}`, { align: 'right' });
+    doc.moveDown();
+
+    // Employee Details
+    doc.fontSize(12).text(`Name: ${emp.firstname} ${emp.lastname}`);
+    doc.text(`Email: ${emp.email}`);
+    doc.text(`Department: ${emp.department || '-'}`);
+    doc.text(`Position: ${emp.position || '-'}`);
+    doc.text(`Employee ID: ${emp._id}`);
+    doc.moveDown();
+
+    // Salary Details
+    doc.fontSize(14).text('Salary Details', { underline: true });
+    doc.moveDown(0.5);
+    doc.fontSize(12).text(`Base Salary: ₹${(emp.salary || 0).toLocaleString('en-IN')}`);
+    // Add more breakdown if needed (e.g., allowances, deductions)
+    doc.moveDown();
+
+    // Footer
+    doc.text('This is a system generated payslip.', { align: 'center', fontSize: 10 });
+    doc.end();
+  } catch (err) {
+    if (!res.headersSent) {
+      res.status(500).end('Failed to generate payslip');
+    }
   }
 });
 // --- End Reports API ---
