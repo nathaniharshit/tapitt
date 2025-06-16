@@ -90,26 +90,6 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
         { label: 'Deactivate Users', onClick: () => setShowDeactivateDialog(true) }
       ]
     },
-    {
-      title: 'System Settings',
-      description: 'Configure system-wide settings',
-      icon: Settings,
-      actions: [
-        { label: 'Email Settings', onClick: () => {} },
-        { label: 'Security Policies', onClick: () => {} },
-        { label: 'Backup Configuration', onClick: () => {} }
-      ]
-    },
-    {
-      title: 'Database Management',
-      description: 'Manage database operations',
-      icon: Database,
-      actions: [
-        { label: 'View Logs', onClick: () => {} },
-        { label: 'Run Backups', onClick: () => {} },
-        { label: 'Data Export', onClick: () => {} }
-      ]
-    }
   ];
 
   // Group employees by role
