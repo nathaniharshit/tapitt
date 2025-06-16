@@ -188,6 +188,12 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
     setAttendanceMarking(prev => ({ ...prev, [empId]: false }));
   };
 
+  // Helper: check if a date is a weekend (Saturday or Sunday)
+  const isWeekend = (dateStr: string) => {
+    const d = new Date(dateStr);
+    return d.getDay() === 0 || d.getDay() === 6;
+  };
+
   // Helper: get attendance status for a given employee and date
   const getAttendanceStatus = (emp: any) => {
     if (!Array.isArray(emp.attendance)) return null;
@@ -200,29 +206,44 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
     (emp: any) => !emp.status || emp.status === 'active'
   );
 
+  // Helper: calculate attendance stats excluding weekends
+  const getAttendanceStats = () => {
+    // Get all unique attendance dates (excluding weekends)
+    const allDatesSet = new Set<string>();
+    allEmployees.forEach(emp => {
+      if (Array.isArray(emp.attendance)) {
+        emp.attendance.forEach((a: any) => {
+          if (a.date && !isWeekend(a.date)) allDatesSet.add(a.date);
+        });
+      }
+    });
+    const allDates = Array.from(allDatesSet);
+    // For each employee, count present days (excluding weekends)
+    let totalPresent = 0;
+    let totalPossible = 0;
+    allEmployees.forEach(emp => {
+      if (Array.isArray(emp.attendance)) {
+        // ...existing code...
+      }
+    });
+    // ...existing code...
+  };
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center space-x-3">
-        <Shield className="h-8 w-8 text-red-600" />
-        <div>
-          <h2 className="text-2xl font-bold text-foreground">Super Admin Panel</h2>
-          <p className="text-muted-foreground">Manage system-wide settings and user permissions</p>
-        </div>
-      </div>
-
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {adminFeatures.map((feature, index) => {
           const Icon = feature.icon;
           return (
             <Card key={index}>
-              <CardHeader>
-                <CardTitle className="flex items-center space-x-2">
-                  <Icon className="h-5 w-5 text-blue-600" />
-                  <span>{feature.title}</span>
-                </CardTitle>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle>{feature.title}</CardTitle>
+                  <p className="text-sm text-muted-foreground">{feature.description}</p>
+                </div>
+                <Icon className="h-8 w-8 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <p className="text-gray-600 mb-4">{feature.description}</p>
                 <div className="space-y-2">
                   {feature.actions.map((action, actionIndex) => (
                     <Button

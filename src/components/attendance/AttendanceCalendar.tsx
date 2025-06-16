@@ -12,6 +12,11 @@ function getDaysInMonth(year: number, month: number) {
   return new Date(year, month + 1, 0).getDate();
 }
 
+function isWeekend(dateStr: string) {
+  const d = new Date(dateStr);
+  return d.getDay() === 0 || d.getDay() === 6;
+}
+
 const AttendanceCalendar: React.FC<AttendanceCalendarProps> = ({ user, month }) => {
   const [attendance, setAttendance] = useState<{ date: string; status: string }[]>([]);
 
@@ -48,12 +53,20 @@ const AttendanceCalendar: React.FC<AttendanceCalendarProps> = ({ user, month }) 
   }
   if (week.length) weeks.push([...week, ...Array(7 - week.length).fill(null)]);
 
-  // Attendance percentage calculation for the month
+  // Attendance percentage calculation for the month (excluding weekends)
   const monthStr = `${year}-${String(monthIdx + 1).padStart(2, '0')}`;
-  const monthAttendance = attendance.filter(a => a.date.startsWith(monthStr));
+  // Get all days in the month that are NOT weekends
+  const allDays: string[] = [];
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateStr = `${year}-${String(monthIdx + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    if (!isWeekend(dateStr)) allDays.push(dateStr);
+  }
+  // Only consider attendance for non-weekend days
+  const monthAttendance = attendance.filter(a => a.date.startsWith(monthStr) && !isWeekend(a.date));
   const presentDays = monthAttendance.filter(a => a.status === 'present').length;
   const markedDays = monthAttendance.length;
-  const attendancePercent = markedDays > 0 ? Math.round((presentDays / markedDays) * 100) : 0;
+  const totalWorkingDays = allDays.length;
+  const attendancePercent = totalWorkingDays > 0 ? Math.round((presentDays / totalWorkingDays) * 100) : 0;
 
   return (
     <div className="bg-card rounded-lg p-4 shadow-md">
@@ -62,10 +75,10 @@ const AttendanceCalendar: React.FC<AttendanceCalendarProps> = ({ user, month }) 
       </div>
       <div className="mb-2 text-center">
         <span className="font-semibold text-blue-700 dark:text-blue-300">
-          Attendance: {markedDays > 0 ? `${attendancePercent}%` : 'N/A'}
+          Attendance: {totalWorkingDays > 0 ? `${attendancePercent}%` : 'N/A'}
         </span>
         <span className="ml-2 text-xs text-muted-foreground">
-          ({presentDays} present / {markedDays} marked)
+          ({presentDays} present / {totalWorkingDays} working days)
         </span>
       </div>
       <div className="grid grid-cols-7 gap-1 text-center text-xs font-bold mb-1">
@@ -83,8 +96,11 @@ const AttendanceCalendar: React.FC<AttendanceCalendarProps> = ({ user, month }) 
             if (!d) return <div key={j} className="bg-muted rounded p-2" />;
             const dateStr = `${year}-${String(monthIdx + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
             const att = attendance.find(a => a.date === dateStr);
+            const isHoliday = isWeekend(dateStr);
             let cellClass = "rounded p-2 font-bold text-center ";
-            if (att?.status === 'present') {
+            if (isHoliday) {
+              cellClass += "bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-200";
+            } else if (att?.status === 'present') {
               cellClass += "bg-green-200 dark:bg-green-900 text-green-900 dark:text-green-200";
             } else if (att?.status === 'absent') {
               cellClass += "bg-red-100 dark:bg-red-900 text-red-600 dark:text-red-200";
@@ -106,6 +122,8 @@ const AttendanceCalendar: React.FC<AttendanceCalendarProps> = ({ user, month }) 
         <span className="text-muted-foreground">Absent</span>
         <span className="inline-block w-3 h-3 bg-muted rounded-full mr-1 align-middle border border-gray-300 dark:border-gray-700" /> 
         <span className="text-muted-foreground">Not Marked</span>
+        <span className="inline-block w-3 h-3 bg-yellow-100 dark:bg-yellow-900 rounded-full mr-1 align-middle border border-yellow-400 dark:border-yellow-700" /> 
+        <span className="text-muted-foreground">Holiday</span>
       </div>
     </div>
   );

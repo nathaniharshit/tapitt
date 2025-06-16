@@ -908,43 +908,89 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
   // --- Payroll state and logic ---
   const [salary, setSalary] = useState<number | null>(null);
   const [salaryLoading, setSalaryLoading] = useState(false);
-  // Payslip month state
   const [payslipMonth, setPayslipMonth] = useState(() => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   });
+  const [payslipError, setPayslipError] = useState<string | null>(null);
+  const [payrollDetails, setPayrollDetails] = useState<any>(null);
 
-  // Fetch salary for the current user
+  // Helper: get recent N months in YYYY-MM format
+  function getRecentMonths(count = 6) {
+    const months = [];
+    const now = new Date();
+    for (let i = 0; i < count; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+    }
+    return months;
+  }
+  // Helper: format YYYY-MM to "Month YYYY"
+  function formatMonth(monthStr: string) {
+    const [year, month] = monthStr.split('-');
+    return `${new Date(Number(year), Number(month) - 1).toLocaleString('default', { month: 'long' })} ${year}`;
+  }
+
+  // Fetch salary and payroll details for the current user from backend for all roles
   const fetchSalary = useCallback(async () => {
     setSalaryLoading(true);
     try {
-      const res = await fetch(`http://localhost:5050/api/employees/${user.id}/salary`);
+      // Fetch salary from dedicated endpoint
+      const res = await fetch(`http://localhost:5050/api/employees/${userId}/salary`);
+      if (!res.ok) {
+        setSalary(null);
+        setPayrollDetails(null);
+        setSalaryLoading(false);
+        return;
+      }
       const data = await res.json();
-      setSalary(data.salary ?? null);
+      setSalary(typeof data.salary === "number" ? data.salary : (data.salary && !isNaN(Number(data.salary)) ? Number(data.salary) : null));
+      // Optionally fetch other details from /api/employees/:id if needed
+      const empRes = await fetch(`http://localhost:5050/api/employees/${userId}`);
+      const empData = empRes.ok ? await empRes.json() : {};
+      setPayrollDetails({
+        salary: typeof data.salary === "number" ? data.salary : (data.salary && !isNaN(Number(data.salary)) ? Number(data.salary) : null),
+        position: empData.position ?? '',
+        department: empData.department ?? '',
+        startDate: empData.startDate ?? '',
+        allowances: empData.allowances ?? [],
+        deductions: empData.deductions ?? [],
+      });
     } catch {
       setSalary(null);
+      setPayrollDetails(null);
     }
     setSalaryLoading(false);
-  }, [user.id]);
+  }, [userId]);
 
-  // Payslip download handler
-  const handleDownloadPayslip = async () => {
+  useEffect(() => {
+    if (activeTab === 'payroll') fetchSalary();
+  }, [activeTab, fetchSalary]);
+
+  // Payslip download handler for any month
+  const handleDownloadPayslipForMonth = async (month: string) => {
+    setPayslipError(null);
     try {
-      const response = await fetch(`http://localhost:5050/api/employees/${user.id}/payslip?month=${payslipMonth}`);
+      const response = await fetch(`http://localhost:5050/api/employees/${user.id}/payslip?month=${month}`);
       if (!response.ok) {
-        alert('Failed to download payslip.');
+        setPayslipError('Failed to download payslip.');
         return;
       }
       const blob = await response.blob();
       const link = document.createElement('a');
       link.href = window.URL.createObjectURL(blob);
-      link.download = `payslip_${user.id}_${payslipMonth}.pdf`;
+      link.download = `payslip_${user.id}_${month}.pdf`;
       document.body.appendChild(link);
       link.click();
       link.remove();
     } catch {
-      alert('Failed to download payslip.');
+      setPayslipError('Failed to download payslip.');
     }
+  };
+
+  // Payslip download handler for selected month
+  const handleDownloadPayslip = async () => {
+    await handleDownloadPayslipForMonth(payslipMonth);
   };
 
   useEffect(() => {
@@ -955,17 +1001,13 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
   const renderContent = () => {
     switch (activeTab) {
       case 'dashboard':
-        // Calculate time since clock-in
-        let timesheetDisplay = '0h 0m 0s';
-        if (clockInTime) {
-          const totalMs = elapsedMs;
-          const hours = Math.floor(totalMs / (1000 * 60 * 60));
-          const minutes = Math.floor((totalMs / (1000 * 60)) % 60);
-          const seconds = Math.floor((totalMs / 1000) % 60);
-          timesheetDisplay = `${hours}h ${minutes}m ${seconds}s`;
-        }
+        const timesheetDisplay = isClockedIn
+          ? new Date(elapsedMs).toISOString().substr(11, 8)
+          : clockInTime && clockOutTime
+          ? new Date(new Date(clockOutTime).getTime() - new Date(clockInTime).getTime()).toISOString().substr(11, 8)
+          : '00:00:00';
         return (
-          <div className="p-4 md:p-8">
+          <div className="p-8">
             <h2 className="text-2xl font-bold mb-6">Welcome to your Dashboard</h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
               {/* Timesheet Widget */}
@@ -1581,15 +1623,56 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
               <CardContent>
                 {salaryLoading ? (
                   <div>Loading salary...</div>
-                ) : salary !== null ? (
+                ) : (
                   <div className="mb-4">
                     <div className="flex justify-between mb-2">
                       <span className="font-semibold">Base Salary:</span>
-                      <span>₹{salary.toLocaleString("en-IN")}</span>
+                      <span>
+                        {salary !== null && salary !== undefined
+                          ? `₹${salary.toLocaleString("en-IN")}`
+                          : <span className="text-red-600">Not available</span>
+                        }
+                      </span>
                     </div>
+                    {payrollDetails?.position && (
+                      <div className="flex justify-between mb-2">
+                        <span className="font-semibold">Position:</span>
+                        <span>{payrollDetails.position}</span>
+                      </div>
+                    )}
+                    {payrollDetails?.department && (
+                      <div className="flex justify-between mb-2">
+                        <span className="font-semibold">Department:</span>
+                        <span>{payrollDetails.department}</span>
+                      </div>
+                    )}
+                    {payrollDetails?.startDate && (
+                      <div className="flex justify-between mb-2">
+                        <span className="font-semibold">Start Date:</span>
+                        <span>{payrollDetails.startDate}</span>
+                      </div>
+                    )}
+                    {Array.isArray(payrollDetails?.allowances) && payrollDetails.allowances.length > 0 && (
+                      <div className="mb-2">
+                        <span className="font-semibold">Allowances:</span>
+                        <ul className="ml-4 list-disc">
+                          {payrollDetails.allowances.map((a: any, idx: number) => (
+                            <li key={idx}>{a.name}: ₹{a.amount}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {Array.isArray(payrollDetails?.deductions) && payrollDetails.deductions.length > 0 && (
+                      <div className="mb-2">
+                        <span className="font-semibold">Deductions:</span>
+                        <ul className="ml-4 list-disc">
+                          {payrollDetails.deductions.map((d: any, idx: number) => (
+                            <li key={idx}>{d.name}: ₹{d.amount}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                   </div>
-                ) : (
-                  <div className="mb-4 text-red-600">Salary information not available.</div>
                 )}
                 <div className="mb-4 flex items-center gap-4">
                   <label className="font-semibold text-foreground" htmlFor="payslip-month">Payslip Month:</label>
@@ -1609,27 +1692,28 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                     Download Payslip (PDF)
                   </button>
                 </div>
+                {payslipError && (
+                  <div className="text-red-600 text-sm mb-2">{payslipError}</div>
+                )}
               </CardContent>
             </Card>
-            {/* ...existing code for payslip history... */}
             <Card className="max-w-2xl mx-auto bg-card text-foreground">
               <CardHeader>
                 <CardTitle>Payslip History</CardTitle>
               </CardHeader>
               <CardContent>
                 <ul className="divide-y divide-border">
-                  <li className="py-2 flex justify-between">
-                    <span>May 2025</span>
-                    <button className="text-blue-600 dark:text-blue-400 underline">Download</button>
-                  </li>
-                  <li className="py-2 flex justify-between">
-                    <span>April 2025</span>
-                    <button className="text-blue-600 dark:text-blue-400 underline">Download</button>
-                  </li>
-                  <li className="py-2 flex justify-between">
-                    <span>March 2025</span>
-                    <button className="text-blue-600 dark:text-blue-400 underline">Download</button>
-                  </li>
+                  {getRecentMonths().map(month => (
+                    <li key={month} className="py-2 flex justify-between">
+                      <span>{formatMonth(month)}</span>
+                      <button
+                        className="text-blue-600 dark:text-blue-400 underline"
+                        onClick={() => handleDownloadPayslipForMonth(month)}
+                      >
+                        Download
+                      </button>
+                    </li>
+                  ))}
                 </ul>
               </CardContent>
             </Card>
