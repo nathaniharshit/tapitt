@@ -997,6 +997,95 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
     if (activeTab === 'payroll') fetchSalary();
   }, [activeTab, fetchSalary]);
 
+  // --- Remote Work state and logic ---
+  const [isRemoteToday, setIsRemoteToday] = useState(false);
+  const [remoteCount, setRemoteCount] = useState(0);
+
+  // Mark remote for today
+  const handleMarkRemote = async () => {
+    if (isRemoteToday) return; // Prevent marking again for that day
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      await fetch(`http://localhost:5050/api/employees/${userId}/remote`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date: today })
+      });
+      setIsRemoteToday(true);
+      fetchRemoteCount();
+    } catch {
+      // Optionally show error
+    }
+  };
+
+  // Fetch remote count for today
+  const fetchRemoteCount = useCallback(async () => {
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      const res = await fetch(`http://localhost:5050/api/employees?remoteDate=${today}`);
+      const data = await res.json();
+      const count = Array.isArray(data)
+        ? data.filter(e => Array.isArray(e.remoteWork) && e.remoteWork.includes(today)).length
+        : 0;
+      setRemoteCount(count);
+    } catch {
+      setRemoteCount(0);
+    }
+  }, []);
+
+  // Fetch if current user is remote today
+  useEffect(() => {
+    const checkRemote = async () => {
+      try {
+        const today = new Date().toISOString().slice(0, 10);
+        const res = await fetch(`http://localhost:5050/api/employees/${userId}`);
+        const emp = await res.json();
+        setIsRemoteToday(Array.isArray(emp.remoteWork) && emp.remoteWork.includes(today));
+      } catch {
+        setIsRemoteToday(false);
+      }
+    };
+    if (userId) checkRemote();
+  }, [userId]);
+
+  useEffect(() => {
+    fetchRemoteCount();
+  }, [fetchRemoteCount]);
+
+  // --- On Leave Today state and logic ---
+  const [onLeaveToday, setOnLeaveToday] = useState(0);
+
+  // Fetch count of employees on leave today
+  const fetchOnLeaveToday = useCallback(async () => {
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      const res = await fetch('http://localhost:5050/api/leaves');
+      const data = await res.json();
+      // Count leaves that are approved and today is between from and to (inclusive)
+      const count = Array.isArray(data)
+        ? data.filter(l =>
+            l.status === 'Approved' &&
+            l.from <= today &&
+            l.to >= today
+          ).length
+        : 0;
+      setOnLeaveToday(count);
+    } catch {
+      setOnLeaveToday(0);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchOnLeaveToday();
+  }, [fetchOnLeaveToday]);
+
+  // Also refresh on leave approval/rejection
+  useEffect(() => {
+    if (activeTab === 'leaves') {
+      fetchOnLeaveToday();
+    }
+  }, [activeTab, leaves, fetchOnLeaveToday]);
+
   // Unified dashboard for all roles
   const renderContent = () => {
     switch (activeTab) {
@@ -1042,7 +1131,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                   <CardTitle>On Leave Today</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-bold text-yellow-600 mb-2">2</div>
+                  <div className="text-3xl font-bold text-yellow-600 mb-2">{onLeaveToday}</div>
                   <div className="text-muted-foreground">Employees on leave</div>
                 </CardContent>
               </Card>
@@ -1086,8 +1175,17 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                   <CardTitle>Working Remotely</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-bold text-green-600 mb-2">4</div>
-                  <div className="text-muted-foreground">Employees remote today</div>
+                  <div className="text-3xl font-bold text-green-600 mb-2">{remoteCount}</div>
+                  <div className="text-muted-foreground mb-2">Employees remote today</div>
+                  {user.role === 'employee' && (
+                    <button
+                      className="px-4 py-2 rounded bg-blue-600 text-white font-semibold disabled:opacity-50"
+                      onClick={handleMarkRemote}
+                      disabled={isRemoteToday}
+                    >
+                      {isRemoteToday ? "Marked as Remote" : "Mark as Working Remotely"}
+                    </button>
+                  )}
                 </CardContent>
               </Card>
               {/* Attendance Widget */}

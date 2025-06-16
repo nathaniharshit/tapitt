@@ -59,6 +59,13 @@ const employeeSchema = new mongoose.Schema({
   ]
 }, { timestamps: true });
 
+// Add remoteWork field to employee schema if not present
+if (!employeeSchema.paths.remoteWork) {
+  employeeSchema.add({
+    remoteWork: [{ type: String }] // Array of YYYY-MM-DD strings
+  });
+}
+
 const Employee = mongoose.model('Employee', employeeSchema);
 
 // --- Project Model ---
@@ -579,6 +586,10 @@ app.get('/api/employees', async (req, res) => {
       const roles = req.query.roles.split(',');
       filter.role = { $in: roles };
     }
+    // Support ?remoteDate=YYYY-MM-DD to filter employees working remotely on that date
+    if (req.query.remoteDate) {
+      filter.remoteWork = req.query.remoteDate;
+    }
     // Explicitly select createdAt and updatedAt fields
     const employees = await Employee.find(filter).select('+createdAt +updatedAt');
     res.json(employees);
@@ -716,6 +727,25 @@ app.post('/api/employees/:id/clockout', async (req, res) => {
     res.json({ message: 'Clocked out', clockOutTime: employee.clockOutTime });
   } catch (err) {
     res.status(400).json({ error: err.message });
+  }
+});
+
+// Mark employee as working remotely for a date
+app.post('/api/employees/:id/remote', async (req, res) => {
+  try {
+    const { date } = req.body;
+    if (!date) return res.status(400).json({ error: 'Date is required.' });
+    const emp = await Employee.findById(req.params.id);
+    if (!emp) return res.status(404).json({ error: 'Employee not found' });
+    if (!Array.isArray(emp.remoteWork)) emp.remoteWork = [];
+    if (emp.remoteWork.includes(date)) {
+      return res.status(400).json({ error: 'Already marked as remote for this date.' });
+    }
+    emp.remoteWork.push(date);
+    await emp.save();
+    res.json({ message: 'Marked as remote', remoteWork: emp.remoteWork });
+  } catch (err) {
+    res.status(400).json({ error: 'Failed to mark remote' });
   }
 });
 

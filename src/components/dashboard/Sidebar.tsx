@@ -23,6 +23,7 @@ interface SidebarProps {
 }
 
 const Sidebar = ({ userRole, activeTab, setActiveTab }: SidebarProps) => {
+  // Move Org Structure below Employees
   const menuItems = [
     {
       id: 'dashboard',
@@ -43,6 +44,12 @@ const Sidebar = ({ userRole, activeTab, setActiveTab }: SidebarProps) => {
       label: 'Employees',
       icon: Users,
       roles: ['super_admin', 'admin', 'employee']
+    },
+    {
+      id: 'org-structure',
+      label: 'Org Structure',
+      icon: Building,
+      roles: ['super_admin', 'admin']
     },
     {
       id: 'personal-details',
@@ -73,12 +80,6 @@ const Sidebar = ({ userRole, activeTab, setActiveTab }: SidebarProps) => {
       label: 'Settings',
       icon: Settings,
       roles: ['super_admin', 'admin', 'employee']
-    },
-    {
-      id: 'org-structure',
-      label: 'Org Structure',
-      icon: Building,
-      roles: ['super_admin', 'admin']
     }
   ];
 
