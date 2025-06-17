@@ -1022,6 +1022,13 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
 
   // Fetch if current user is remote today (on mount and when userId changes)
   useEffect(() => {
+    // Only check remote status for employees
+    if (user.role !== 'employee') {
+      setIsRemoteToday(false);
+      setRemoteRequestPending(false);
+      setRemoteError('');
+      return;
+    }
     const checkRemote = async () => {
       try {
         setRemoteError('');
@@ -1047,7 +1054,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
       }
     };
     if (userId) checkRemote();
-  }, [userId]);
+  }, [userId, user.role]);
 
   // Mark remote for today (employee: send request, not direct mark)
   const handleMarkRemote = async () => {
@@ -1062,7 +1069,14 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
         body: JSON.stringify({ date: today })
       });
       if (!res.ok) {
-        setRemoteError('Failed to request remote work');
+        let errorMsg = 'Failed to request remote work';
+        try {
+          const errorData = await res.json();
+          if (errorData && errorData.error) {
+            errorMsg = errorData.error;
+          }
+        } catch {}
+        setRemoteError(errorMsg);
         return;
       }
       setRemoteRequestPending(true);
@@ -1078,18 +1092,22 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
       const today = new Date().toISOString().slice(0, 10);
       const res = await fetch(`http://localhost:5050/api/employees?remoteDate=${today}`);
       const data = await res.json();
-      const filtered = Array.isArray(data)
-        ? data.filter(e => Array.isArray(e.remoteWork) && e.remoteWork.includes(today))
-        : [];
-      setRemoteCount(filtered.length);
-      if (user.role === 'admin' || user.role === 'super_admin') {
-        setRemoteEmployees(filtered);
-        // Fetch pending remote requests
-        // Assume backend returns employees with remoteRequests including today
-        const pending = Array.isArray(data)
-          ? data.filter(e => Array.isArray(e.remoteRequests) && e.remoteRequests.includes(today))
+      if (data && typeof data === 'object' && 'remoteEmployees' in data && 'pendingRemoteRequests' in data) {
+        setRemoteCount(Array.isArray(data.remoteEmployees) ? data.remoteEmployees.length : 0);
+        if (user.role === 'admin' || user.role === 'super_admin') {
+          setRemoteEmployees(Array.isArray(data.remoteEmployees) ? data.remoteEmployees : []);
+          setPendingRemoteRequests(Array.isArray(data.pendingRemoteRequests) ? data.pendingRemoteRequests : []);
+        }
+      } else {
+        // fallback for old response shape
+        const filtered = Array.isArray(data)
+          ? data.filter(e => Array.isArray(e.remoteWork) && e.remoteWork.includes(today))
           : [];
-        setPendingRemoteRequests(pending);
+        setRemoteCount(filtered.length);
+        if (user.role === 'admin' || user.role === 'super_admin') {
+          setRemoteEmployees(filtered);
+          setPendingRemoteRequests([]);
+        }
       }
     } catch {
       setRemoteCount(0);
@@ -1290,7 +1308,8 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                               {emp.firstname} {emp.lastname} ({emp.department || 'N/A'})
                             </li>
                           ))
-                        )}
+                       
+                       ) }
                       </ul>
                       {/* Pending remote requests */}
                       <div className="mt-4">
@@ -1325,6 +1344,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                       </div>
                     </>
                   )}
+                  {/* Button for employee to mark remote */}
                   {user.role === 'employee' && (
                     <button
                       className="px-4 py-2 rounded bg-blue-600 text-white font-semibold disabled:opacity-50"
@@ -2842,4 +2862,3 @@ function AwardsSection({ user, employees }) {
 }
 
 export default Dashboard;
-

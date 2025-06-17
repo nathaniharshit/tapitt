@@ -644,7 +644,20 @@ app.get('/api/employees', async (req, res) => {
     }
     // Support ?remoteDate=YYYY-MM-DD to filter employees working remotely on that date
     if (req.query.remoteDate) {
-      filter.remoteWork = req.query.remoteDate;
+      const remoteDate = req.query.remoteDate;
+      // Find employees who are remote or have a pending remote request for the date
+      const remoteEmployees = await Employee.find({
+        ...filter,
+        remoteWork: remoteDate
+      }).select('+createdAt +updatedAt');
+      const pendingRemoteRequests = await Employee.find({
+        ...filter,
+        remoteWorkRequests: remoteDate
+      }).select('+createdAt +updatedAt');
+      return res.json({
+        remoteEmployees,
+        pendingRemoteRequests
+      });
     }
     // Explicitly select createdAt and updatedAt fields
     const employees = await Employee.find(filter).select('+createdAt +updatedAt');
