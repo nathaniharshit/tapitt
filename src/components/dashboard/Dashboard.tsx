@@ -565,110 +565,6 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
     };
     fetchAndSetUserId();
   }, [user.email]);
-
-  // Only allow clock in/out if userId is a valid MongoDB ObjectId
-  const isValidObjectId = (id: string) => /^[a-f\d]{24}$/i.test(id);
-
-  const handleClockIn = async () => {
-    if (!isValidObjectId(userId)) {
-      alert('Invalid user ID. Please contact admin.');
-      return;
-    }
-    try {
-      const resp = await fetch(`http://localhost:5050/api/employees/${userId}/clockin`, { method: 'POST' });
-      const data = await resp.json();
-      if (data.error) {
-        alert('Clock In failed: ' + data.error);
-        return;
-      }
-      // Fetch latest clock-in/out times from backend
-      const res = await fetch(`http://localhost:5050/api/employees`);
-      const employees = await res.json();
-      const emp = employees.find((e: any) => e.email === user.email);
-      if (emp) {
-        setIsClockedIn(!!emp.clockInTime && !emp.clockOutTime);
-        setClockInTime(emp.clockInTime || null);
-        setClockOutTime(emp.clockOutTime || null);
-      }
-    } catch (err) {
-      alert('Clock In failed. Please try again.');
-    }
-  };
-  const handleClockOut = async () => {
-    if (!isValidObjectId(userId)) {
-      alert('Invalid user ID. Please contact admin.');
-      return;
-    }
-    try {
-      const resp = await fetch(`http://localhost:5050/api/employees/${userId}/clockout`, { method: 'POST' });
-      const data = await resp.json();
-      if (data.error) {
-        alert('Clock Out failed: ' + data.error);
-        return;
-      }
-      // Fetch latest clock-in/out times from backend
-      const res = await fetch(`http://localhost:5050/api/employees`);
-      const employees = await res.json();
-      const emp = employees.find((e: any) => e.email === user.email);
-      if (emp) {
-        setIsClockedIn(!!emp.clockInTime && !emp.clockOutTime);
-        setClockInTime(emp.clockInTime || null);
-        setClockOutTime(emp.clockOutTime || null);
-      }
-    } catch (err) {
-      alert('Clock Out failed. Please try again.');
-    }
-  };
-
-  // Update timesheet every minute if clocked in
-  useEffect(() => {
-    if (!isClockedIn || !clockInTime) return;
-    const interval = setInterval(() => {
-      // Force re-render to update the timesheet
-      setClockInTime((prev) => prev ? prev : clockInTime);
-    }, 60000); // 1 minute
-    return () => clearInterval(interval);
-  }, [isClockedIn, clockInTime]);
-
-  // Update timesheet every second if clocked in
-  useEffect(() => {
-    if (!isClockedIn || !clockInTime) return;
-    const interval = setInterval(() => {
-      setClockInTime((prev) => prev ? prev : clockInTime);
-    }, 1000); // 1 second
-    return () => clearInterval(interval);
-  }, [isClockedIn, clockInTime]);
-
-  useEffect(() => {
-    if (isClockedIn && clockInTime && !clockOutTime) {
-      // Calculate initial elapsed time
-      const clockInDate = new Date(clockInTime);
-      setElapsedMs(Date.now() - clockInDate.getTime());
-      // Start interval
-      const interval = setInterval(() => {
-        setElapsedMs(Date.now() - clockInDate.getTime());
-      }, 1000);
-      return () => clearInterval(interval);
-    } else if (clockInTime && clockOutTime) {
-      // If clocked out, show total duration
-      const clockInDate = new Date(clockInTime);
-      const clockOutDate = new Date(clockOutTime);
-      setElapsedMs(Math.max(0, clockOutDate.getTime() - clockInDate.getTime()));
-    } else {
-      setElapsedMs(0);
-    }
-  }, [isClockedIn, clockInTime, clockOutTime]);
-
-  // Defensive: If clockInTime is in the future, reset to 0
-  useEffect(() => {
-    if (isClockedIn && clockInTime && !clockOutTime) {
-      const clockInDate = new Date(clockInTime);
-      if (Date.now() < clockInDate.getTime()) {
-        setElapsedMs(0);
-      }
-    }
-  }, [isClockedIn, clockInTime, clockOutTime]);
-
   // Fetch employees
   const fetchEmployees = async () => {
     const res = await fetch('http://localhost:5050/api/employees');
@@ -1123,32 +1019,42 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
           <div className="p-8">
             <h2 className="text-2xl font-bold mb-6">Welcome to your Dashboard</h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-              {/* Timesheet Widget */}
-              <Card className="col-span-1">
+              {user.role === 'employee' && activeTab === 'dashboard' && (
+              <Card className="mb-6">
                 <CardHeader>
-                  <CardTitle>Timesheet</CardTitle>
+                  <CardTitle>Work Session Tracker</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-4xl font-bold text-blue-600 mb-2">{timesheetDisplay}</div>
-                  <div className="text-muted-foreground mb-2">{isClockedIn ? 'Clocked in' : clockInTime && clockOutTime ? 'Clocked out' : 'Not clocked in yet'}</div>
-                  <div className="flex space-x-2">
+                  <div className="flex gap-4 mb-4">
                     <button
                       className="px-4 py-2 rounded bg-green-600 text-white font-semibold disabled:opacity-50"
-                      onClick={handleClockIn}
-                      disabled={isClockedIn}
+                      onClick={handleStartSession}
+                      disabled={sessionActive}
                     >
-                      Clock In
+                      Start Session
                     </button>
                     <button
                       className="px-4 py-2 rounded bg-red-600 text-white font-semibold disabled:opacity-50"
-                      onClick={handleClockOut}
-                      disabled={!isClockedIn}
+                      onClick={handleEndSession}
+                      disabled={!sessionActive}
                     >
-                      Clock Out
+                      End Session
                     </button>
+                  </div>
+                  <div>
+                    <h4 className="font-semibold mb-2">Today's Sessions</h4>
+                    <ul className="list-disc ml-6">
+                      {workSessions.length === 0 && <li>No sessions yet.</li>}
+                      {workSessions.map((s, i) => (
+                        <li key={i}>
+                          Start: {new Date(s.start).toLocaleTimeString()} {s.end ? `| End: ${new Date(s.end).toLocaleTimeString()}` : '| In Progress'}
+                        </li>
+                      ))}
+                    </ul>
                   </div>
                 </CardContent>
               </Card>
+            )}
               {/* On Leave Today Widget */}
               <Card className="col-span-1">
                 <CardHeader>
@@ -1344,42 +1250,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                 </CardContent>
               </Card>
             </div>
-            {user.role === 'employee' && activeTab === 'dashboard' && (
-              <Card className="mb-6">
-                <CardHeader>
-                  <CardTitle>Work Session Tracker</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex gap-4 mb-4">
-                    <button
-                      className="px-4 py-2 rounded bg-green-600 text-white font-semibold disabled:opacity-50"
-                      onClick={handleStartSession}
-                      disabled={sessionActive}
-                    >
-                      Start Session
-                    </button>
-                    <button
-                      className="px-4 py-2 rounded bg-red-600 text-white font-semibold disabled:opacity-50"
-                      onClick={handleEndSession}
-                      disabled={!sessionActive}
-                    >
-                      End Session
-                    </button>
-                  </div>
-                  <div>
-                    <h4 className="font-semibold mb-2">Today's Sessions</h4>
-                    <ul className="list-disc ml-6">
-                      {workSessions.length === 0 && <li>No sessions yet.</li>}
-                      {workSessions.map((s, i) => (
-                        <li key={i}>
-                          Start: {new Date(s.start).toLocaleTimeString()} {s.end ? `| End: ${new Date(s.end).toLocaleTimeString()}` : '| In Progress'}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
+            
           </div>
         );
       case 'personal-details':
