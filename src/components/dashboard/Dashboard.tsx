@@ -1224,32 +1224,43 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
               {(user.role === 'admin' || user.role === 'super_admin') && (
                   <Card className="col-span-1 mb-4">
                   <CardHeader>
-                 <CardTitle>Add Holiday</CardTitle>
-                 </CardHeader>
+                    <CardTitle className="text-gray-900 dark:text-gray-100">Add Holiday</CardTitle>
+                  </CardHeader>
                   <CardContent>
-                 <form onSubmit={handleAddHoliday} className="space-y-2">
-                <input
-                 type="text"
-                name="name"
-                  value={holidayForm.name}
-                 onChange={handleHolidayFormChange}
-                  placeholder="Holiday Name"
-               className="border rounded px-2 py-1 w-full"
-                 required
-                   />
-                 <input
-                 type="date"
-                  name="date"
-                 value={holidayForm.date}
-                  onChange={handleHolidayFormChange}
-                 className="border rounded px-2 py-1 w-full"
-                  required
-                 />
-                 <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded">Add Holiday</button>
-                   {holidayMsg && <div className="text-xs text-red-500 mt-1">{holidayMsg}</div>}
-                </form>
-               </CardContent>
-               </Card>
+                    <form onSubmit={handleAddHoliday} className="space-y-3">
+                      <input
+                        type="text"
+                        name="name"
+                        value={holidayForm.name}
+                        onChange={handleHolidayFormChange}
+                        placeholder="Holiday Name"
+                        className="w-full px-3 py-2 border rounded-md bg-white text-black border-gray-300 
+                                   dark:bg-gray-800 dark:text-white dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        required
+                      />
+                      <input
+                        type="date"
+                        name="date"
+                        value={holidayForm.date}
+                        onChange={handleHolidayFormChange}
+                        className="w-full px-3 py-2 border rounded-md bg-white text-black border-gray-300 
+                                   dark:bg-gray-800 dark:text-white dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        required
+                      />
+                      <button
+                        type="submit"
+                        className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 
+                                   dark:bg-blue-500 dark:hover:bg-blue-600 transition-colors"
+                      >
+                        Add Holiday
+                      </button>
+                      {holidayMsg && (
+                        <div className="text-xs mt-1 text-red-600 dark:text-red-400">{holidayMsg}</div>
+                      )}
+                    </form>
+                  </CardContent>
+                </Card>
+                           
                  )}
               <Card className="col-span-1">
               <CardHeader>
@@ -1264,7 +1275,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                  <li key={i}>{h.name} - {new Date(h.date).toLocaleDateString()}</li>
                   ))
                     )}
-                    </ul>2
+                    </ul>
                    </CardContent>
               </Card>
             </div>
