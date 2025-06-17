@@ -1013,7 +1013,12 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
   // --- Remote Work state and logic ---
   const [isRemoteToday, setIsRemoteToday] = useState(false);
   const [remoteCount, setRemoteCount] = useState(0);
-  const [remoteError, setRemoteError] = useState(''); // Add error/debug state
+  const [remoteError, setRemoteError] = useState('');
+  const [remoteEmployees, setRemoteEmployees] = useState<any[]>([]);
+  // Pending remote requests (for admin/super_admin)
+  const [pendingRemoteRequests, setPendingRemoteRequests] = useState<any[]>([]);
+  // For employee: track if request is pending
+  const [remoteRequestPending, setRemoteRequestPending] = useState(false);
 
   // Fetch if current user is remote today (on mount and when userId changes)
   useEffect(() => {
@@ -1028,92 +1033,105 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
           return;
         }
         const emp = await res.json();
-        console.log('Remote check:', emp.remoteWork, today);
         setIsRemoteToday(Array.isArray(emp.remoteWork) && emp.remoteWork.includes(today));
+        // Check if there's a pending remote request for this user
+        if (Array.isArray(emp.remoteRequests)) {
+          setRemoteRequestPending(emp.remoteRequests.includes(today));
+        } else {
+          setRemoteRequestPending(false);
+        }
       } catch (err) {
         setRemoteError('Error checking remote status');
         setIsRemoteToday(false);
+        setRemoteRequestPending(false);
       }
     };
     if (userId) checkRemote();
   }, [userId]);
 
-  // Mark remote for today
+  // Mark remote for today (employee: send request, not direct mark)
   const handleMarkRemote = async () => {
-    if (isRemoteToday) return; // Prevent marking again for that day
+    if (isRemoteToday || remoteRequestPending) return;
     try {
       setRemoteError('');
       const today = new Date().toISOString().slice(0, 10);
-      const res = await fetch(`http://localhost:5050/api/employees/${userId}/remote`, {
+      // Send a remote work request (not direct mark)
+      const res = await fetch(`http://localhost:5050/api/employees/${userId}/remote-request`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ date: today })
       });
       if (!res.ok) {
-        setRemoteError('Failed to mark remote');
+        setRemoteError('Failed to request remote work');
         return;
       }
-      setIsRemoteToday(true);
-      fetchRemoteCount();
+      setRemoteRequestPending(true);
     } catch {
-      setRemoteError('Error marking remote');
+      setRemoteError('Error requesting remote work');
     }
   };
 
-  // Fetch remote count for today
+  // Fetch remote count for today and remote employees for admin/super_admin
+  // Also fetch pending remote requests for admin/super_admin
   const fetchRemoteCount = useCallback(async () => {
     try {
       const today = new Date().toISOString().slice(0, 10);
       const res = await fetch(`http://localhost:5050/api/employees?remoteDate=${today}`);
       const data = await res.json();
-      const count = Array.isArray(data)
-        ? data.filter(e => Array.isArray(e.remoteWork) && e.remoteWork.includes(today)).length
-        : 0;
-      setRemoteCount(count);
+      const filtered = Array.isArray(data)
+        ? data.filter(e => Array.isArray(e.remoteWork) && e.remoteWork.includes(today))
+        : [];
+      setRemoteCount(filtered.length);
+      if (user.role === 'admin' || user.role === 'super_admin') {
+        setRemoteEmployees(filtered);
+        // Fetch pending remote requests
+        // Assume backend returns employees with remoteRequests including today
+        const pending = Array.isArray(data)
+          ? data.filter(e => Array.isArray(e.remoteRequests) && e.remoteRequests.includes(today))
+          : [];
+        setPendingRemoteRequests(pending);
+      }
     } catch {
       setRemoteCount(0);
+      setRemoteEmployees([]);
+      setPendingRemoteRequests([]);
     }
-  }, []);
+  }, [user.role]);
 
   useEffect(() => {
     fetchRemoteCount();
   }, [fetchRemoteCount]);
 
-  // --- On Leave Today state and logic ---
-  const [onLeaveToday, setOnLeaveToday] = useState(0);
-
-  // Fetch count of employees on leave today
-  const fetchOnLeaveToday = useCallback(async () => {
+  // Admin: Accept remote request
+  const handleAcceptRemoteRequest = async (employeeId: string) => {
     try {
       const today = new Date().toISOString().slice(0, 10);
-      const res = await fetch('http://localhost:5050/api/leaves');
-      const data = await res.json();
-      // Count leaves that are approved and today is between from and to (inclusive)
-      const count = Array.isArray(data)
-        ? data.filter(l =>
-            l.status === 'Approved' &&
-            l.from <= today &&
-            l.to >= today
-          ).length
-        : 0;
-      setOnLeaveToday(count);
-    } catch {
-      setOnLeaveToday(0);
-    }
-  }, []);
+      const res = await fetch(`http://localhost:5050/api/employees/${employeeId}/remote-approve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date: today })
+      });
+      if (res.ok) {
+        fetchRemoteCount();
+      }
+    } catch {}
+  };
 
-  useEffect(() => {
-    fetchOnLeaveToday();
-  }, [fetchOnLeaveToday]);
+  // Admin: Cancel remote request
+  const handleCancelRemoteRequest = async (employeeId: string) => {
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      const res = await fetch(`http://localhost:5050/api/employees/${employeeId}/remote-cancel`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date: today })
+      });
+      if (res.ok) {
+        fetchRemoteCount();
+      }
+    } catch {}
+  };
 
-  // Also refresh on leave approval/rejection
-  useEffect(() => {
-    if (activeTab === 'leaves') {
-      fetchOnLeaveToday();
-    }
-  }, [activeTab, leaves, fetchOnLeaveToday]);
-
-  // Unified dashboard for all roles
   const renderContent = () => {
     switch (activeTab) {
       case 'dashboard':
@@ -1122,6 +1140,18 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
           : clockInTime && clockOutTime
           ? new Date(new Date(clockOutTime).getTime() - new Date(clockInTime).getTime()).toISOString().substr(11, 8)
           : '00:00:00';
+
+        // Calculate number of employees on leave today
+        const todayStr = new Date().toISOString().slice(0, 10);
+        const onLeaveToday = employees.filter(emp =>
+          Array.isArray(emp.leaves) &&
+          emp.leaves.some(l =>
+            l.status === 'Approved' &&
+            l.from <= todayStr &&
+            l.to >= todayStr
+          )
+        ).length;
+
         return (
           <div className="p-8">
             <h2 className="text-2xl font-bold mb-6">Welcome to your Dashboard</h2>
@@ -1216,7 +1246,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                  <li key={i}>{h.name} - {new Date(h.date).toLocaleDateString()}</li>
                   ))
                     )}
-                    </ul>
+                    </ul>2
                    </CardContent>
               </Card>
             </div>
@@ -1248,14 +1278,69 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                 <CardContent>
                   <div className="text-3xl font-bold text-green-600 mb-2">{remoteCount}</div>
                   <div className="text-muted-foreground mb-2">Employees remote today</div>
+                  {/* Show list for admin/super_admin */}
+                  {(user.role === 'admin' || user.role === 'super_admin') && (
+                    <>
+                      <ul className="text-muted-foreground text-sm mb-2 max-h-32 overflow-y-auto">
+                        {remoteEmployees.length === 0 ? (
+                          <li>No one is working remotely today.</li>
+                        ) : (
+                          remoteEmployees.map(emp => (
+                            <li key={emp._id}>
+                              {emp.firstname} {emp.lastname} ({emp.department || 'N/A'})
+                            </li>
+                          ))
+                        )}
+                      </ul>
+                      {/* Pending remote requests */}
+                      <div className="mt-4">
+                        <div className="font-semibold mb-1">Pending Remote Requests</div>
+                        <ul className="text-sm max-h-32 overflow-y-auto">
+                          {pendingRemoteRequests.length === 0 ? (
+                            <li className="text-muted-foreground">No pending requests.</li>
+                          ) : (
+                            pendingRemoteRequests.map(emp => (
+                              <li key={emp._id} className="flex items-center justify-between mb-1">
+                                <span>
+                                  {emp.firstname} {emp.lastname} ({emp.department || 'N/A'})
+                                </span>
+                                <span className="flex gap-2">
+                                  <button
+                                    className="px-2 py-1 bg-green-600 text-white rounded text-xs font-semibold"
+                                    onClick={() => handleAcceptRemoteRequest(emp._id)}
+                                  >
+                                    Accept
+                                  </button>
+                                  <button
+                                    className="px-2 py-1 bg-red-600 text-white rounded text-xs font-semibold"
+                                    onClick={() => handleCancelRemoteRequest(emp._id)}
+                                  >
+                                    Cancel
+                                  </button>
+                                </span>
+                              </li>
+                            ))
+                         ) }
+                        </ul>
+                      </div>
+                    </>
+                  )}
                   {user.role === 'employee' && (
                     <button
                       className="px-4 py-2 rounded bg-blue-600 text-white font-semibold disabled:opacity-50"
                       onClick={handleMarkRemote}
-                      disabled={isRemoteToday}
+                      disabled={isRemoteToday || remoteRequestPending}
                     >
-                      {isRemoteToday ? "Marked as Remote" : "Mark as Working Remotely"}
+                      {isRemoteToday
+                        ? "Marked as Remote"
+                        : remoteRequestPending
+                        ? "Pending Approval"
+                        : "Mark as Working Remotely"}
                     </button>
+                  )}
+                  {/* Optionally show error */}
+                  {remoteError && (
+                    <div className="text-xs text-red-600 mt-2">{remoteError}</div>
                   )}
                 </CardContent>
               </Card>
@@ -1411,7 +1496,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
         return <Settings userRole={user.role} userId={userId} />;
       case 'attendance':
         if (user.role === 'employee') {
-          // Use top-level state for month selection
+          // Employee: show personal attendance calendar
           return (
             <div className="p-8">
               <Card className="max-w-2xl mx-auto">
@@ -1755,6 +1840,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
             </Card>
             {/* Confirmation dialog */}
             {confirmDeleteLeaveId && (
+
               <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
                 <div className="bg-card rounded-lg shadow-lg max-w-xs w-full p-6 relative">
                   <div className="mb-4 text-center">
@@ -2485,7 +2571,6 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
   );
 }
 
-
 function AwardsSection({ user, employees }) {
   const [awards, setAwards] = useState<any[]>([]);
   const [awardName, setAwardName] = useState('Employee of the Month');
@@ -2757,3 +2842,4 @@ function AwardsSection({ user, employees }) {
 }
 
 export default Dashboard;
+

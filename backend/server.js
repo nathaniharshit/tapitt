@@ -117,6 +117,13 @@ if (!employeeSchema.paths.remoteWork) {
   });
 }
 
+// Add remoteWorkRequests field to employee schema if not present
+if (!employeeSchema.paths.remoteWorkRequests) {
+  employeeSchema.add({
+    remoteWorkRequests: [{ type: String }] // Array of YYYY-MM-DD strings (pending requests)
+  });
+}
+
 const Employee = mongoose.model('Employee', employeeSchema);
 
 // --- Project Model ---
@@ -783,18 +790,86 @@ app.post('/api/employees/:id/clockout', async (req, res) => {
 app.post('/api/employees/:id/remote', async (req, res) => {
   try {
     const { date } = req.body;
-    if (!date) return res.status(400).json({ error: 'Date is required.' });
+    console.log('Mark remote request:', { id: req.params.id, date });
+    if (!date) {
+      console.error('Remote mark failed: Date is required.');
+      return res.status(400).json({ error: 'Date is required.' });
+    }
     const emp = await Employee.findById(req.params.id);
-    if (!emp) return res.status(404).json({ error: 'Employee not found' });
+    if (!emp) {
+      console.error('Remote mark failed: Employee not found for id', req.params.id);
+      return res.status(404).json({ error: 'Employee not found' });
+    }
     if (!Array.isArray(emp.remoteWork)) emp.remoteWork = [];
     if (emp.remoteWork.includes(date)) {
+      console.warn('Remote mark failed: Already marked as remote for this date.', { id: req.params.id, date });
       return res.status(400).json({ error: 'Already marked as remote for this date.' });
     }
     emp.remoteWork.push(date);
     await emp.save();
+    console.log('Remote mark success:', { id: req.params.id, date });
     res.json({ message: 'Marked as remote', remoteWork: emp.remoteWork });
   } catch (err) {
-    res.status(400).json({ error: 'Failed to mark remote' });
+    console.error('Remote mark failed:', err);
+    res.status(400).json({ error: 'Failed to mark remote', details: err.message });
+  }
+});
+
+// Employee requests remote work for a date (creates a pending request)
+app.post('/api/employees/:id/remote-request', async (req, res) => {
+  try {
+    const { date } = req.body;
+    if (!date) return res.status(400).json({ error: 'Date is required.' });
+    const emp = await Employee.findById(req.params.id);
+    if (!emp) return res.status(404).json({ error: 'Employee not found' });
+    if (!Array.isArray(emp.remoteWorkRequests)) emp.remoteWorkRequests = [];
+    if (emp.remoteWorkRequests.includes(date) || (Array.isArray(emp.remoteWork) && emp.remoteWork.includes(date))) {
+      return res.status(400).json({ error: 'Already requested or marked as remote for this date.' });
+    }
+    emp.remoteWorkRequests.push(date);
+    await emp.save();
+    res.json({ message: 'Remote work request submitted', remoteWorkRequests: emp.remoteWorkRequests });
+  } catch (err) {
+    res.status(400).json({ error: 'Failed to request remote work', details: err.message });
+  }
+});
+
+// Admin approves remote work request (moves date from requests to remoteWork)
+app.post('/api/employees/:id/remote-approve', async (req, res) => {
+  try {
+    const { date } = req.body;
+    if (!date) return res.status(400).json({ error: 'Date is required.' });
+    const emp = await Employee.findById(req.params.id);
+    if (!emp) return res.status(404).json({ error: 'Employee not found' });
+    if (!Array.isArray(emp.remoteWorkRequests) || !emp.remoteWorkRequests.includes(date)) {
+      return res.status(400).json({ error: 'No such remote work request.' });
+    }
+    // Remove from requests, add to remoteWork
+    emp.remoteWorkRequests = emp.remoteWorkRequests.filter(d => d !== date);
+    if (!Array.isArray(emp.remoteWork)) emp.remoteWork = [];
+    emp.remoteWork.push(date);
+    await emp.save();
+    res.json({ message: 'Remote work approved', remoteWork: emp.remoteWork });
+  } catch (err) {
+    res.status(400).json({ error: 'Failed to approve remote work', details: err.message });
+  }
+});
+
+// Admin cancels remote work request (removes date from requests)
+app.post('/api/employees/:id/remote-cancel', async (req, res) => {
+  try {
+    const { date } = req.body;
+    if (!date) return res.status(400).json({ error: 'Date is required.' });
+    const emp = await Employee.findById(req.params.id);
+    if (!emp) return res.status(404).json({ error: 'Employee not found' });
+    if (!Array.isArray(emp.remoteWorkRequests) || !emp.remoteWorkRequests.includes(date)) {
+      return res.status(400).json({ error: 'No such remote work request.' });
+    }
+    emp.remoteWorkRequests = emp.remoteWorkRequests.filter(d => d !== date);
+    await emp.save();
+    res.json({ message: 'Remote work request cancelled', remoteWorkRequests: emp.remoteWorkRequests });
+  } catch (err) {
+    res.status(400).json({ error: 'Failed to cancel remote work request', details: err.message });
   }
 });
 
@@ -1315,4 +1390,15 @@ cron.schedule('0 1 * * *', async () => {
   } catch (err) {
     console.error('Error auto-deleting past holidays:', err);
   }
+});
+
+// Log all incoming requests and their bodies, except for /socket.io
+app.use((req, res, next) => {
+  if (!req.url.startsWith('/socket.io')) {
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+    if (req.body && Object.keys(req.body).length > 0) {
+      console.log('Request body:', req.body);
+    }
+  }
+  next();
 });
