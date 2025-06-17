@@ -479,8 +479,32 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
     }
   };
 
+  // --- Work Session Tracker State ---
+  const [workSessions, setWorkSessions] = useState<{ start: string; end?: string }[]>([]);
+  const [sessionActive, setSessionActive] = useState(false);
+
+  // Start a new work session
+  const handleStartSession = () => {
+    setWorkSessions((prev) => [...prev, { start: new Date().toISOString() }]);
+    setSessionActive(true);
+  };
+
+  // End the current work session
+  const handleEndSession = () => {
+    setWorkSessions((prev) => {
+      const updated = [...prev];
+      if (updated.length > 0 && !updated[updated.length - 1].end) {
+        updated[updated.length - 1].end = new Date().toISOString();
+      }
+      return updated;
+    });
+    setSessionActive(false);
+  };
+
+  // --- End Work Session Tracker ---
+
+  // Fetch login time for the current user
   useEffect(() => {
-    // Fetch login time for the current user
     const fetchLoginTime = async () => {
       try {
         const res = await fetch(`http://localhost:5050/api/employees`);
@@ -1165,7 +1189,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                           {emp.firstname} {emp.lastname} ({emp.department || 'N/A'})
                         </li>
                       ))
-                    )}
+                    )};
                   </ul>
                 </CardContent>
               </Card>
@@ -1320,6 +1344,42 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                 </CardContent>
               </Card>
             </div>
+            {user.role === 'employee' && activeTab === 'dashboard' && (
+              <Card className="mb-6">
+                <CardHeader>
+                  <CardTitle>Work Session Tracker</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex gap-4 mb-4">
+                    <button
+                      className="px-4 py-2 rounded bg-green-600 text-white font-semibold disabled:opacity-50"
+                      onClick={handleStartSession}
+                      disabled={sessionActive}
+                    >
+                      Start Session
+                    </button>
+                    <button
+                      className="px-4 py-2 rounded bg-red-600 text-white font-semibold disabled:opacity-50"
+                      onClick={handleEndSession}
+                      disabled={!sessionActive}
+                    >
+                      End Session
+                    </button>
+                  </div>
+                  <div>
+                    <h4 className="font-semibold mb-2">Today's Sessions</h4>
+                    <ul className="list-disc ml-6">
+                      {workSessions.length === 0 && <li>No sessions yet.</li>}
+                      {workSessions.map((s, i) => (
+                        <li key={i}>
+                          Start: {new Date(s.start).toLocaleTimeString()} {s.end ? `| End: ${new Date(s.end).toLocaleTimeString()}` : '| In Progress'}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </div>
         );
       case 'personal-details':
@@ -1782,6 +1842,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                     className="border rounded px-2 py-1 bg-background text-foreground dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700"
                     max={new Date().toISOString().substring(0, 7)}
                   />
+
                   <button
                     className="px-4 py-2 bg-green-600 text-white rounded font-semibold"
                     onClick={handleDownloadPayslip}
@@ -2578,13 +2639,13 @@ function AwardsSection({ user, employees }) {
                 `}
               >
                 <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-full bg-blue-200 dark:bg-blue-900 flex items-center justify-center text-lg font-bold text-blue-700 dark:text-blue-200 border border-blue-400 dark:border-blue-700">
+                  <div className="w-10 h-10 rounded-full bg-blue-200 dark:bg-blue-900 flex items-center justify-center text-3xl font-bold text-blue-700 dark:text-blue-200 border border-blue-400 dark:border-blue-700 mb-2">
                     {getInitials(nom.employee)}
                   </div>
                   <div>
                     <div className="font-semibold text-foreground text-base">
                       {nom.employee?.firstname} {nom.employee?.lastname}
-                      <span className="ml-2 text-xs text-muted-foreground">
+                      <span className="ml-2 text-base text-muted-foreground">
                         ({nom.employee?.department || 'N/A'})
                       </span>
                       {winner && winner._id === nom.employee?._id && (
@@ -2614,7 +2675,6 @@ function AwardsSection({ user, employees }) {
                     </button>
                   )}
                   {/* Admin/super_admin can see votes and announce winner */}
-                      className="ml-2 px-4 py-1 rounded bg-yellow-500 text-white font-semibold shadow"
                   {(user.role === 'admin' || user.role === 'super_admin') && !announced && (
                     <button
                       className="ml-2 px-4 py-1 rounded bg-yellow-500 text-white font-semibold shadow"
