@@ -13,6 +13,57 @@ const PORT = process.env.PORT || 5050;
 
 const MONGODB_URI = 'mongodb+srv://ADH:HELLO@employeemanagement.9tmhw4a.mongodb.net/?retryWrites=true&w=majority&appName=EmployeeManagement';
 
+const sessionSchema = new mongoose.Schema({
+  employeeId: String,
+  employeeName: String,
+  startTime: { type: Date, default: Date.now },
+  endTime: { type: Date, default: null } // Add endTime for session end
+});
+const Session = mongoose.model('Session', sessionSchema);
+
+// Add express.json() middleware at the very top, before any routes
+app.use(express.json());
+
+app.post('/api/session/start', async (req, res) => {
+  // Log the raw body for debugging
+  console.log('Raw req.body:', req.body);
+  const { employeeName, employeeId } = req.body || {};
+
+  // Log the request body and employeeId for debugging
+  console.log('Session start request body:', req.body);
+
+  try {
+    // Save session to database
+    const session = new Session({
+      employeeId: employeeId,
+      employeeName: employeeName,
+      startTime: new Date(),
+    });
+    await session.save();
+    console.log('Session saved:', session);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error saving session:', error);
+    res.status(500).json({ success: false, error: 'Failed to save session', details: error.message });
+  }
+});
+
+// Endpoint to end a session (set endTime for the latest open session)
+app.post('/api/session/end', async (req, res) => {
+  const { employeeId } = req.body;
+  if (!employeeId) return res.status(400).json({ error: 'employeeId is required' });
+  try {
+    // Find the latest session for this employee with no endTime
+    const session = await Session.findOne({ employeeId, endTime: null }).sort({ startTime: -1 });
+    if (!session) return res.status(404).json({ error: 'No active session found' });
+    session.endTime = new Date();
+    await session.save();
+    res.json({ success: true, session });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to end session', details: error.message });
+  }
+});
+
 mongoose.connect(MONGODB_URI, { useNewUrlParser: true, useUnifiedTopology: true })
   .then(() => console.log('Connected to MongoDB Atlas'))
   .catch((err) => console.error('MongoDB connection error:', err));
@@ -574,8 +625,6 @@ app.delete('/api/leaves/:id', async (req, res) => {
     res.status(400).json({ error: 'Failed to delete leave' });
   }
 });
-
-// --- End Leaves API ---
 
 // --- Employees API: filter by role for team selection ---
 app.get('/api/employees', async (req, res) => {
@@ -1194,4 +1243,30 @@ cron.schedule('* * * * *', sendScheduledReports);
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
+});
+
+// GET endpoint to fetch all sessions for an employee
+app.get('/api/sessions', async (req, res) => {
+  try {
+    const { employeeId } = req.query;
+    console.log('Fetching sessions for employeeId:', employeeId);
+    if (!employeeId) return res.status(400).json({ error: 'employeeId is required' });
+    const sessions = await Session.find({ employeeId }).sort({ startTime: -1 });
+    console.log('Sessions found:', sessions);
+    res.json({ sessions });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+app.get('/api/sessions', async (req, res) => {
+  try {
+    const { employeeId } = req.query;
+    console.log('Fetching sessions for employeeId:', employeeId);
+    if (!employeeId) return res.status(400).json({ error: 'employeeId is required' });
+    const sessions = await Session.find({ employeeId }).sort({ startTime: -1 });
+    console.log('Sessions found:', sessions);
+    res.json({ sessions });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });

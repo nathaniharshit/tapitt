@@ -12,6 +12,8 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import AttendanceCalendar from '../attendance/AttendanceCalendar';
 import { Dialog } from '@/components/ui/dialog'; // If you use a dialog/modal component
 import OrgChart from './OrgChart';
+import { socket } from '@/lib/socket';
+
 
 interface User {
   id: string;
@@ -33,6 +35,7 @@ const ProtectedRoute = ({ user, allowedRoles, children }) => {
   }
   return children;
 };
+
 
 const Dashboard = ({ user, onLogout }: DashboardProps) => {
   const location = useLocation();
@@ -483,22 +486,66 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
   const [workSessions, setWorkSessions] = useState<{ start: string; end?: string }[]>([]);
   const [sessionActive, setSessionActive] = useState(false);
 
+  // Fetch all sessions from backend on mount or when userId changes
+  useEffect(() => {
+    if (!user.id) return;
+    const fetchSessions = async () => {
+      try {
+        const res = await fetch(`http://localhost:5050/api/sessions?employeeId=${user.id}`);
+        const data = await res.json();
+        if (Array.isArray(data.sessions)) {
+          // Show all sessions (full history)
+          setWorkSessions(
+            data.sessions.map((s: any) => ({ start: s.startTime, end: s.endTime }))
+          );
+          setSessionActive(
+            data.sessions.length > 0 && !data.sessions[0].endTime
+          );
+        }
+      } catch {
+        setWorkSessions([]);
+        setSessionActive(false);
+      }
+    };
+    fetchSessions();
+  }, [user.id]);
+
   // Start a new work session
-  const handleStartSession = () => {
-    setWorkSessions((prev) => [...prev, { start: new Date().toISOString() }]);
+  const handleStartSession = async () => {
+    const now = new Date().toISOString();
+    setWorkSessions((prev) => [{ start: now }, ...prev]); // Optimistically add session
     setSessionActive(true);
+    await fetch('http://localhost:5050/api/session/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ employeeName: user.name, employeeId: user.id })
+    });
+    // Re-fetch sessions after starting
+    const res = await fetch(`http://localhost:5050/api/sessions?employeeId=${user.id}`);
+    const data = await res.json();
+    setWorkSessions(data.sessions.map((s: any) => ({ start: s.startTime, end: s.endTime })));
   };
 
   // End the current work session
-  const handleEndSession = () => {
+  const handleEndSession = async () => {
+    const now = new Date().toISOString();
     setWorkSessions((prev) => {
       const updated = [...prev];
-      if (updated.length > 0 && !updated[updated.length - 1].end) {
-        updated[updated.length - 1].end = new Date().toISOString();
+      if (updated.length > 0 && !updated[0].end) {
+        updated[0].end = now;
       }
       return updated;
     });
     setSessionActive(false);
+    await fetch('http://localhost:5050/api/session/end', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ employeeId: user.id })
+    });
+    // Re-fetch sessions after ending
+    const res = await fetch(`http://localhost:5050/api/sessions?employeeId=${user.id}`);
+    const data = await res.json();
+    setWorkSessions(data.sessions.map((s: any) => ({ start: s.startTime, end: s.endTime })));
   };
 
   // --- End Work Session Tracker ---
@@ -1042,12 +1089,12 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                     </button>
                   </div>
                   <div>
-                    <h4 className="font-semibold mb-2">Today's Sessions</h4>
+                    <h4 className="font-semibold mb-2">Session History</h4>
                     <ul className="list-disc ml-6">
                       {workSessions.length === 0 && <li>No sessions yet.</li>}
                       {workSessions.map((s, i) => (
                         <li key={i}>
-                          Start: {new Date(s.start).toLocaleTimeString()} {s.end ? `| End: ${new Date(s.end).toLocaleTimeString()}` : '| In Progress'}
+                          Start: {new Date(s.start).toLocaleString()} {s.end ? `| End: ${new Date(s.end).toLocaleString()}` : '| In Progress'}
                         </li>
                       ))}
                     </ul>
@@ -1789,8 +1836,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                         value={projectForm.lead}
                         onChange={handleProjectFormChange}
                         required
-                        className="w-full border rounded px-3 py-2 bg-background text-foreground"
-                      >
+                                           >
                         <option value="">Select project lead</option>
                         {leadOptions.map(opt => (
                           <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -2298,6 +2344,23 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
     }
   }; // <-- FIX: close renderContent function here
 
+  // Admin notifications for employee session start
+  const [notifications, setNotifications] = useState<{ employeeName: string, time: string }[]>([]);
+  useEffect(() => {
+    if (user.role === 'admin' || user.role === 'super_admin') {
+      socket.emit('register', user.role);
+      socket.on('employee-session-started', (data) => {
+        setNotifications((prev) => [
+          { employeeName: data.employeeName, time: data.time },
+          ...prev
+        ]);
+      });
+      return () => {
+        socket.off('employee-session-started');
+      };
+    }
+  }, [user.role]);
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <Header user={user} onLogout={onLogout} />
@@ -2308,6 +2371,19 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
           setActiveTab={setActiveTab} 
         />
         <main className="flex-1 p-6">
+          {/* Render notifications for admin users */}
+          {(user.role === 'admin' || user.role === 'super_admin') && notifications.length > 0 && (
+            <div className="mb-4">
+              <h4 className="font-bold">Employee Session Notifications</h4>
+              <ul>
+                {notifications.map((n, i) => (
+                  <li key={i}>
+                    {n.employeeName} started a session at {new Date(n.time).toLocaleTimeString()}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           {renderContent()}
         </main>
       </div>
