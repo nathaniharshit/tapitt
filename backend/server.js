@@ -1241,6 +1241,38 @@ const sendScheduledReports = async () => {
 cron.schedule('* * * * *', sendScheduledReports);
 // --- End Automated Scheduled Report Sender ---
 
+// --- Holiday Schema and Endpoints ---
+const holidaySchema = new mongoose.Schema({
+  name: { type: String, required: true },
+  date: { type: String, required: true }, // YYYY-MM-DD
+  createdBy: String,
+});
+const Holiday = mongoose.model('Holiday', holidaySchema);
+
+// Add a holiday (admin only)
+app.post('/api/holidays', async (req, res) => {
+  try {
+    const { name, date, createdBy } = req.body;
+    if (!name || !date) return res.status(400).json({ error: 'Name and date are required' });
+    const holiday = new Holiday({ name, date, createdBy });
+    await holiday.save();
+    res.json({ success: true, holiday });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get all holidays
+app.get('/api/holidays', async (req, res) => {
+  try {
+    const holidays = await Holiday.find().sort({ date: 1 });
+    res.json({ holidays });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+// --- End Holiday Schema and Endpoints ---
+
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
@@ -1268,5 +1300,19 @@ app.get('/api/sessions', async (req, res) => {
     res.json({ sessions });
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+// Auto-delete holidays whose date has passed (runs every day at 1:00 AM)
+cron.schedule('0 1 * * *', async () => {
+  const today = new Date();
+  const todayStr = today.toISOString().slice(0, 10); // YYYY-MM-DD
+  try {
+    const result = await Holiday.deleteMany({ date: { $lt: todayStr } });
+    if (result.deletedCount > 0) {
+      console.log(`Auto-deleted ${result.deletedCount} past holidays.`);
+    }
+  } catch (err) {
+    console.error('Error auto-deleting past holidays:', err);
   }
 });

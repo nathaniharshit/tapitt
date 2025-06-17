@@ -53,6 +53,52 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
   const [projectForm, setProjectForm] = useState({ name: '', description: '', team: [] as string[], lead: '' });
   const [projectMsg, setProjectMsg] = useState('');
   const projectFormRef = useRef<HTMLFormElement>(null);
+  // --- Holidays state and logic ---
+  const [holidays, setHolidays] = useState<{ name: string; date: string }[]>([]);
+  const [holidayForm, setHolidayForm] = useState({ name: '', date: '' });
+  const [holidayMsg, setHolidayMsg] = useState('');
+
+  // Fetch holidays
+  const fetchHolidays = useCallback(async () => {
+    try {
+      const res = await fetch('http://localhost:5050/api/holidays');
+      const data = await res.json();
+      setHolidays(data.holidays || []);
+    } catch {
+      setHolidays([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchHolidays();
+  }, [fetchHolidays]);
+
+  // Add holiday handler
+  const handleHolidayFormChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setHolidayForm({ ...holidayForm, [e.target.name]: e.target.value });
+  };
+  const handleAddHoliday = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setHolidayMsg('');
+    try {
+      const res = await fetch('http://localhost:5050/api/holidays', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...holidayForm, createdBy: user.name })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setHolidayMsg('Holiday added!');
+        setHolidayForm({ name: '', date: '' });
+        fetchHolidays();
+      } else {
+        setHolidayMsg(data.error || 'Failed to add holiday');
+      }
+    } catch {
+      setHolidayMsg('Network error.');
+    }
+  };
+  // --- End Holidays logic ---
 
   // Fetch employees and interns for team selection
   const [teamOptions, setTeamOptions] = useState<{ value: string; label: string }[]>([]);
@@ -967,21 +1013,50 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
   // --- Remote Work state and logic ---
   const [isRemoteToday, setIsRemoteToday] = useState(false);
   const [remoteCount, setRemoteCount] = useState(0);
+  const [remoteError, setRemoteError] = useState(''); // Add error/debug state
+
+  // Fetch if current user is remote today (on mount and when userId changes)
+  useEffect(() => {
+    const checkRemote = async () => {
+      try {
+        setRemoteError('');
+        const today = new Date().toISOString().slice(0, 10);
+        const res = await fetch(`http://localhost:5050/api/employees/${userId}`);
+        if (!res.ok) {
+          setRemoteError('Failed to fetch user for remote check');
+          setIsRemoteToday(false);
+          return;
+        }
+        const emp = await res.json();
+        console.log('Remote check:', emp.remoteWork, today);
+        setIsRemoteToday(Array.isArray(emp.remoteWork) && emp.remoteWork.includes(today));
+      } catch (err) {
+        setRemoteError('Error checking remote status');
+        setIsRemoteToday(false);
+      }
+    };
+    if (userId) checkRemote();
+  }, [userId]);
 
   // Mark remote for today
   const handleMarkRemote = async () => {
     if (isRemoteToday) return; // Prevent marking again for that day
     try {
+      setRemoteError('');
       const today = new Date().toISOString().slice(0, 10);
-      await fetch(`http://localhost:5050/api/employees/${userId}/remote`, {
+      const res = await fetch(`http://localhost:5050/api/employees/${userId}/remote`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ date: today })
       });
+      if (!res.ok) {
+        setRemoteError('Failed to mark remote');
+        return;
+      }
       setIsRemoteToday(true);
       fetchRemoteCount();
     } catch {
-      // Optionally show error
+      setRemoteError('Error marking remote');
     }
   };
 
@@ -999,21 +1074,6 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
       setRemoteCount(0);
     }
   }, []);
-
-  // Fetch if current user is remote today
-  useEffect(() => {
-    const checkRemote = async () => {
-      try {
-        const today = new Date().toISOString().slice(0, 10);
-        const res = await fetch(`http://localhost:5050/api/employees/${userId}`);
-        const emp = await res.json();
-        setIsRemoteToday(Array.isArray(emp.remoteWork) && emp.remoteWork.includes(today));
-      } catch {
-        setIsRemoteToday(false);
-      }
-    };
-    if (userId) checkRemote();
-  }, [userId]);
 
   useEffect(() => {
     fetchRemoteCount();
@@ -1113,17 +1173,51 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                 </CardContent>
               </Card>
               {/* Holidays Widget */}
+              {(user.role === 'admin' || user.role === 'super_admin') && (
+                  <Card className="col-span-1 mb-4">
+                  <CardHeader>
+                 <CardTitle>Add Holiday</CardTitle>
+                 </CardHeader>
+                  <CardContent>
+                 <form onSubmit={handleAddHoliday} className="space-y-2">
+                <input
+                 type="text"
+                name="name"
+                  value={holidayForm.name}
+                 onChange={handleHolidayFormChange}
+                  placeholder="Holiday Name"
+               className="border rounded px-2 py-1 w-full"
+                 required
+                   />
+                 <input
+                 type="date"
+                  name="date"
+                 value={holidayForm.date}
+                  onChange={handleHolidayFormChange}
+                 className="border rounded px-2 py-1 w-full"
+                  required
+                 />
+                 <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded">Add Holiday</button>
+                   {holidayMsg && <div className="text-xs text-red-500 mt-1">{holidayMsg}</div>}
+                </form>
+               </CardContent>
+               </Card>
+                 )}
               <Card className="col-span-1">
-                <CardHeader>
-                  <CardTitle>Upcoming Holidays</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <ul className="text-muted-foreground space-y-1">
-                    <li>Independence Day - 15 Aug</li>
-                    <li>Raksha Bandhan - 19 Aug</li>
-                    <li>Janmashtami - 26 Aug</li>
-                  </ul>
-                </CardContent>
+              <CardHeader>
+              <CardTitle>Upcoming Holidays</CardTitle>
+              </CardHeader>
+              <CardContent>
+               <ul className="text-muted-foreground space-y-1">
+                 {holidays.length === 0 ? (
+                 <li>No holidays found.</li>
+                  ) : (
+                 holidays.map((h, i) => (
+                 <li key={i}>{h.name} - {new Date(h.date).toLocaleDateString()}</li>
+                  ))
+                    )}
+                    </ul>
+                   </CardContent>
               </Card>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
@@ -1799,7 +1893,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
       case 'projects':
         return (
           <div className="p-8">
-            {(user.role === 'admin' || user.role === 'super_admin') && (
+            
               <Card className="max-w-3xl mx-auto mb-8 bg-card text-foreground">
                 <CardHeader>
                   <CardTitle>Add New Project</CardTitle>
@@ -1880,7 +1974,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                   </form>
                 </CardContent>
               </Card>
-            )}
+            
             <div className="max-w-6xl mx-auto">
               <Card className="bg-gray-50 dark:bg-gray-900 text-foreground mb-6 border-2 border-gray-300 dark:border-gray-700 shadow-lg">
                 <CardHeader>
@@ -2390,6 +2484,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
     </div>
   );
 }
+
 
 function AwardsSection({ user, employees }) {
   const [awards, setAwards] = useState<any[]>([]);
