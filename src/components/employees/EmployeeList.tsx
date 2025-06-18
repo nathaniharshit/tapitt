@@ -409,19 +409,44 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
                 </div>
                 <div>
                   <label className="text-sm text-muted-foreground">Role</label>
-                  <select
-                    name="role"
-                    value={editEmployee.role || ''}
-                    onChange={handleEditChange}
-                    className="w-full mt-1 mb-2 border rounded-md px-3 py-2 bg-background text-foreground"
-                    required
-                  >
-                    <option value="">Select role</option>
-                    <option value="employee">Employee</option>
-                    <option value="admin">Admin</option>
-                    <option value="superadmin">Superadmin</option>
-                    <option value="intern">Intern</option>
-                  </select>
+                  {userRole === 'super_admin' ? (
+                    <div className="flex gap-4 my-2">
+                      {['super_admin', 'admin', 'employee', 'intern'].map((role) => (
+                        <label key={role} className="flex flex-col items-center cursor-pointer">
+                          <input
+                            type="radio"
+                            name="role"
+                            value={role}
+                            checked={editEmployee.role === role}
+                            onChange={handleEditChange}
+                            className="hidden"
+                          />
+                          <span
+                            className={`w-5 h-5 rounded-full border-2 mb-1 ${
+                              editEmployee.role === role
+                                ? 'bg-blue-600 border-blue-600'
+                                : 'bg-gray-200 border-gray-400'
+                            }`}
+                          />
+                          <span className="text-xs capitalize">{role.replace('_', ' ')}</span>
+                        </label>
+                      ))}
+                    </div>
+                  ) : (
+                    <select
+                      name="role"
+                      value={editEmployee.role || ''}
+                      onChange={handleEditChange}
+                      className="w-full mt-1 mb-2 border rounded-md px-3 py-2 bg-background text-foreground"
+                      required
+                    >
+                      <option value="">Select role</option>
+                      <option value="employee">Employee</option>
+                      <option value="admin">Admin</option>
+                      <option value="super_admin">Super Admin</option>
+                      <option value="intern">Intern</option>
+                    </select>
+                  )}
                 </div>
                 <div>
                   <label className="text-sm text-muted-foreground">Salary</label>

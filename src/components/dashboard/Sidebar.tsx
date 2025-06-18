@@ -43,13 +43,13 @@ const Sidebar = ({ userRole, activeTab, setActiveTab }: SidebarProps) => {
       id: 'employees',
       label: 'Employees',
       icon: Users,
-      roles: ['super_admin', 'admin', 'employee']
+      roles: ['super_admin', 'admin'] // Only visible to super_admin and admin
     },
     {
       id: 'org-structure',
       label: 'Org Structure',
       icon: Building,
-      roles: ['super_admin', 'admin']
+      roles: ['super_admin', 'admin', 'employee'] // Make visible to everyone
     },
     {
       id: 'personal-details',
