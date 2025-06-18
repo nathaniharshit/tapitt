@@ -8,6 +8,8 @@ const path = require('path');
 const cron = require('node-cron');
 const nodemailer = require('nodemailer');
 const PDFDocument = require('pdfkit');
+const http = require('http');
+const { Server } = require('socket.io');
 const app = express();
 const PORT = process.env.PORT || 5050;
 
@@ -124,6 +126,17 @@ if (!employeeSchema.paths.remoteWorkRequests) {
   });
 }
 
+// Add remoteWorkApprovals field to employee schema if not present
+if (!employeeSchema.paths.remoteWorkApprovals) {
+  employeeSchema.add({
+    remoteWorkApprovals: [{
+      date: String, // YYYY-MM-DD
+      approver: String, // 'admin', 'hr', etc.
+      approverName: String // Optional: store name
+    }]
+  });
+}
+
 const Employee = mongoose.model('Employee', employeeSchema);
 
 // --- Project Model ---
@@ -140,7 +153,8 @@ const Project = mongoose.model('Project', projectSchema);
 // --- Team Model ---
 const teamSchema = new mongoose.Schema({
   name: { type: String, required: true },
-  members: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Employee' }]
+  members: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Employee' }],
+  teamLead: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee' } // Assigned by admin/HR
 }, { timestamps: true });
 const Team = mongoose.model('Team', teamSchema);
 // --- End Team Model ---
@@ -861,7 +875,25 @@ app.post('/api/employees/:id/remote-approve', async (req, res) => {
     emp.remoteWorkRequests = emp.remoteWorkRequests.filter(d => d !== date);
     if (!Array.isArray(emp.remoteWork)) emp.remoteWork = [];
     emp.remoteWork.push(date);
+    // Add approval record
+    if (!Array.isArray(emp.remoteWorkApprovals)) emp.remoteWorkApprovals = [];
+    if (req.user) {
+      emp.remoteWorkApprovals.push({
+        date,
+        approver: req.user.role,
+        approverName: req.user.firstname + ' ' + req.user.lastname
+      });
+    }
     await emp.save();
+    // Emit socket event for real-time update
+    if (global._io) {
+      global._io.emit('remoteRequestApproved', {
+        employeeId: emp._id.toString(),
+        date,
+        approver: req.user ? req.user.role : undefined,
+        approverName: req.user ? req.user.firstname + ' ' + req.user.lastname : undefined
+      });
+    }
     res.json({ message: 'Remote work approved', remoteWork: emp.remoteWork });
   } catch (err) {
     res.status(400).json({ error: 'Failed to approve remote work', details: err.message });
@@ -1361,7 +1393,19 @@ app.get('/api/holidays', async (req, res) => {
 });
 // --- End Holiday Schema and Endpoints ---
 
-app.listen(PORT, () => {
+// --- SOCKET.IO SETUP ---
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: '*',
+    methods: ['GET', 'POST']
+  }
+});
+
+global._io = io; // Make io accessible globally if needed
+// --- END SOCKET.IO SETUP ---
+
+server.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
 
@@ -1414,4 +1458,19 @@ app.use((req, res, next) => {
     }
   }
   next();
+});
+
+// Assign or change team lead (admin/HR only)
+app.put('/api/teams/:teamId/team-lead', authorizeRoles(['admin', 'hr', 'super_admin']), async (req, res) => {
+  try {
+    const { teamLeadId } = req.body;
+    if (!teamLeadId) return res.status(400).json({ error: 'teamLeadId is required' });
+    const team = await Team.findById(req.params.teamId);
+    if (!team) return res.status(404).json({ error: 'Team not found' });
+    team.teamLead = teamLeadId;
+    await team.save();
+    res.json({ message: 'Team lead assigned', team });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });

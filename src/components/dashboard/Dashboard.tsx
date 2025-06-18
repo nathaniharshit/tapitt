@@ -1019,6 +1019,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
   const [pendingRemoteRequests, setPendingRemoteRequests] = useState<any[]>([]);
   // For employee: track if request is pending
   const [remoteRequestPending, setRemoteRequestPending] = useState(false);
+  const [remoteApprover, setRemoteApprover] = useState<string | null>(null);
 
   // Fetch if current user is remote today (on mount and when userId changes)
   useEffect(() => {
@@ -1027,6 +1028,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
       setIsRemoteToday(false);
       setRemoteRequestPending(false);
       setRemoteError('');
+      setRemoteApprover(null);
       return;
     }
     const checkRemote = async () => {
@@ -1037,6 +1039,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
         if (!res.ok) {
           setRemoteError('Failed to fetch user for remote check');
           setIsRemoteToday(false);
+          setRemoteApprover(null);
           return;
         }
         const emp = await res.json();
@@ -1047,10 +1050,18 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
         } else {
           setRemoteRequestPending(false);
         }
+        // Find approver for today if remote is approved
+        if (Array.isArray(emp.remoteWorkApprovals)) {
+          const approval = emp.remoteWorkApprovals.find(a => a.date === today);
+          setRemoteApprover(approval ? (approval.approver === 'hr' ? 'Accepted by HR' : approval.approver === 'admin' ? 'Accepted by Manager' : `Accepted by ${approval.approverName || approval.approver}`) : null);
+        } else {
+          setRemoteApprover(null);
+        }
       } catch (err) {
         setRemoteError('Error checking remote status');
         setIsRemoteToday(false);
         setRemoteRequestPending(false);
+        setRemoteApprover(null);
       }
     };
     if (userId) checkRemote();
@@ -1363,7 +1374,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                       disabled={isRemoteToday || remoteRequestPending}
                     >
                       {isRemoteToday
-                        ? "Marked as Remote"
+                        ? remoteApprover || "Request Accepted"
                         : remoteRequestPending
                         ? "Pending Approval"
                         : "Mark as Working Remotely"}
@@ -1655,7 +1666,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                     <ul className="mt-2 text-sm text-red-900 dark:text-red-200 text-left max-h-32 overflow-y-auto w-full">
                       {attendanceLoading ? (
                         <li>Loading...</li>
-                      ) : absentEmployees.length === 0 ? (
+                      ): absentEmployees.length === 0 ? (
                         <li>No one absent</li>
                       ) : (
                         absentEmployees.map(emp => (
@@ -2572,6 +2583,56 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
     }
   }, [user.role]);
 
+  // Real-time update: listen for remoteRequestApproved
+  useEffect(() => {
+    if (user.role !== 'employee') return;
+    const handler = (data: { employeeId: string; date: string }) => {
+      if (data.employeeId === userId) {
+        // Re-fetch remote status for this employee
+        const today = new Date().toISOString().slice(0, 10);
+        if (data.date === today) {
+          // Call the same logic as in checkRemote
+          (async () => {
+            try {
+              setRemoteError('');
+              const res = await fetch(`http://localhost:5050/api/employees/${userId}`);
+              if (!res.ok) {
+                setRemoteError('Failed to fetch user for remote check');
+                setIsRemoteToday(false);
+                setRemoteRequestPending(false);
+                setRemoteApprover(null);
+                return;
+              }
+              const emp = await res.json();
+              setIsRemoteToday(Array.isArray(emp.remoteWork) && emp.remoteWork.includes(today));
+              if (Array.isArray(emp.remoteRequests)) {
+                setRemoteRequestPending(emp.remoteRequests.includes(today));
+              } else {
+                setRemoteRequestPending(false);
+              }
+              // Find approver for today if remote is approved
+              if (Array.isArray(emp.remoteWorkApprovals)) {
+                const approval = emp.remoteWorkApprovals.find(a => a.date === today);
+                setRemoteApprover(approval ? (approval.approver === 'hr' ? 'Accepted by HR' : approval.approver === 'admin' ? 'Accepted by Manager' : `Accepted by ${approval.approverName || approval.approver}`) : null);
+              } else {
+                setRemoteApprover(null);
+              }
+            } catch (err) {
+              setRemoteError('Error checking remote status');
+              setIsRemoteToday(false);
+              setRemoteRequestPending(false);
+              setRemoteApprover(null);
+            }
+          })();
+        }
+      }
+    };
+    socket.on('remoteRequestApproved', handler);
+    return () => {
+      socket.off('remoteRequestApproved', handler);
+    };
+  }, [userId, user.role]);
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <Header user={user} onLogout={onLogout} />
@@ -2601,7 +2662,6 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
     </div>
   );
 }
-
 function AwardsSection({ user, employees }) {
   const [awards, setAwards] = useState<any[]>([]);
   const [awardName, setAwardName] = useState('Employee of the Month');
