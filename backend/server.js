@@ -90,6 +90,7 @@ const employeeSchema = new mongoose.Schema({
   linkedin: String,
   github: String,
   status: String,
+  role: String,
   picture: String, // Store as URL or base64 string
   password: { type: String, select: false },
   mustChangePassword: { type: Boolean, default: true },
@@ -754,7 +755,7 @@ app.post('/api/login', async (req, res) => {
   const { email, password } = req.body;
   try {
     const employee = await Employee.findOne({ email }).select('+password +mustChangePassword +firstname +lastname +role +lastLogin');
-    // Debug: log the employee password hash
+    console.log('Employee object:', employee); // Debug: log the full employee object
     if (employee) {
       console.log('Employee password hash in DB:', employee.password);
     }

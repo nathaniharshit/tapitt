@@ -61,16 +61,20 @@ const AttendanceCalendar: React.FC<AttendanceCalendarProps> = ({ user, month }) 
   }
   if (week.length) weeks.push([...week, ...Array(7 - week.length).fill(null)]);
 
-  // Attendance percentage calculation for the month (excluding weekends)
+  // Attendance percentage calculation for the month (excluding weekends, till today if current month)
   const monthStr = `${year}-${String(monthIdx + 1).padStart(2, '0')}`;
-  // Get all days in the month that are NOT weekends
+  const today = new Date();
+  // Get all days in the month that are NOT weekends and (if current month) <= today
   const allDays: string[] = [];
   for (let d = 1; d <= daysInMonth; d++) {
     const dateStr = `${year}-${String(monthIdx + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-    if (!isWeekend(dateStr)) allDays.push(dateStr);
+    const dateObj = new Date(dateStr);
+    if (!isWeekend(dateStr) && (year !== today.getFullYear() || monthIdx !== today.getMonth() || dateObj <= today)) {
+      allDays.push(dateStr);
+    }
   }
-  // Only consider attendance for non-weekend days
-  const monthAttendance = attendance.filter(a => a.date.startsWith(monthStr) && !isWeekend(a.date));
+  // Only consider attendance for non-weekend days and till today if current month
+  const monthAttendance = attendance.filter(a => a.date.startsWith(monthStr) && !isWeekend(a.date) && (year !== today.getFullYear() || monthIdx !== today.getMonth() || new Date(a.date) <= today));
   const presentDays = monthAttendance.filter(a => a.status === 'present').length;
   const markedDays = monthAttendance.length;
   const totalWorkingDays = allDays.length;

@@ -200,27 +200,43 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
     (emp: any) => !emp.status || emp.status === 'active'
   );
 
-  // Helper: calculate attendance stats excluding weekends
+  // Helper: calculate attendance stats excluding weekends and only till today
   const getAttendanceStats = () => {
-    // Get all unique attendance dates (excluding weekends)
+    const today = new Date();
+    // Get all unique attendance dates (excluding weekends, only till today)
     const allDatesSet = new Set<string>();
     allEmployees.forEach(emp => {
       if (Array.isArray(emp.attendance)) {
         emp.attendance.forEach((a: any) => {
-          if (a.date && !isWeekend(a.date)) allDatesSet.add(a.date);
+          if (
+            a.date &&
+            !isWeekend(a.date) &&
+            new Date(a.date) <= today
+          ) {
+            allDatesSet.add(a.date);
+          }
         });
       }
     });
     const allDates = Array.from(allDatesSet);
-    // For each employee, count present days (excluding weekends)
+    // For each employee, count present days (excluding weekends, only till today)
     let totalPresent = 0;
     let totalPossible = 0;
     allEmployees.forEach(emp => {
       if (Array.isArray(emp.attendance)) {
-        // ...existing code...
+        emp.attendance.forEach((a: any) => {
+          if (
+            a.date &&
+            !isWeekend(a.date) &&
+            new Date(a.date) <= today
+          ) {
+            totalPossible++;
+            if (a.status === 'present') totalPresent++;
+          }
+        });
       }
     });
-    // ...existing code...
+    return { totalPresent, totalPossible };
   };
 
   // --- Standard Payroll Values ---
@@ -321,19 +337,19 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
   };
 
   return (
-    <div className="p-6 space-y-8">
+    <div className="p-6 space-y-8 bg-background text-foreground dark:bg-gray-900 dark:text-gray-100">
       {/* Admin Features Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {adminFeatures.map((feature, index) => {
           const Icon = feature.icon;
           return (
-            <Card key={index}>
+            <Card key={index} className="bg-card dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
               <CardHeader className="flex flex-row items-center justify-between">
                 <div>
-                  <CardTitle>{feature.title}</CardTitle>
-                  <p className="text-sm text-muted-foreground">{feature.description}</p>
+                  <CardTitle className="text-foreground dark:text-gray-100">{feature.title}</CardTitle>
+                  <p className="text-sm text-muted-foreground dark:text-gray-400">{feature.description}</p>
                 </div>
-                <Icon className="h-8 w-8 text-muted-foreground" />
+                <Icon className="h-8 w-8 text-muted-foreground dark:text-gray-400" />
               </CardHeader>
               <CardContent>
                 <div className="space-y-2">
@@ -342,7 +358,7 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
                       key={actionIndex}
                       variant="outline"
                       size="sm"
-                      className="w-full justify-start"
+                      className="w-full justify-start bg-background dark:bg-gray-900 text-foreground dark:text-gray-100 border dark:border-gray-700"
                       onClick={action.onClick}
                     >
                       {action.label}
@@ -356,38 +372,38 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
       </div>
 
       {/* System Statistics Card */}
-      <Card>
+      <Card className="bg-card dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
         <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>System Statistics</CardTitle>
-          <Button variant="ghost" size="icon" onClick={fetchCounts} title="Refresh">
+          <CardTitle className="text-foreground dark:text-gray-100">System Statistics</CardTitle>
+          <Button variant="ghost" size="icon" onClick={fetchCounts} title="Refresh" className="text-foreground dark:text-gray-100">
             <RefreshCw className={loading ? "animate-spin" : ""} />
           </Button>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="text-center">
-              <div className="text-2xl font-bold text-blue-600">
+              <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
                 {loading ? '...' : counts.super_admin}
               </div>
-              <div className="text-sm text-gray-600">Super Admins</div>
+              <div className="text-sm text-gray-600 dark:text-gray-300">Super Admins</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold text-green-600">
+              <div className="text-2xl font-bold text-green-600 dark:text-green-400">
                 {loading ? '...' : counts.admin}
               </div>
-              <div className="text-sm text-gray-600">Admins</div>
+              <div className="text-sm text-gray-600 dark:text-gray-300">Admins</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold text-yellow-600">
+              <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">
                 {loading ? '...' : counts.employee}
               </div>
-              <div className="text-sm text-gray-600">Employees</div>
+              <div className="text-sm text-gray-600 dark:text-gray-300">Employees</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold text-purple-600">
+              <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">
                 {loading ? '...' : counts.intern}
               </div>
-              <div className="text-sm text-gray-600">Interns</div>
+              <div className="text-sm text-gray-600 dark:text-gray-300">Interns</div>
             </div>
           </div>
         </CardContent>
@@ -636,7 +652,7 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
                     </select>
                   </div>
                 ))
-              )}
+              }
             </div>
             <div className="flex justify-end space-x-2 mt-6">
               <Button variant="outline" onClick={() => setShowEditRolesDialog(false)} disabled={savingRoles}>Cancel</Button>
