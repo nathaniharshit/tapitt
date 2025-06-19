@@ -1604,8 +1604,11 @@ app.delete('/api/roles/:id', async (req, res) => {
 // Assign a custom role to an employee
 app.put('/api/employees/:id/role', authorizePermission('assign_roles'), async (req, res) => {
   try {
-    const { roleId } = req.body;
-    if (!roleId) return res.status(400).json({ error: 'roleId is required' });
+    let { roleId } = req.body;
+    // Allow demotion: if roleId is null, undefined, or empty string, clear roleRef
+    if (roleId === null || roleId === undefined || roleId === '') {
+      roleId = null;
+    }
     const emp = await Employee.findByIdAndUpdate(
       req.params.id,
       { roleRef: roleId },
@@ -1677,4 +1680,9 @@ app.get('/api/manager/attendance', async (req, res) => {
   res.json(summary);
 });
 // --- End Manager API Endpoints ---
+
+// --- TEMP: Add fixAdminRole route for permissions fix ---
+const fixAdminRole = require('./routes/fixAdminRole');
+app.use('/api', fixAdminRole);
+// --- End TEMP: Add fixAdminRole route for permissions fix ---
 
