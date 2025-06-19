@@ -1618,3 +1618,63 @@ app.put('/api/employees/:id/role', authorizePermission('assign_roles'), async (r
   }
 });
 
+// --- Manager API Endpoints ---
+// Get team members for a manager
+app.get('/api/manager/team', async (req, res) => {
+  const { managerId } = req.query;
+  if (!managerId) return res.status(400).json({ error: 'managerId required' });
+  // Assumes Employee schema has a 'manager' or 'managerId' field
+  const team = await Employee.find({ manager: managerId });
+  res.json(team);
+});
+
+// Get leave requests for a manager's team
+app.get('/api/manager/leaves', async (req, res) => {
+  const { managerId } = req.query;
+  if (!managerId) return res.status(400).json({ error: 'managerId required' });
+  // Find team members
+  const team = await Employee.find({ manager: managerId });
+  const teamIds = team.map(e => e._id);
+  // Find pending leaves for team
+  const leaves = await Leave.find({ employee: { $in: teamIds }, status: 'Pending' }).populate('employee');
+  res.json(leaves.map(l => ({
+    _id: l._id,
+    employeeName: l.employee.firstname + ' ' + l.employee.lastname,
+    type: l.type,
+    from: l.from,
+    to: l.to,
+    reason: l.reason
+  })));
+});
+
+// Approve/reject leave
+app.post('/api/manager/leaves/:leaveId/:action', async (req, res) => {
+  const { leaveId, action } = req.params;
+  if (!['approve', 'reject'].includes(action)) return res.status(400).json({ error: 'Invalid action' });
+  const leave = await Leave.findById(leaveId);
+  if (!leave) return res.status(404).json({ error: 'Leave not found' });
+  leave.status = action === 'approve' ? 'Approved' : 'Rejected';
+  await leave.save();
+  res.json({ success: true });
+});
+
+// Team attendance summary
+app.get('/api/manager/attendance', async (req, res) => {
+  const { managerId } = req.query;
+  if (!managerId) return res.status(400).json({ error: 'managerId required' });
+  const team = await Employee.find({ manager: managerId });
+  const summary = team.map(emp => {
+    const present = (emp.attendance || []).filter(a => a.status === 'present').length;
+    const absent = (emp.attendance || []).filter(a => a.status === 'absent').length;
+    return {
+      _id: emp._id,
+      firstname: emp.firstname,
+      lastname: emp.lastname,
+      present,
+      absent
+    };
+  });
+  res.json(summary);
+});
+// --- End Manager API Endpoints ---
+

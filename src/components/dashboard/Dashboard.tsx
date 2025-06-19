@@ -1194,6 +1194,40 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
     } catch {}
   };
 
+  // --- Manager Section State ---
+  const [teamMembers, setTeamMembers] = useState<any[]>([]);
+  const [leaveRequests, setLeaveRequests] = useState<any[]>([]);
+  const [attendanceSummary, setAttendanceSummary] = useState<any[]>([]);
+  const [managerLoading, setManagerLoading] = useState(false);
+
+  useEffect(() => {
+    if (user.role === 'manager') {
+      setManagerLoading(true);
+      fetch(`http://localhost:5050/api/manager/team?managerId=${user.id}`)
+        .then(res => res.json())
+        .then(data => setTeamMembers(data))
+        .catch(() => setTeamMembers([]));
+      fetch(`http://localhost:5050/api/manager/leaves?managerId=${user.id}`)
+        .then(res => res.json())
+        .then(data => setLeaveRequests(data))
+        .catch(() => setLeaveRequests([]));
+      fetch(`http://localhost:5050/api/manager/attendance?managerId=${user.id}`)
+        .then(res => res.json())
+        .then(data => setAttendanceSummary(data))
+        .catch(() => setAttendanceSummary([]));
+      setManagerLoading(false);
+    }
+  }, [user.id, user.role]);
+
+  const handleLeaveAction = async (leaveId, action) => {
+    await fetch(`http://localhost:5050/api/manager/leaves/${leaveId}/${action}`, { method: 'POST' });
+    // Refresh leave requests
+    fetch(`http://localhost:5050/api/manager/leaves?managerId=${user.id}`)
+      .then(res => res.json())
+      .then(data => setLeaveRequests(data))
+      .catch(() => setLeaveRequests([]));
+  };
+
   const renderContent = () => {
     switch (activeTab) {
       case 'dashboard':
@@ -2526,7 +2560,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                                     );
                                   })
                                 : <li>N/A</li>}
-                            </ul>
+                          </ul>
                           </div>
                         </div>
                       ))}

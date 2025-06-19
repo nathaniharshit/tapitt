@@ -55,7 +55,7 @@ const Sidebar = ({ userRole, activeTab, setActiveTab }: SidebarProps) => {
       id: 'org-structure',
       label: 'Org Structure',
       icon: Building,
-      roles: ['superadmin', 'admin', 'employee'] // Make visible to everyone
+      roles: ['superadmin', 'admin', 'employee', 'manager'] // Make visible to everyone including manager
     },
     {
       id: 'personal-details',
@@ -85,7 +85,7 @@ const Sidebar = ({ userRole, activeTab, setActiveTab }: SidebarProps) => {
       id: 'settings',
       label: 'Settings',
       icon: Settings,
-      roles: ['superadmin', 'admin', 'employee']
+      roles: ['superadmin', 'admin', 'employee', 'manager']
     }
   ];
 

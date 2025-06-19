@@ -73,7 +73,7 @@ const LoginForm = ({ onLogin }: LoginFormProps) => {
         }
         // Determine final role for UI/permissions
         let finalRole = backendRole;
-        if (data.employee?.roleRef?.name === 'manager') {
+        if (data.employee?.roleRef?.name && data.employee.roleRef.name.toLowerCase() === 'manager') {
           finalRole = 'manager';
         } else if (backendRole === 'intern' || backendRole === 'manager') {
           finalRole = 'employee';
