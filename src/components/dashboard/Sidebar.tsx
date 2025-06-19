@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 
 interface SidebarProps {
-  userRole: 'super_admin' | 'admin' | 'employee';
+  userRole: 'superadmin' | 'admin' | 'employee' | 'manager';
   activeTab: string;
   setActiveTab: (tab: string) => void;
 }
@@ -29,7 +29,7 @@ const Sidebar = ({ userRole, activeTab, setActiveTab }: SidebarProps) => {
       id: 'dashboard',
       label: 'Dashboard',
       icon: LayoutDashboard,
-      roles: ['super_admin', 'admin', 'employee'],
+      roles: ['superadmin', 'admin', 'employee', 'manager'],
       children: [
         { id: 'attendance', label: 'Attendance', icon: Calendar },
         { id: 'leaves', label: 'Leaves', icon: FileText },
@@ -40,16 +40,22 @@ const Sidebar = ({ userRole, activeTab, setActiveTab }: SidebarProps) => {
       ]
     },
     {
+      id: 'manager-section',
+      label: 'Manager Section',
+      icon: Activity,
+      roles: ['manager'],
+    },
+    {
       id: 'employees',
       label: 'Employees',
       icon: Users,
-      roles: ['super_admin', 'admin'] // Only visible to super_admin and admin
+      roles: ['superadmin', 'admin'] // Only visible to superadmin and admin
     },
     {
       id: 'org-structure',
       label: 'Org Structure',
       icon: Building,
-      roles: ['super_admin', 'admin', 'employee'] // Make visible to everyone
+      roles: ['superadmin', 'admin', 'employee'] // Make visible to everyone
     },
     {
       id: 'personal-details',
@@ -61,25 +67,25 @@ const Sidebar = ({ userRole, activeTab, setActiveTab }: SidebarProps) => {
       id: 'add-employee',
       label: 'Add Employee',
       icon: UserPlus,
-      roles: ['super_admin', 'admin'] // Allow both super_admin and admin
+      roles: ['superadmin', 'admin'] // Allow both superadmin and admin
     },
     {
       id: 'admin-panel',
       label: 'Admin Panel',
       icon: Shield,
-      roles: ['super_admin', 'admin'] // <-- Allow both admin and super_admin
+      roles: ['superadmin', 'admin'] // <-- Allow both admin and superadmin
     },
     {
       id: 'reports',
       label: 'Reports',
       icon: BarChart3,
-      roles: ['super_admin', 'admin']
+      roles: ['superadmin', 'admin']
     },
     {
       id: 'settings',
       label: 'Settings',
       icon: Settings,
-      roles: ['super_admin', 'admin', 'employee']
+      roles: ['superadmin', 'admin', 'employee']
     }
   ];
 

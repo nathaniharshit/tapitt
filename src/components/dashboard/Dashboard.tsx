@@ -19,7 +19,7 @@ interface User {
   id: string;
   name: string;
   email: string;
-  role: 'super_admin' | 'admin' | 'employee';
+  role: 'superadmin' | 'admin' | 'employee' | 'manager';
 }
 
 interface DashboardProps {
@@ -102,7 +102,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
 
   // Fetch employees and interns for team selection
   const [teamOptions, setTeamOptions] = useState<{ value: string; label: string }[]>([]);
-  // Fetch admins/super_admins for project lead selection
+  // Fetch admins/superadmins for project lead selection
   const [leadOptions, setLeadOptions] = useState<{ value: string; label: string }[]>([]);
   useEffect(() => {
     const fetchTeamOptions = async () => {
@@ -119,9 +119,9 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
             label: `${emp.firstname} ${emp.lastname} (${emp.department || 'N/A'})`
           }))
         );
-        // Filter for admins and super_admins
+        // Filter for admins and superadmins
         const admins = data.filter((emp: any) =>
-          emp.role === 'admin' || emp.role === 'super_admin'
+          emp.role === 'admin' || emp.role === 'superadmin'
         );
         setLeadOptions(
           admins.map((emp: any) => ({
@@ -187,7 +187,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
         body: JSON.stringify({
           ...projectForm,
           team: projectForm.team, // array of employee/intern IDs
-          lead: projectForm.lead  // admin/super_admin ID
+          lead: projectForm.lead  // admin/superadmin ID
         })
       });
       if (resp.ok) {
@@ -682,7 +682,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
     // eslint-disable-next-line
   }, [location.state]);
 
-  // Attendance state for admin/super_admin attendance tab
+  // Attendance state for admin/superadmin attendance tab
   const [presentEmployees, setPresentEmployees] = useState<any[]>([]);
   const [absentEmployees, setAbsentEmployees] = useState<any[]>([]);
   const [attendanceLoading, setAttendanceLoading] = useState(true);
@@ -694,7 +694,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
     const today = new Date();
     return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
   });
-  // Add for admin/super_admin to select employee for calendar view
+  // Add for admin/superadmin to select employee for calendar view
   const [calendarEmployeeId, setCalendarEmployeeId] = useState<string>('');
   const [calendarMonth, setCalendarMonth] = useState(() => {
     const today = new Date();
@@ -707,7 +707,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
   });
 
   useEffect(() => {
-    if (activeTab === 'attendance' && (user.role === 'admin' || user.role === 'super_admin')) {
+    if (activeTab === 'attendance' && (user.role === 'admin' || user.role === 'superadmin')) {
       const fetchAttendance = async () => {
         setAttendanceLoading(true);
         try {
@@ -771,11 +771,11 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
   const [editingLeaveId, setEditingLeaveId] = useState<string | null>(null);
   const [confirmDeleteLeaveId, setConfirmDeleteLeaveId] = useState<string | null>(null);
 
-  // Fetch leaves for current user or all if admin/super_admin
+  // Fetch leaves for current user or all if admin/superadmin
   const fetchLeaves = useCallback(async () => {
     try {
       let url = '';
-      if (user.role === 'admin' || user.role === 'super_admin') {
+      if (user.role === 'admin' || user.role === 'superadmin') {
         url = 'http://localhost:5050/api/leaves';
       } else {
         url = `http://localhost:5050/api/leaves/${user.id}`;
@@ -824,7 +824,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
     setLeaveLoading(false);
   };
 
-  // Approve/reject leave (admin/super_admin)
+  // Approve/reject leave (admin/superadmin)
   const handleLeaveStatus = async (leaveId: string, status: 'Approved' | 'Rejected') => {
     setLeaveMsg('');
     try {
@@ -1047,7 +1047,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
   const [remoteCount, setRemoteCount] = useState(0);
   const [remoteError, setRemoteError] = useState('');
   const [remoteEmployees, setRemoteEmployees] = useState<any[]>([]);
-  // Pending remote requests (for admin/super_admin)
+  // Pending remote requests (for admin/superadmin)
   const [pendingRemoteRequests, setPendingRemoteRequests] = useState<any[]>([]);
   // For employee: track if request is pending
   const [remoteRequestPending, setRemoteRequestPending] = useState(false);
@@ -1129,8 +1129,8 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
     }
   };
 
-  // Fetch remote count for today and remote employees for admin/super_admin
-  // Also fetch pending remote requests for admin/super_admin
+  // Fetch remote count for today and remote employees for admin/superadmin
+  // Also fetch pending remote requests for admin/superadmin
   const fetchRemoteCount = useCallback(async () => {
     try {
       const today = new Date().toISOString().slice(0, 10);
@@ -1138,7 +1138,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
       const data = await res.json();
       if (data && typeof data === 'object' && 'remoteEmployees' in data && 'pendingRemoteRequests' in data) {
         setRemoteCount(Array.isArray(data.remoteEmployees) ? data.remoteEmployees.length : 0);
-        if (user.role === 'admin' || user.role === 'super_admin') {
+        if (user.role === 'admin' || user.role === 'superadmin') {
           setRemoteEmployees(Array.isArray(data.remoteEmployees) ? data.remoteEmployees : []);
           setPendingRemoteRequests(Array.isArray(data.pendingRemoteRequests) ? data.pendingRemoteRequests : []);
         }
@@ -1148,7 +1148,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
           ? data.filter(e => Array.isArray(e.remoteWork) && e.remoteWork.includes(today))
           : [];
         setRemoteCount(filtered.length);
-        if (user.role === 'admin' || user.role === 'super_admin') {
+        if (user.role === 'admin' || user.role === 'superadmin') {
           setRemoteEmployees(filtered);
           setPendingRemoteRequests([]);
         }
@@ -1265,7 +1265,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                 </CardContent>
               </Card>
               {/* Holidays Widget */}
-              {(user.role === 'admin' || user.role === 'super_admin') && (
+              {(user.role === 'admin' || user.role === 'superadmin') && (
                   <Card className="col-span-1 mb-4">
                   <CardHeader>
                     <CardTitle className="text-gray-900 dark:text-gray-100">Add Holiday</CardTitle>
@@ -1351,8 +1351,8 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                 <CardContent>
                   <div className="text-3xl font-bold text-green-600 mb-2">{remoteCount}</div>
                   <div className="text-muted-foreground mb-2">Employees remote today</div>
-                  {/* Show list for admin/super_admin */}
-                  {(user.role === 'admin' || user.role === 'super_admin') && (
+                  {/* Show list for admin/superadmin */}
+                  {(user.role === 'admin' || user.role === 'superadmin') && (
                     <>
                       <ul className="text-muted-foreground text-sm mb-2 max-h-32 overflow-y-auto">
                         {remoteEmployees.length === 0 ? (
@@ -1456,7 +1456,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                   <CardTitle>Announcements</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {(user.role === 'admin' || user.role === 'super_admin') && (
+                  {(user.role === 'admin' || user.role === 'superadmin') && (
                     <form className="mb-4 flex gap-2" onSubmit={handleAddAnnouncement}>
                       <input
                         className="flex-1 border rounded px-3 py-2 bg-background text-foreground"
@@ -1492,7 +1492,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                               {a.createdBy ? `By ${a.createdBy}` : ''} &middot; {new Date(a.createdAt).toLocaleDateString()}
                             </div>
                           </div>
-                          {(user.role === 'admin' || user.role === 'super_admin') && (
+                          {(user.role === 'admin' || user.role === 'superadmin') && (
                             <>
                               <button
                                 className="ml-4 text-xs text-red-600 hover:underline"
@@ -1559,10 +1559,10 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
       case 'employees':
         return <EmployeeList userRole={user.role} />;
       case 'add-employee':
-        return (user.role === 'super_admin' || user.role === 'admin') ? <EmployeeForm onEmployeeAdded={fetchEmployees} /> : <EmployeeList userRole={user.role} />;
+        return (user.role === 'superadmin' || user.role === 'admin') ? <EmployeeForm onEmployeeAdded={fetchEmployees} /> : <EmployeeList userRole={user.role} />;
       case 'admin-panel':
-        // Allow both admin and super_admin to access AdminPanel
-        return (user.role === 'admin' || user.role === 'super_admin')
+        // Allow both admin and superadmin to access AdminPanel
+        return (user.role === 'admin' || user.role === 'superadmin')
           ? <AdminPanel userRole={user.role} />
           : <div className="p-8">Access denied.</div>;
       case 'reports':
@@ -1844,8 +1844,8 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                   {leaves.map(l => (
                     <li key={l._id} className="py-2 flex justify-between items-center">
                       <span>
-                        {/* Show employee name for admin/super_admin */}
-                        {(user.role === 'admin' || user.role === 'super_admin') && l.employee && (
+                        {/* Show employee name for admin/superadmin */}
+                        {(user.role === 'admin' || user.role === 'superadmin') && l.employee && (
                           <span className="font-semibold text-foreground">
                             {l.employee.firstname} {l.employee.lastname}
                             <span className="text-xs text-muted-foreground ml-2">
@@ -1885,8 +1885,8 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                           </button>
                         </span>
                       )}
-                      {/* Admin/super_admin: show approve/reject buttons for pending leaves */}
-                      {(user.role === 'admin' || user.role === 'super_admin') && l.status === 'Pending' && (
+                      {/* Admin/superadmin: show approve/reject buttons for pending leaves */}
+                      {(user.role === 'admin' || user.role === 'superadmin') && l.status === 'Pending' && (
                         <span className="flex gap-2 ml-4">
                           <button
                             className="px-2 py-1 bg-green-600 text-white rounded text-xs font-semibold"
@@ -2222,7 +2222,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                             </div>
                           )}
                           {/* Action Buttons */}
-                          {(user.role === 'admin' || user.role === 'super_admin') && (
+                          {(user.role === 'admin' || user.role === 'superadmin') && (
                             <div className="flex gap-2 mb-2 flex-wrap">
                               {proj.status !== 'over' && (
                                 <button
@@ -2293,7 +2293,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                                     );
                                   })
                                 : <li>N/A</li>}
-                            </ul>
+                          </ul>
                           </div>
                           <div className="pt-4 mt-auto flex items-center justify-between">
                             <span className="text-xs text-muted-foreground">
@@ -2405,7 +2405,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
         // Teams feature: show team members and allow team creation/edit/delete
         return (
           <div className="p-8">
-            {(user.role === 'super_admin' || user.role === 'admin') && (
+            {(user.role === 'superadmin' || user.role === 'admin') && (
               <Card className="max-w-2xl mx-auto mb-8 bg-card text-foreground">
                 <CardHeader>
                   <CardTitle>Create New Team</CardTitle>
@@ -2470,13 +2470,10 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                   ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
                       {teams.map(team => (
-                        <div
-                          key={team._id}
-                          className="rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 p-6 flex flex-col min-h-[200px] shadow-md"
-                        >
+                        <div key={team._id} className="rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 p-6 flex flex-col min-h-[200px] shadow-md">
                           <div className="flex items-center justify-between mb-3">
                             <span className="font-bold text-xl text-gray-900 dark:text-gray-100 truncate">{team.name}</span>
-                            {(user.role === 'admin' || user.role === 'super_admin') && (
+                            {(user.role === 'admin' || user.role === 'superadmin') && (
                               <div className="flex gap-2">
                                 {/* ...edit/delete buttons... */}
                                 <button
@@ -2628,7 +2625,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
   // Admin notifications for employee session start
   const [notifications, setNotifications] = useState<{ employeeName: string, time: string }[]>([]);
   useEffect(() => {
-    if (user.role === 'admin' || user.role === 'super_admin') {
+    if (user.role === 'admin' || user.role === 'superadmin') {
       socket.emit('register', user.role);
       socket.on('employee-session-started', (data) => {
         setNotifications((prev) => [
@@ -2703,7 +2700,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
         />
         <main className="flex-1 p-6">
           {/* Render notifications for admin users */}
-          {(user.role === 'admin' || user.role === 'super_admin') && notifications.length > 0 && (
+          {(user.role === 'admin' || user.role === 'superadmin') && notifications.length > 0 && (
             <div className="mb-4">
               <h4 className="font-bold">Employee Session Notifications</h4>
               <ul>
@@ -2746,7 +2743,7 @@ function AwardsSection({ user, employees }) {
     fetchAwards();
   }, [fetchAwards]);
 
-  // Nominate employee (admin/super_admin)
+  // Nominate employee (admin/superadmin)
   const handleNominate = async (e) => {
     e.preventDefault();
     setAwardMsg('');
@@ -2791,7 +2788,7 @@ function AwardsSection({ user, employees }) {
     }
   };
 
-  // Announce winner (admin/super_admin)
+  // Announce winner (admin/superadmin)
   const handleAnnounce = async (awardId, winnerId) => {
     setAwardMsg('');
     try {
@@ -2866,8 +2863,8 @@ function AwardsSection({ user, employees }) {
           {awardMsg}
         </div>
       )}
-      {/* Nomination section for admin/super_admin */}
-      {(user.role === 'admin' || user.role === 'super_admin') && (
+      {/* Nomination section for admin/superadmin */}
+      {(user.role === 'admin' || user.role === 'superadmin') && (
         <form className="mb-6 flex flex-col md:flex-row gap-4 items-end" onSubmit={handleNominate}>
           <div>
             <label className="font-semibold mr-2">Nominate Employee:</label>
@@ -2937,7 +2934,7 @@ function AwardsSection({ user, employees }) {
                   <span className="inline-block px-3 py-1 rounded-full bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-200 font-semibold text-sm shadow">
                     {nom.votes.length} vote{nom.votes.length !== 1 ? 's' : ''}
                   </span>
-                  {/* Voting button for employees (not admin/super_admin) */}
+                  {/* Voting button for employees (not admin/superadmin) */}
                   {user.role === 'employee' && (
                     <button
                       className={`ml-2 px-4 py-1 rounded font-semibold transition
@@ -2951,8 +2948,8 @@ function AwardsSection({ user, employees }) {
                       {userVote === nom.employee?._id ? 'Voted' : 'Vote'}
                     </button>
                   )}
-                  {/* Admin/super_admin can see votes and announce winner */}
-                  {(user.role === 'admin' || user.role === 'super_admin') && !announced && (
+                  {/* Admin/superadmin can see votes and announce winner */}
+                  {(user.role === 'admin' || user.role === 'superadmin') && !announced && (
                     <button
                       className="ml-2 px-4 py-1 rounded bg-yellow-500 text-white font-semibold shadow"
                       onClick={() => handleAnnounce(currentAward._id, nom.employee?._id)}

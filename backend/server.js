@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
 const authorizeRoles = require('./middleware/rbac');
+const authorizePermission = require('./middleware/permission');
 const bcrypt = require('bcrypt');
 const multer = require('multer');
 const path = require('path');
@@ -470,7 +471,7 @@ app.delete('/api/announcements/:id', async (req, res) => {
 
 // --- Awards API ---
 
-// Get all awards (for admin/super_admin: show votes, for employee: show only their votes)
+// Get all awards (for admin/superadmin: show votes, for employee: show only their votes)
 app.get('/api/awards', async (req, res) => {
   try {
     // Optionally filter by month and/or award name
@@ -487,7 +488,7 @@ app.get('/api/awards', async (req, res) => {
   }
 });
 
-// Nominate an employee for an award (admin/super_admin only)
+// Nominate an employee for an award (admin/superadmin only)
 app.post('/api/awards/nominate', async (req, res) => {
   try {
     const { name, month, nomineeId } = req.body;
@@ -534,7 +535,7 @@ app.post('/api/awards/vote', async (req, res) => {
   }
 });
 
-// Announce winner (admin/super_admin only)
+// Announce winner (admin/superadmin only)
 app.post('/api/awards/announce', async (req, res) => {
   try {
     const { awardId, winnerId } = req.body;
@@ -592,7 +593,7 @@ app.get('/api/leaves/:employeeId', async (req, res) => {
   }
 });
 
-// Get all leaves (admin/super_admin)
+// Get all leaves (admin/superadmin)
 app.get('/api/leaves', async (req, res) => {
   try {
     const leaves = await Leave.find({})
@@ -604,7 +605,7 @@ app.get('/api/leaves', async (req, res) => {
   }
 });
 
-// Update leave request or status (employee or admin/super_admin)
+// Update leave request or status (employee or admin/superadmin)
 app.put('/api/leaves/:id', async (req, res) => {
   try {
     const { type, from, to, reason, employeeId, status } = req.body;
@@ -626,7 +627,7 @@ app.put('/api/leaves/:id', async (req, res) => {
       return res.json(leave);
     }
 
-    // Admin/super_admin updating status
+    // Admin/superadmin updating status
     if (status && ['Pending', 'Approved', 'Rejected'].includes(status)) {
       leave.status = status;
       await leave.save();
@@ -708,7 +709,7 @@ app.get('/api/employees', async (req, res) => {
 });
 
 // Update employee with file upload
-app.put('/api/employees/:id', upload.fields([
+app.put('/api/employees/:id', authorizePermission('edit_employee'), upload.fields([
   { name: 'picture', maxCount: 1 }
 ]), async (req, res) => {
   try {
@@ -971,7 +972,7 @@ app.use(async (req, res, next) => {
   next();
 });
 
-// Mark attendance for an employee (admin/super_admin only)
+// Mark attendance for an employee (admin/superadmin only)
 app.post('/api/employees/:id/attendance', async (req, res) => {
   try {
     const { date, status } = req.body;
@@ -1245,10 +1246,10 @@ app.get('/api/employees/roles-count', async (req, res) => {
         }
       }
     ]);
-    // Convert to { super_admin: X, admin: Y, employee: Z }
-    const result = { super_admin: 0, admin: 0, employee: 0 };
+    // Convert to { superadmin: X, admin: Y, employee: Z }
+    const result = { superadmin: 0, admin: 0, employee: 0 };
     counts.forEach(item => {
-      if (item._id === 'super_admin' || item._id === 'superadmin') result.super_admin = item.count;
+      if (item._id === 'superadmin' || item._id === 'superadmin') result.superadmin = item.count;
       else if (item._id === 'admin') result.admin = item.count;
       else if (item._id === 'employee') result.employee = item.count;
     });
@@ -1541,7 +1542,7 @@ app.use((req, res, next) => {
 });
 
 // Assign or change team lead (admin/HR only)
-app.put('/api/teams/:teamId/team-lead', authorizeRoles(['admin', 'hr', 'super_admin']), async (req, res) => {
+app.put('/api/teams/:teamId/team-lead', authorizeRoles(['admin', 'hr', 'superadmin']), async (req, res) => {
   try {
     const { teamLeadId } = req.body;
     if (!teamLeadId) return res.status(400).json({ error: 'teamLeadId is required' });
@@ -1601,7 +1602,7 @@ app.delete('/api/roles/:id', async (req, res) => {
 // --- End Role Management Endpoints ---
 
 // Assign a custom role to an employee
-app.put('/api/employees/:id/role', async (req, res) => {
+app.put('/api/employees/:id/role', authorizePermission('assign_roles'), async (req, res) => {
   try {
     const { roleId } = req.body;
     if (!roleId) return res.status(400).json({ error: 'roleId is required' });

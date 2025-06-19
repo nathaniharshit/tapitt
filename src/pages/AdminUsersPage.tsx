@@ -20,7 +20,7 @@ const AdminUsersPage = () => {
   }, []);
 
   const grouped = {
-    super_admin: employees.filter(e => e.role === 'super_admin' || e.role === 'superadmin'),
+    superadmin: employees.filter(e => e.role === 'superadmin' || e.role === 'superadmin'),
     admin: employees.filter(e => e.role === 'admin'),
     employee: employees.filter(e => e.role === 'employee'),
     intern: employees.filter(e => e.role === 'intern'),
@@ -43,8 +43,8 @@ const AdminUsersPage = () => {
           </CardHeader>
           <CardContent>
             <ul className="space-y-3">
-              {loading ? <li>Loading...</li> : grouped.super_admin.length === 0 ? <li className="text-gray-400">None</li> :
-                grouped.super_admin.map(user => (
+              {loading ? <li>Loading...</li> : grouped.superadmin.length === 0 ? <li className="text-gray-400">None</li> :
+                grouped.superadmin.map(user => (
                   <li key={user._id} className="border-b py-1">
                     <div className="font-semibold">{user.firstname} {user.lastname}</div>
                     <div className="text-xs text-gray-500 break-all">{user.email}</div>

@@ -2,27 +2,29 @@ import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { LogOut, User } from 'lucide-react';
 
-interface User {
+interface HeaderUser {
   id: string;
   name: string;
   email: string;
-  role: 'super_admin' | 'admin' | 'employee';
+  role: 'superadmin' | 'admin' | 'employee' | 'manager';
 }
 
 interface HeaderProps {
-  user: User;
+  user: HeaderUser;
   onLogout: () => void;
 }
 
 const Header = ({ user, onLogout }: HeaderProps) => {
   const getRoleDisplay = (role: string) => {
     switch (role) {
-      case 'super_admin':
+      case 'superadmin':
         return 'Super Admin';
       case 'admin':
         return 'Admin';
       case 'employee':
         return 'Employee';
+      case 'manager':
+        return 'Manager';
       default:
         return role;
     }

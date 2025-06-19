@@ -7,7 +7,7 @@ import { Search, Edit, Trash2, Eye } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 interface EmployeeListProps {
-  userRole: 'super_admin' | 'admin' | 'employee';
+  userRole: 'superadmin' | 'admin' | 'employee' | 'manager';
 }
 
 const EmployeeList = ({ userRole }: EmployeeListProps) => {
@@ -34,8 +34,8 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
   }, []);
   
 
-  const canEdit = userRole === 'super_admin' || userRole === 'admin';
-  const canDelete = userRole === 'super_admin';
+  const canEdit = userRole === 'superadmin' || userRole === 'admin';
+  const canDelete = userRole === 'superadmin';
 
   const handleView = (employee: any) => {
     setViewedEmployee(employee);
@@ -144,14 +144,14 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
   };
 
   const groupedEmployees = {
-    super_admin: employees.filter(e => e.role === 'super_admin' || e.role === 'superadmin'),
+    superadmin: employees.filter(e => e.role === 'superadmin' || e.role === 'superadmin'),
     admin: employees.filter(e => e.role === 'admin'),
     employee: employees.filter(e => e.role === 'employee'),
     intern: employees.filter(e => e.role === 'intern'),
   };
 
   const roleSections = [
-    { key: 'super_admin', label: 'Super Admins', border: 'border-blue-500', bg: 'bg-blue-50 dark:bg-card', badge: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' },
+    { key: 'superadmin', label: 'Super Admins', border: 'border-blue-500', bg: 'bg-blue-50 dark:bg-card', badge: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' },
     { key: 'admin', label: 'Admins', border: 'border-green-500', bg: 'bg-green-50 dark:bg-card', badge: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' },
     { key: 'employee', label: 'Employees', border: 'border-yellow-500', bg: 'bg-yellow-50 dark:bg-card', badge: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200' },
     { key: 'intern', label: 'Interns', border: 'border-purple-500', bg: 'bg-purple-50 dark:bg-card', badge: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200' },
@@ -339,8 +339,8 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
                   <p className="text-muted-foreground font-medium">Role</p>
                   <p className="text-lg font-semibold text-foreground">{viewedEmployee?.role}</p>
                 </div>
-                {/* Only show salary if userRole is super_admin or admin */}
-                {(userRole === 'super_admin' || userRole === 'admin') && (
+                {/* Only show salary if userRole is superadmin or admin */}
+                {(userRole === 'superadmin' || userRole === 'admin') && (
                   <div>
                     <p className="text-muted-foreground font-medium">Salary</p>
                     <p className="text-lg font-semibold text-foreground">{formatSalary(viewedEmployee?.salary)}</p>
@@ -409,9 +409,9 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
                 </div>
                 <div>
                   <label className="text-sm text-muted-foreground">Role</label>
-                  {userRole === 'super_admin' ? (
+                  {userRole === 'superadmin' ? (
                     <div className="flex gap-4 my-2">
-                      {['super_admin', 'admin', 'employee', 'intern'].map((role) => (
+                      {['superadmin', 'admin', 'employee', 'intern'].map((role) => (
                         <label key={role} className="flex flex-col items-center cursor-pointer">
                           <input
                             type="radio"
@@ -443,7 +443,7 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
                       <option value="">Select role</option>
                       <option value="employee">Employee</option>
                       <option value="admin">Admin</option>
-                      <option value="super_admin">Super Admin</option>
+                      <option value="superadmin">Super Admin</option>
                       <option value="intern">Intern</option>
                     </select>
                   )}

@@ -8,12 +8,12 @@ import { format, parseISO } from 'date-fns';
 import AttendanceCalendar from '../attendance/AttendanceCalendar';
 
 interface AdminPanelProps {
-  userRole: 'super_admin' | 'admin' | 'employee';
+  userRole: 'superadmin' | 'admin' | 'employee' | 'manager';
 }
 
 const AdminPanel = ({ userRole }: AdminPanelProps) => {
-  const [counts, setCounts] = useState<{ super_admin: number; admin: number; employee: number; intern: number }>({
-    super_admin: 0,
+  const [counts, setCounts] = useState<{ superadmin: number; admin: number; employee: number; intern: number }>({
+    superadmin: 0,
     admin: 0,
     employee: 0,
     intern: 0,
@@ -45,9 +45,9 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
       const res = await fetch('http://localhost:5050/api/employees');
       const employees = await res.json();
       setAllEmployees(employees);
-      const roleCounts = { super_admin: 0, admin: 0, employee: 0, intern: 0 };
+      const roleCounts = { superadmin: 0, admin: 0, employee: 0, intern: 0 };
       employees.forEach((emp: any) => {
-        if (emp.role === 'super_admin' || emp.role === 'superadmin') roleCounts.super_admin += 1;
+        if (emp.role === 'superadmin' || emp.role === 'superadmin') roleCounts.superadmin += 1;
         else if (emp.role === 'admin') roleCounts.admin += 1;
         else if (emp.role === 'employee') roleCounts.employee += 1;
         else if (emp.role === 'intern') roleCounts.intern += 1;
@@ -58,7 +58,7 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
       employees.forEach((emp: any) => { rolesObj[emp._id] = emp.role; });
       setEditRoles(rolesObj);
     } catch {
-      setCounts({ super_admin: 0, admin: 0, employee: 0, intern: 0 });
+      setCounts({ superadmin: 0, admin: 0, employee: 0, intern: 0 });
       setAllEmployees([]);
       setEditRoles({});
     }
@@ -83,7 +83,7 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
     fetchRoles();
   }, []);
 
-  if (userRole !== 'admin' && userRole !== 'super_admin') {
+  if (userRole !== 'admin' && userRole !== 'superadmin') {
     return (
       <div className="text-center py-12">
         <Shield className="h-16 w-16 text-gray-400 mx-auto mb-4" />
@@ -108,7 +108,7 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
 
   // Group employees by role
   const grouped = {
-    super_admin: allEmployees.filter(e => e.role === 'super_admin' || e.role === 'superadmin'),
+    superadmin: allEmployees.filter(e => e.role === 'superadmin' || e.role === 'superadmin'),
     admin: allEmployees.filter(e => e.role === 'admin'),
     employee: allEmployees.filter(e => e.role === 'employee'),
     intern: allEmployees.filter(e => e.role === 'intern'),
@@ -392,7 +392,7 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="text-center">
               <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                {loading ? '...' : counts.super_admin}
+                {loading ? '...' : counts.superadmin}
               </div>
               <div className="text-sm text-gray-600 dark:text-gray-300">Super Admins</div>
             </div>
@@ -654,7 +654,7 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
                       className="border rounded px-2 py-1 bg-background text-foreground"
                       disabled={savingRoles}
                     >
-                      <option value="super_admin">Super Admin</option>
+                      <option value="superadmin">Super Admin</option>
                       <option value="admin">Admin</option>
                       <option value="employee">Employee</option>
                       <option value="intern">Intern</option>

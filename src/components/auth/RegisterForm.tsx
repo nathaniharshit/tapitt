@@ -94,7 +94,7 @@ const RegisterForm = ({ onRegister }: RegisterFormProps) => {
       id: Date.now().toString(),
       name: `${formData.firstName} ${formData.lastName}`,
       email: formData.email,
-      role: formData.role as 'super_admin' | 'admin' | 'employee',
+      role: formData.role as 'superadmin' | 'admin' | 'employee',
       department: formData.department,
       employeeId: formData.employeeId
     };
@@ -190,7 +190,7 @@ const RegisterForm = ({ onRegister }: RegisterFormProps) => {
                 <SelectContent>
                   <SelectItem value="employee">Employee</SelectItem>
                   <SelectItem value="admin">Admin</SelectItem>
-                  <SelectItem value="super_admin">Super Admin</SelectItem>
+                  <SelectItem value="superadmin">Super Admin</SelectItem>
                 </SelectContent>
               </Select>
               {errors.role && <p className="text-red-500 text-sm mt-1">{errors.role}</p>}

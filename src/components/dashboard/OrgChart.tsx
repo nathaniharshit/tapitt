@@ -3,7 +3,7 @@ import React, { useEffect, useState } from "react";
 const MAX_EMPLOYEES_PER_ROW = 5;
 
 function buildOrgTree(employees) {
-  const superAdmins = employees.filter(e => e.role === "super_admin" || e.role === "superadmin");
+  const superAdmins = employees.filter(e => e.role === "superadmin" || e.role === "superadmin");
   const admins = employees.filter(e => e.role === "admin");
   const departments = Array.from(new Set(employees.map(e => e.department).filter(Boolean)));
   const deptMap: { [key: string]: Array<any> } = {};

@@ -10,11 +10,11 @@ import { toast } from '@/components/ui/use-toast';
 import 'chart.js/auto';
 
 interface ReportsProps {
-  userRole: 'super_admin' | 'admin' | 'employee';
+  userRole: 'superadmin' | 'admin' | 'employee' | 'manager';
 }
 
 const Reports = ({ userRole }: ReportsProps) => {
-  const canViewAllReports = userRole === 'super_admin' || userRole === 'admin';
+  const canViewAllReports = userRole === 'superadmin' || userRole === 'admin';
 
   if (!canViewAllReports) {
     return (
@@ -46,7 +46,7 @@ const Reports = ({ userRole }: ReportsProps) => {
       description: 'Monthly payroll summary',
       type: 'financial',
       lastGenerated: '2024-01-01',
-      available: userRole === 'super_admin'
+      available: userRole === 'superadmin'
     },
     {
       title: 'Attendance Report',

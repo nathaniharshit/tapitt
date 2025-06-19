@@ -98,7 +98,7 @@ src/
 
 ## Customization
 
-- **Roles:** `super_admin`, `admin`, `employee`, `intern`
+- **Roles:** `superadmin`, `admin`, `employee`, `intern`
 - **Permissions:** Controlled in both backend and frontend.
 - **Environment:** Adjust MongoDB URI and ports as needed.
 

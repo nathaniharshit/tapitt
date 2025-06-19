@@ -8,12 +8,12 @@ import { User, Bell, Shield, Palette, Eye, EyeOff } from 'lucide-react'; // <-- 
 import { useState, useEffect } from 'react';
 
 interface SettingsProps {
-  userRole: 'super_admin' | 'admin' | 'employee';
+  userRole: 'superadmin' | 'admin' | 'employee' | 'manager';
   userId: string; // Add userId prop for password change
 }
 
 const Settings = ({ userRole, userId }: SettingsProps) => {
-  const canEditSystemSettings = userRole === 'super_admin' || userRole === 'admin';
+  const canEditSystemSettings = userRole === 'superadmin' || userRole === 'admin';
 
   // State for password change
   const [newPassword, setNewPassword] = useState('');

@@ -29,7 +29,7 @@ type DemoUser = {
   name: string;
   email: string;
   password: string;
-  role: 'super_admin' | 'admin' | 'employee' | 'intern'; // Added 'intern'
+  role: 'superadmin' | 'admin' | 'employee' | 'intern'; // Added 'intern'
 };
 
 const LoginForm = ({ onLogin }: LoginFormProps) => {
@@ -45,7 +45,7 @@ const LoginForm = ({ onLogin }: LoginFormProps) => {
     setError(null);
 
     // Unified backend login for all roles
-    if (selectedRole === 'super_admin' || selectedRole === 'admin' || selectedRole === 'employee' || selectedRole === 'intern') {
+    if (selectedRole === 'superadmin' || selectedRole === 'admin' || selectedRole === 'employee' || selectedRole === 'intern') {
       try {
         const response = await fetch('http://localhost:5050/api/login', {
           method: 'POST',
@@ -53,13 +53,16 @@ const LoginForm = ({ onLogin }: LoginFormProps) => {
           body: JSON.stringify({ email, password })
         });
         const data = await response.json();
+        console.log('LOGIN DEBUG:', data.employee); // Debug log to inspect backend response
         if (!response.ok) {
           setError(data.error || 'Login failed');
           return;
         }
         // Accept all roles for login, but check if backend role matches selectedRole
         const backendRole = data.employee?.role;
-        if (backendRole !== selectedRole && !(selectedRole === 'employee' && backendRole === 'manager')) {
+        // Allow both 'superadmin' and 'superadmin' for superadmin login
+        const isSuperAdmin = (selectedRole === 'superadmin' && (backendRole === 'superadmin' || backendRole === 'superadmin'));
+        if (!isSuperAdmin && backendRole !== selectedRole && !(selectedRole === 'employee' && backendRole === 'manager')) {
           setError('You are not authorized to login as this role.');
           return;
         }
@@ -68,14 +71,20 @@ const LoginForm = ({ onLogin }: LoginFormProps) => {
           navigate('/employee-set-password', { state: { employeeId: data.employee._id, email: data.employee.email } });
           return;
         }
+        // Determine final role for UI/permissions
+        let finalRole = backendRole;
+        if (data.employee?.roleRef?.name === 'manager') {
+          finalRole = 'manager';
+        } else if (backendRole === 'intern' || backendRole === 'manager') {
+          finalRole = 'employee';
+        }
         // Successful login
         onLogin({
           id: data.employee._id,
           name: `${data.employee.firstname} ${data.employee.lastname}`,
           email: data.employee.email,
           password: password,
-          // Map intern and manager to employee for UI/permissions
-          role: backendRole === 'intern' || backendRole === 'manager' ? 'employee' : backendRole
+          role: finalRole
         });
       } catch (err) {
         setError('Network error.');
@@ -135,7 +144,7 @@ const LoginForm = ({ onLogin }: LoginFormProps) => {
                   <SelectValue placeholder="Select role" />
                 </SelectTrigger>
                 <SelectContent className="dark:bg-gray-800 dark:text-gray-100">
-                  <SelectItem value="super_admin">Super Admin</SelectItem>
+                  <SelectItem value="superadmin">Super Admin</SelectItem>
                   <SelectItem value="admin">Admin</SelectItem>
                   <SelectItem value="employee">Employee</SelectItem>
                   <SelectItem value="intern">Intern</SelectItem>

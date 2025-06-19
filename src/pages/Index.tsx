@@ -10,7 +10,7 @@ const Index = () => {
     id: string;
     name: string;
     email: string;
-    role: 'super_admin' | 'admin' | 'employee';
+    role: 'superadmin' | 'admin' | 'employee';
   } | null>(null);
 
   useEffect(() => {

@@ -240,6 +240,7 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
                   <option value="admin">Admin</option>
                   <option value="superadmin">Superadmin</option>
                   <option value="intern">Intern</option>
+                  <option value="manager">Manager</option> {/* Added manager role */}
                 </select>
               </div>
               <div>
