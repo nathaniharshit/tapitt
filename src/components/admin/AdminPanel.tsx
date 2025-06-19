@@ -209,8 +209,31 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
     // ...existing code...
   };
 
+  // --- Standard Payroll Values ---
+  const [standardAllowances, setStandardAllowances] = useState([
+    { name: 'HRA', amount: 5000 },
+    { name: 'Transport', amount: 2000 },
+  ]);
+  const [standardDeductions, setStandardDeductions] = useState([
+    { name: 'PF', amount: 1800 },
+    { name: 'Professional Tax', amount: 200 },
+  ]);
+  const [editPayroll, setEditPayroll] = useState(false);
+  // Handlers for editing standard values
+  const handleAllowanceChange = (idx: number, field: 'name' | 'amount', value: string | number) => {
+    setStandardAllowances(prev => prev.map((a, i) => i === idx ? { ...a, [field]: value } : a));
+  };
+  const handleDeductionChange = (idx: number, field: 'name' | 'amount', value: string | number) => {
+    setStandardDeductions(prev => prev.map((d, i) => i === idx ? { ...d, [field]: value } : d));
+  };
+  const handleAddAllowance = () => setStandardAllowances(prev => [...prev, { name: '', amount: 0 }]);
+  const handleAddDeduction = () => setStandardDeductions(prev => [...prev, { name: '', amount: 0 }]);
+  const handleRemoveAllowance = (idx: number) => setStandardAllowances(prev => prev.filter((_, i) => i !== idx));
+  const handleRemoveDeduction = (idx: number) => setStandardDeductions(prev => prev.filter((_, i) => i !== idx));
+
   return (
-    <div className="space-y-6">
+    <div className="p-6 space-y-8">
+      {/* Admin Features Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {adminFeatures.map((feature, index) => {
           const Icon = feature.icon;
@@ -243,6 +266,7 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
         })}
       </div>
 
+      {/* System Statistics Card */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>System Statistics</CardTitle>
@@ -280,6 +304,7 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
         </CardContent>
       </Card>
 
+      {/* Mark Attendance Card */}
       <Card>
         <CardHeader>
           <CardTitle>Mark Employee Attendance</CardTitle>
@@ -355,6 +380,109 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
         </CardContent>
       </Card>
 
+      {/* Standard Payroll Values Section */}
+      <Card className="max-w-2xl mx-auto mb-8">
+        <CardHeader>
+          <CardTitle>Standard Payroll Allowances & Deductions</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="mb-4">
+            <div className="flex justify-between items-center mb-2">
+              <span className="font-semibold text-green-700">Allowances (Monthly)</span>
+              <Button size="sm" variant="outline" onClick={handleAddAllowance}>Add Allowance</Button>
+            </div>
+            <table className="w-full text-sm mb-2">
+              <tbody>
+                {standardAllowances.map((a, idx) => (
+                  <tr key={idx}>
+                    <td>
+                      <input
+                        className="border rounded px-2 py-1 w-32"
+                        value={a.name}
+                        onChange={e => handleAllowanceChange(idx, 'name', e.target.value)}
+                        placeholder="Name"
+                      />
+                    </td>
+                    <td>
+                      <input
+                        className="border rounded px-2 py-1 w-24 text-right"
+                        type="number"
+                        value={a.amount}
+                        onChange={e => handleAllowanceChange(idx, 'amount', Number(e.target.value))}
+                        placeholder="Amount"
+                      />
+                    </td>
+                    <td>
+                      <Button size="icon" variant="ghost" onClick={() => handleRemoveAllowance(idx)}><X className="w-4 h-4" /></Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="mb-4">
+            <div className="flex justify-between items-center mb-2">
+              <span className="font-semibold text-red-700">Deductions (Monthly)</span>
+              <Button size="sm" variant="outline" onClick={handleAddDeduction}>Add Deduction</Button>
+            </div>
+            <table className="w-full text-sm mb-2">
+              <tbody>
+                {standardDeductions.map((d, idx) => (
+                  <tr key={idx}>
+                    <td>
+                      <input
+                        className="border rounded px-2 py-1 w-32"
+                        value={d.name}
+                        onChange={e => handleDeductionChange(idx, 'name', e.target.value)}
+                        placeholder="Name"
+                      />
+                    </td>
+                    <td>
+                      <input
+                        className="border rounded px-2 py-1 w-24 text-right"
+                        type="number"
+                        value={d.amount}
+                        onChange={e => handleDeductionChange(idx, 'amount', Number(e.target.value))}
+                        placeholder="Amount"
+                      />
+                    </td>
+                    <td>
+                      <Button size="icon" variant="ghost" onClick={() => handleRemoveDeduction(idx)}><X className="w-4 h-4" /></Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="text-xs text-gray-500">These values will be used as defaults for new employees. You can override them per employee.</div>
+          <Button
+            className="mb-4"
+            variant="outline"
+            onClick={async () => {
+              try {
+                const res = await fetch('http://localhost:5050/api/payroll/apply-standards-to-all', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    allowances: standardAllowances,
+                    deductions: standardDeductions
+                  })
+                });
+                if (res.ok) {
+                  alert('Standards applied to all employees!');
+                } else {
+                  alert('Failed to apply standards.');
+                }
+              } catch {
+                alert('Network error while applying standards.');
+              }
+            }}
+          >
+            Apply Standards to All Employees
+          </Button>
+        </CardContent>
+      </Card>
+
       {/* Edit Roles Dialog */}
       {showEditRolesDialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
@@ -402,8 +530,7 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
             </div>
           </div>
         </div>
-      )}
-
+            )}
       {/* Deactivate Users Dialog */}
       {showDeactivateDialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">

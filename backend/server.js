@@ -1474,3 +1474,30 @@ app.put('/api/teams/:teamId/team-lead', authorizeRoles(['admin', 'hr', 'super_ad
     res.status(500).json({ error: err.message });
   }
 });
+
+// --- Settings Model for Payroll Standards ---
+const settingsSchema = new mongoose.Schema({
+  key: { type: String, required: true, unique: true },
+  value: { type: mongoose.Schema.Types.Mixed, required: true }
+});
+const Settings = mongoose.model('Settings', settingsSchema);
+
+// --- Apply Payroll Standards to All Employees ---
+app.post('/api/payroll/apply-standards-to-all', async (req, res) => {
+  try {
+    // Fetch standards from settings
+    const settings = await Settings.findOne({ key: 'payroll_standards' });
+    if (!settings) return res.status(404).json({ error: 'Payroll standards not found' });
+    const { allowances, deductions } = settings.value || {};
+    // Update all employees
+    await Employee.updateMany({}, {
+      $set: {
+        allowances: allowances || [],
+        deductions: deductions || []
+      }
+    });
+    res.json({ success: true, message: 'Standards applied to all employees.' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to apply standards', details: error.message });
+  }
+});

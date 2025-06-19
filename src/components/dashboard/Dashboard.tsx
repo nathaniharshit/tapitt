@@ -894,7 +894,6 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
     } catch {
       setLeaveMsg('Network error.');
     }
-    setLeaveLoading(false);
   };
 
   // Delete leave
@@ -919,6 +918,18 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
   };
 
   // --- Payroll state and logic ---
+  interface AllowanceOrDeduction {
+    name: string;
+    amount: number;
+  }
+  interface PayrollDetails {
+    salary: number;
+    position: string;
+    department: string;
+    startDate: string;
+    allowances: AllowanceOrDeduction[];
+    deductions: AllowanceOrDeduction[];
+  }
   const [salary, setSalary] = useState<number | null>(null);
   const [salaryLoading, setSalaryLoading] = useState(false);
   const [payslipMonth, setPayslipMonth] = useState(() => {
@@ -926,22 +937,43 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   });
   const [payslipError, setPayslipError] = useState<string | null>(null);
-  const [payrollDetails, setPayrollDetails] = useState<any>(null);
+  const [payrollDetails, setPayrollDetails] = useState<PayrollDetails | null>(null);
+  const [standardAllowances, setStandardAllowances] = useState<AllowanceOrDeduction[]>([]);
+  const [standardDeductions, setStandardDeductions] = useState<AllowanceOrDeduction[]>([]);
 
-  // Helper: get recent N months in YYYY-MM format
-  function getRecentMonths(count = 6) {
-    const months = [];
-    const now = new Date();
-    for (let i = 0; i < count; i++) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
-    }
-    return months;
+  // Fetch standard payroll values from backend
+  useEffect(() => {
+    const fetchStandards = async () => {
+      try {
+        const res = await fetch('http://localhost:5050/api/payroll/standards');
+        const data = await res.json();
+        setStandardAllowances(data.allowances || []);
+        setStandardDeductions(data.deductions || []);
+      } catch {
+        setStandardAllowances([]);
+        setStandardDeductions([]);
+      }
+    };
+    fetchStandards();
+  }, []);
+
+  function calculateMonthlyGross(salary: number) {
+    if (typeof salary !== "number" || isNaN(salary)) return 0;
+    return Math.round(salary / 12);
   }
-  // Helper: format YYYY-MM to "Month YYYY"
-  function formatMonth(monthStr: string) {
-    const [year, month] = monthStr.split('-');
-    return `${new Date(Number(year), Number(month) - 1).toLocaleString('default', { month: 'long' })} ${year}`;
+  function calculateTotalAllowances(details: PayrollDetails | null) {
+    if (!details || !Array.isArray(details.allowances)) return 0;
+    return details.allowances.reduce((sum, a) => sum + (a.amount || 0), 0);
+  }
+  function calculateTotalDeductions(details: PayrollDetails | null) {
+    if (!details || !Array.isArray(details.deductions)) return 0;
+    return details.deductions.reduce((sum, d) => sum + (d.amount || 0), 0);
+  }
+  function calculateNetMonthlySalary(details: PayrollDetails | null) {
+    const gross = details ? calculateMonthlyGross(details.salary) : 0;
+    const allowances = calculateTotalAllowances(details);
+    const deductions = calculateTotalDeductions(details);
+    return gross + allowances - deductions;
   }
 
   // Fetch salary and payroll details for the current user from backend for all roles
@@ -962,19 +994,19 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
       const empRes = await fetch(`http://localhost:5050/api/employees/${userId}`);
       const empData = empRes.ok ? await empRes.json() : {};
       setPayrollDetails({
-        salary: typeof data.salary === "number" ? data.salary : (data.salary && !isNaN(Number(data.salary)) ? Number(data.salary) : null),
+        salary: typeof data.salary === "number" ? data.salary : (data.salary && !isNaN(Number(data.salary)) ? Number(data.salary) : 0),
         position: empData.position ?? '',
         department: empData.department ?? '',
         startDate: empData.startDate ?? '',
-        allowances: empData.allowances ?? [],
-        deductions: empData.deductions ?? [],
+        allowances: Array.isArray(empData.allowances) && empData.allowances.length > 0 ? empData.allowances : standardAllowances,
+        deductions: Array.isArray(empData.deductions) && empData.deductions.length > 0 ? empData.deductions : standardDeductions,
       });
     } catch {
       setSalary(null);
       setPayrollDetails(null);
     }
     setSalaryLoading(false);
-  }, [userId]);
+  }, [userId, standardAllowances, standardDeductions]);
 
   useEffect(() => {
     if (activeTab === 'payroll') fetchSalary();
@@ -1039,6 +1071,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
         if (!res.ok) {
           setRemoteError('Failed to fetch user for remote check');
           setIsRemoteToday(false);
+          setRemoteRequestPending(false);
           setRemoteApprover(null);
           return;
         }
@@ -1802,8 +1835,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
             )}
             <Card className="max-w-2xl mx-auto bg-card text-foreground">
               <CardHeader>
-                <CardTitle>Leave History</CardTitle>
-              </CardHeader>
+                <CardTitle>Leave History</CardTitle></CardHeader>
               <CardContent>
                 <ul className="divide-y divide-border">
                   {leaves.length === 0 && (
@@ -1911,65 +1943,93 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
           </div>
         );
       case 'payroll':
+        // Returns an array of the last 6 months (including current), in "YYYY-MM" format, most recent first
+        function getRecentMonths(): string[] {
+          const months: string[] = [];
+          const now = new Date();
+          for (let i = 0; i < 6; i++) {
+            const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+            const y = d.getFullYear();
+            const m = String(d.getMonth() + 1).padStart(2, '0');
+            months.push(`${y}-${m}`);
+          }
+          return months;
+        }
+        // Helper to format "YYYY-MM" as "Month YYYY"
+        function formatMonth(month: string): string {
+          const [y, m] = month.split('-');
+          const date = new Date(Number(y), Number(m) - 1, 1);
+          return date.toLocaleString('default', { month: 'long', year: 'numeric' });
+        }
+
         // Payroll feature: show salary details and payslip download
         return (
           <div className="p-8">
-            <Card className="max-w-2xl mx-auto mb-8">
+            <Card className="max-w-2xl mx-auto mb-8 shadow-lg border border-gray-200 dark:border-gray-700">
               <CardHeader>
-                <CardTitle>My Salary Details</CardTitle>
+                <CardTitle className="text-2xl font-bold text-center mb-2">My Salary Details</CardTitle>
               </CardHeader>
               <CardContent>
                 {salaryLoading ? (
-                  <div>Loading salary...</div>
+                  <div className="flex justify-center items-center h-24">Loading salary...</div>
                 ) : (
-                  <div className="mb-4">
-                    <div className="flex justify-between mb-2">
-                      <span className="font-semibold">Base Salary:</span>
-                      <span>
-                        {salary !== null && salary !== undefined
-                          ? `₹${salary.toLocaleString("en-IN")}`
-                          : <span className="text-red-600">Not available</span>
-                        }
+                  <div className="mb-4 space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="bg-blue-50 dark:bg-blue-900 rounded p-3 flex flex-col">
+                        <span className="font-semibold text-blue-700 dark:text-blue-200">Annual CTC</span>
+                        <span className="text-lg font-bold">{salary !== null && salary !== undefined ? `₹${salary.toLocaleString("en-IN")}` : <span className="text-red-600">Not available</span>}</span>
+                      </div>
+                      <div className="bg-purple-50 dark:bg-purple-900 rounded p-3 flex flex-col">
+                        <span className="font-semibold text-purple-700 dark:text-purple-200">Monthly Gross Salary</span>
+                        <span className="text-lg font-bold">{salary !== null && salary !== undefined ? `₹${calculateMonthlyGross(salary)?.toLocaleString("en-IN")}` : '--'}</span>
+                      </div>
+                    </div>
+                    {/* Allowances Section */}
+                    {Array.isArray(payrollDetails?.allowances) && payrollDetails.allowances.length > 0 && (
+                      <div>
+                        <div className="font-semibold text-green-700 dark:text-green-300 mb-1 flex items-center gap-2">
+                          <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 1.343-3 3s1.343 3 3 3 3-1.343 3-3-1.343-3-3-3z"/><path strokeLinecap="round" strokeLinejoin="round" d="M19.4 15a1.65 1.65 0 01-1.4 2.4H6a1.65 1.65 0 01-1.4-2.4l1.4-2.4V7a5 5 0 0110 0v5.6l1.4 2.4z"/></svg>
+                          Allowances (Monthly)
+                        </div>
+                        <table className="w-full text-sm mb-2">
+                          <tbody>
+                            {payrollDetails.allowances.map((a, idx) => (
+                              <tr key={idx} className="border-b border-gray-100 dark:border-gray-700">
+                                <td className="py-1 pl-2">{a.name}</td>
+                                <td className="py-1 pr-2 text-right text-green-700 dark:text-green-300 font-semibold">₹{a.amount}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                    {/* Deductions Section */}
+                    {Array.isArray(payrollDetails?.deductions) && payrollDetails.deductions.length > 0 && (
+                      <div>
+                        <div className="font-semibold text-red-700 dark:text-red-300 mb-1 flex items-center gap-2">
+                          <svg className="w-4 h-4 text-red-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 1.343-3 3s1.343 3 3 3 3-1.343 3-3-1.343-3-3-3z"/><path strokeLinecap="round" strokeLinejoin="round" d="M19.4 15a1.65 1.65 0 01-1.4 2.4H6a1.65 1.65 0 01-1.4-2.4l1.4-2.4V7a5 5 0 0110 0v5.6l1.4 2.4z"/></svg>
+                          Deductions (Monthly)
+                        </div>
+                        <table className="w-full text-sm mb-2">
+                          <tbody>
+                            {payrollDetails.deductions.map((d, idx) => (
+                              <tr key={idx} className="border-b border-gray-100 dark:border-gray-700">
+                                <td className="py-1 pl-2">{d.name}</td>
+                                <td className="py-1 pr-2 text-right text-red-700 dark:text-red-300 font-semibold">₹{d.amount}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                    {/* Net Salary Section */}
+                    <div className="flex justify-between items-center mt-4 p-3 rounded bg-green-100 dark:bg-green-900 border border-green-200 dark:border-green-700 shadow">
+                      <span className="font-bold text-lg">Net Monthly Salary</span>
+                      <span className="font-bold text-2xl text-green-700 dark:text-green-300">
+                        {payrollDetails ? `₹${calculateNetMonthlySalary(payrollDetails)?.toLocaleString("en-IN")}` : '--'}
                       </span>
                     </div>
-                    {payrollDetails?.position && (
-                      <div className="flex justify-between mb-2">
-                        <span className="font-semibold">Position:</span>
-                        <span>{payrollDetails.position}</span>
-                      </div>
-                    )}
-                    {payrollDetails?.department && (
-                      <div className="flex justify-between mb-2">
-                        <span className="font-semibold">Department:</span>
-                        <span>{payrollDetails.department}</span>
-                      </div>
-                    )}
-                    {payrollDetails?.startDate && (
-                      <div className="flex justify-between mb-2">
-                        <span className="font-semibold">Start Date:</span>
-                        <span>{payrollDetails.startDate}</span>
-                      </div>
-                    )}
-                    {Array.isArray(payrollDetails?.allowances) && payrollDetails.allowances.length > 0 && (
-                      <div className="mb-2">
-                        <span className="font-semibold">Allowances:</span>
-                        <ul className="ml-4 list-disc">
-                          {payrollDetails.allowances.map((a: any, idx: number) => (
-                            <li key={idx}>{a.name}: ₹{a.amount}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                    {Array.isArray(payrollDetails?.deductions) && payrollDetails.deductions.length > 0 && (
-                      <div className="mb-2">
-                        <span className="font-semibold">Deductions:</span>
-                        <ul className="ml-4 list-disc">
-                          {payrollDetails.deductions.map((d: any, idx: number) => (
-                            <li key={idx}>{d.name}: ₹{d.amount}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
+                    <div className="text-xs text-gray-500 mt-2">* CTC is annual. All other values are monthly. Net = Gross + Allowances - Deductions</div>
                   </div>
                 )}
                 <div className="mb-4 flex items-center gap-4">
@@ -1982,7 +2042,6 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                     className="border rounded px-2 py-1 bg-background text-foreground dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700"
                     max={new Date().toISOString().substring(0, 7)}
                   />
-
                   <button
                     className="px-4 py-2 bg-green-600 text-white rounded font-semibold"
                     onClick={handleDownloadPayslip}
@@ -2933,3 +2992,4 @@ function AwardsSection({ user, employees }) {
 }
 
 export default Dashboard;
+
