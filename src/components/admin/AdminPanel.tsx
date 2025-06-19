@@ -122,15 +122,24 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
     setSavingRoles(true);
     try {
       await Promise.all(
-        allEmployees.map(emp => {
+        allEmployees.map(async emp => {
           if (editRoles[emp._id] !== emp.role) {
-            return fetch(`http://localhost:5050/api/employees/${emp._id}`, {
+            // Update the simple role field
+            await fetch(`http://localhost:5050/api/employees/${emp._id}`, {
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ ...emp, role: editRoles[emp._id] }),
             });
+            // If using custom roles, also update roleRef if available
+            const selectedRoleObj = roles.find((r: any) => r.name === editRoles[emp._id]);
+            if (selectedRoleObj && selectedRoleObj._id) {
+              await fetch(`http://localhost:5050/api/employees/${emp._id}/role`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ roleId: selectedRoleObj._id }),
+              });
+            }
           }
-          return null;
         })
       );
       setShowEditRolesDialog(false);
@@ -652,7 +661,7 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
                     </select>
                   </div>
                 ))
-              }
+              )}
             </div>
             <div className="flex justify-end space-x-2 mt-6">
               <Button variant="outline" onClick={() => setShowEditRolesDialog(false)} disabled={savingRoles}>Cancel</Button>

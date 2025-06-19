@@ -32,30 +32,6 @@ type DemoUser = {
   role: 'super_admin' | 'admin' | 'employee' | 'intern'; // Added 'intern'
 };
 
-const demoUsers: Record<'super_admin' | 'admin' | 'employee', DemoUser> = {
-  super_admin: {
-    id: '1',
-    name: 'Divy Shah',
-    email: 'super@tapitt.com',
-    password: 'super123',
-    role: 'super_admin'
-  },
-  admin: {
-    id: '2',
-    name: 'Nilay Shah',
-    email: 'admin@tapitt.com',
-    password: 'admin123',
-    role: 'admin'
-  },
-  employee: {
-    id: '3',
-    name: 'Mike Johnson',
-    email: 'employee@tapitt.com',
-    password: 'employee123',
-    role: 'employee'
-  }
-};
-
 const LoginForm = ({ onLogin }: LoginFormProps) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -68,29 +44,8 @@ const LoginForm = ({ onLogin }: LoginFormProps) => {
     e.preventDefault();
     setError(null);
 
-    // Static login for super_admin and admin
-    if (selectedRole === 'super_admin' || selectedRole === 'admin') {
-      const user = Object.values(demoUsers).find((u) => u.email === email);
-      // Debug log for troubleshooting
-      console.log({ email, password, selectedRole, user });
-      if (!user) {
-        setError('Invalid email address.');
-        return;
-      }
-      if (user.role !== selectedRole) {
-        setError('Selected role does not match the email entered.');
-        return;
-      }
-      if (user.password !== password) {
-        setError('Incorrect password.');
-        return;
-      }
-      onLogin(user);
-      return;
-    }
-
-    // Employee/intern login via backend
-    if (selectedRole === 'employee' || selectedRole === 'intern') {
+    // Unified backend login for all roles
+    if (selectedRole === 'super_admin' || selectedRole === 'admin' || selectedRole === 'employee' || selectedRole === 'intern') {
       try {
         const response = await fetch('http://localhost:5050/api/login', {
           method: 'POST',
@@ -102,10 +57,10 @@ const LoginForm = ({ onLogin }: LoginFormProps) => {
           setError(data.error || 'Login failed');
           return;
         }
-        // Accept both employee and intern roles
+        // Accept all roles for login, but check if backend role matches selectedRole
         const backendRole = data.employee?.role;
-        if (backendRole !== 'employee' && backendRole !== 'intern') {
-          setError('You are not authorized to login as employee/intern.');
+        if (backendRole !== selectedRole && !(selectedRole === 'employee' && backendRole === 'manager')) {
+          setError('You are not authorized to login as this role.');
           return;
         }
         // If mustChangePassword, redirect to set password page
@@ -119,12 +74,13 @@ const LoginForm = ({ onLogin }: LoginFormProps) => {
           name: `${data.employee.firstname} ${data.employee.lastname}`,
           email: data.employee.email,
           password: password,
-          // Map intern to employee for UI/permissions
-          role: backendRole === 'intern' ? 'employee' : backendRole
+          // Map intern and manager to employee for UI/permissions
+          role: backendRole === 'intern' || backendRole === 'manager' ? 'employee' : backendRole
         });
       } catch (err) {
         setError('Network error.');
       }
+      return;
     }
   };
 
