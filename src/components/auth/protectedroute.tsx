@@ -1,13 +1,13 @@
 import { Navigate } from 'react-router-dom';
 
 interface ProtectedRouteProps {
-  user: { role: string } | null;
-  allowedRoles: string[];
+  user: { roleRef?: { permissions?: string[] } } | null;
+  requiredPermission: string;
   children: React.ReactNode;
 }
 
-const ProtectedRoute = ({ user, allowedRoles, children }: ProtectedRouteProps) => {
-  if (!user || !allowedRoles.includes(user.role)) {
+const ProtectedRoute = ({ user, requiredPermission, children }: ProtectedRouteProps) => {
+  if (!user || !user.roleRef || !Array.isArray(user.roleRef.permissions) || !user.roleRef.permissions.includes(requiredPermission)) {
     return <Navigate to="/login" />;
   }
   return <>{children}</>;
@@ -15,8 +15,8 @@ const ProtectedRoute = ({ user, allowedRoles, children }: ProtectedRouteProps) =
 
 export default ProtectedRoute;
 
-// Usage example (not part of the component file):
-// <ProtectedRoute user={user} allowedRoles={['admin', 'super_admin']}>
+// Usage example:
+// <ProtectedRoute user={user} requiredPermission="edit_employee">
 //   <AdminPanel userRole={user.role} />
 // </ProtectedRoute>
 

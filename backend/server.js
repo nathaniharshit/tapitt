@@ -91,11 +91,6 @@ const employeeSchema = new mongoose.Schema({
   github: String,
   status: String,
   picture: String, // Store as URL or base64 string
-  role: {
-    type: String,
-    enum: ['employee', 'admin', 'super_admin', 'superadmin', 'intern'],
-    required: true
-  },
   password: { type: String, select: false },
   mustChangePassword: { type: Boolean, default: true },
   department: String,      // <-- Add
@@ -109,7 +104,25 @@ const employeeSchema = new mongoose.Schema({
       date: { type: String, required: true }, // YYYY-MM-DD
       status: { type: String, enum: ['present', 'absent'], required: true }
     }
-  ]
+  ],
+  allowances: {
+    type: [
+      {
+        name: { type: String, required: true },
+        amount: { type: Number, required: true }
+      }
+    ],
+    default: undefined
+  },
+  deductions: {
+    type: [
+      {
+        name: { type: String, required: true },
+        amount: { type: Number, required: true }
+      }
+    ],
+    default: undefined
+  }
 }, { timestamps: true });
 
 // Add remoteWork field to employee schema if not present
@@ -136,6 +149,18 @@ if (!employeeSchema.paths.remoteWorkApprovals) {
     }]
   });
 }
+
+// --- Role Model for Custom RBAC ---
+const roleSchema = new mongoose.Schema({
+  name: { type: String, required: true, unique: true },
+  permissions: [String], // e.g., ['edit_employee', 'view_payroll']
+});
+const Role = mongoose.model('Role', roleSchema);
+
+// Update Employee schema to reference Role
+employeeSchema.add({
+  roleRef: { type: mongoose.Schema.Types.ObjectId, ref: 'Role' }
+});
 
 const Employee = mongoose.model('Employee', employeeSchema);
 
@@ -746,7 +771,8 @@ app.post('/api/login', async (req, res) => {
     // Update lastLogin timestamp
     employee.lastLogin = new Date();
     await employee.save();
-    // Return mustChangePassword flag for frontend
+    // Populate roleRef for permissions-based RBAC
+    const employeeWithRole = await Employee.findById(employee._id).populate('roleRef');
     res.json({ message: 'Login successful', employee: {
       _id: employee._id,
       email: employee.email,
@@ -754,7 +780,8 @@ app.post('/api/login', async (req, res) => {
       mustChangePassword: employee.mustChangePassword,
       firstname: employee.firstname,
       lastname: employee.lastname,
-      lastLogin: employee.lastLogin
+      lastLogin: employee.lastLogin,
+      roleRef: employeeWithRole.roleRef // includes name and permissions
     }});
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1392,6 +1419,58 @@ app.get('/api/holidays', async (req, res) => {
   }
 });
 // --- End Holiday Schema and Endpoints ---
+// --- Settings Model for Payroll Standards ---
+const settingsSchema = new mongoose.Schema({
+  key: { type: String, required: true, unique: true },
+  value: { type: mongoose.Schema.Types.Mixed, required: true }
+});
+const Settings = mongoose.model('Settings', settingsSchema);
+
+// --- Apply Payroll Standards to All Employees ---
+app.post('/api/payroll/apply-standards-to-all', async (req, res) => {
+  try {
+    // Fetch standards from settings
+    const settings = await Settings.findOne({ key: 'payroll_standards' });
+    if (!settings) return res.status(404).json({ error: 'Payroll standards not found' });
+    const { allowances, deductions } = settings.value || {};
+    // Update all employees
+    await Employee.updateMany({}, {
+      $set: {
+        allowances: allowances || [],
+        deductions: deductions || []
+      }
+    });
+    res.json({ success: true, message: 'Standards applied to all employees.' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to apply standards', details: error.message });
+  }
+});
+
+// --- Create Initial Payroll Standards (one-time endpoint) ---
+app.post('/api/payroll/create-initial-standards', async (req, res) => {
+  try {
+    const exists = await Settings.findOne({ key: 'payroll_standards' });
+    if (exists) return res.status(400).json({ error: 'payroll_standards already exists' });
+    const { allowances, deductions } = req.body || {};
+    const doc = new Settings({
+      key: 'payroll_standards',
+      value: {
+        allowances: Array.isArray(allowances) ? allowances : [
+          { name: 'HRA', amount: 5000 },
+          { name: 'Transport', amount: 2000 }
+        ],
+        deductions: Array.isArray(deductions) ? deductions : [
+          { name: 'PF', amount: 1800 },
+          { name: 'Professional Tax', amount: 200 }
+        ]
+      }
+    });
+    await doc.save();
+    res.json({ success: true, message: 'Initial payroll standards created.' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
 
 // --- SOCKET.IO SETUP ---
 const server = http.createServer(app);
@@ -1475,29 +1554,65 @@ app.put('/api/teams/:teamId/team-lead', authorizeRoles(['admin', 'hr', 'super_ad
   }
 });
 
-// --- Settings Model for Payroll Standards ---
-const settingsSchema = new mongoose.Schema({
-  key: { type: String, required: true, unique: true },
-  value: { type: mongoose.Schema.Types.Mixed, required: true }
-});
-const Settings = mongoose.model('Settings', settingsSchema);
-
-// --- Apply Payroll Standards to All Employees ---
-app.post('/api/payroll/apply-standards-to-all', async (req, res) => {
+// --- Role Management Endpoints ---
+// Create a new role
+app.post('/api/roles', async (req, res) => {
   try {
-    // Fetch standards from settings
-    const settings = await Settings.findOne({ key: 'payroll_standards' });
-    if (!settings) return res.status(404).json({ error: 'Payroll standards not found' });
-    const { allowances, deductions } = settings.value || {};
-    // Update all employees
-    await Employee.updateMany({}, {
-      $set: {
-        allowances: allowances || [],
-        deductions: deductions || []
-      }
-    });
-    res.json({ success: true, message: 'Standards applied to all employees.' });
+    const { name, permissions } = req.body;
+    if (!name || !Array.isArray(permissions)) return res.status(400).json({ error: 'Name and permissions required' });
+    const role = new Role({ name, permissions });
+    await role.save();
+    res.json(role);
   } catch (error) {
-    res.status(500).json({ error: 'Failed to apply standards', details: error.message });
+    res.status(500).json({ error: error.message });
   }
 });
+// List all roles
+app.get('/api/roles', async (req, res) => {
+  try {
+    const roles = await Role.find();
+    res.json(roles);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+// Update a role
+app.put('/api/roles/:id', async (req, res) => {
+  try {
+    const { name, permissions } = req.body;
+    const role = await Role.findByIdAndUpdate(req.params.id, { name, permissions }, { new: true });
+    if (!role) return res.status(404).json({ error: 'Role not found' });
+    res.json(role);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+// Delete a role
+app.delete('/api/roles/:id', async (req, res) => {
+  try {
+    const role = await Role.findByIdAndDelete(req.params.id);
+    if (!role) return res.status(404).json({ error: 'Role not found' });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+// --- End Role Management Endpoints ---
+
+// Assign a custom role to an employee
+app.put('/api/employees/:id/role', async (req, res) => {
+  try {
+    const { roleId } = req.body;
+    if (!roleId) return res.status(400).json({ error: 'roleId is required' });
+    const emp = await Employee.findByIdAndUpdate(
+      req.params.id,
+      { roleRef: roleId },
+      { new: true }
+    );
+    if (!emp) return res.status(404).json({ error: 'Employee not found' });
+    res.json(emp);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+

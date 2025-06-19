@@ -36,6 +36,8 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
     const today = new Date();
     return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
   });
+  const [roles, setRoles] = useState([]);
+  const [roleAssignMsg, setRoleAssignMsg] = useState('');
 
   const fetchCounts = async () => {
     setLoading(true);
@@ -67,6 +69,18 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
     fetchCounts();
     const interval = setInterval(fetchCounts, 30000);
     return () => clearInterval(interval);
+  }, []);
+
+  // Fetch all roles
+  useEffect(() => {
+    const fetchRoles = async () => {
+      try {
+        const res = await fetch('http://localhost:5050/api/roles');
+        const data = await res.json();
+        setRoles(data);
+      } catch {}
+    };
+    fetchRoles();
   }, []);
 
   if (userRole !== 'admin' && userRole !== 'super_admin') {
@@ -219,6 +233,9 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
     { name: 'Professional Tax', amount: 200 },
   ]);
   const [editPayroll, setEditPayroll] = useState(false);
+  const [payrollLoading, setPayrollLoading] = useState(false);
+  const [payrollMsg, setPayrollMsg] = useState('');
+
   // Handlers for editing standard values
   const handleAllowanceChange = (idx: number, field: 'name' | 'amount', value: string | number) => {
     setStandardAllowances(prev => prev.map((a, i) => i === idx ? { ...a, [field]: value } : a));
@@ -230,6 +247,78 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
   const handleAddDeduction = () => setStandardDeductions(prev => [...prev, { name: '', amount: 0 }]);
   const handleRemoveAllowance = (idx: number) => setStandardAllowances(prev => prev.filter((_, i) => i !== idx));
   const handleRemoveDeduction = (idx: number) => setStandardDeductions(prev => prev.filter((_, i) => i !== idx));
+
+  // Fetch standards from backend on mount
+  useEffect(() => {
+    const fetchStandards = async () => {
+      try {
+        const res = await fetch('http://localhost:5050/api/payroll/standards');
+        if (res.ok) {
+          const data = await res.json();
+          if (data.allowances) setStandardAllowances(data.allowances);
+          if (data.deductions) setStandardDeductions(data.deductions);
+        }
+      } catch {}
+    };
+    fetchStandards();
+  }, []);
+
+  const handleSaveStandards = async () => {
+    setPayrollLoading(true);
+    setPayrollMsg('');
+    try {
+      const res = await fetch('http://localhost:5050/api/payroll/standards', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ allowances: standardAllowances, deductions: standardDeductions })
+      });
+      if (res.ok) {
+        setPayrollMsg('Standards saved!');
+      } else {
+        setPayrollMsg('Failed to save standards.');
+      }
+    } catch {
+      setPayrollMsg('Network error.');
+    }
+    setPayrollLoading(false);
+  };
+
+  const handleApplyStandards = async () => {
+    setPayrollLoading(true);
+    setPayrollMsg('');
+    try {
+      const res = await fetch('http://localhost:5050/api/payroll/apply-standards-to-all', {
+        method: 'POST'
+      });
+      if (res.ok) {
+        setPayrollMsg('Standards applied to all employees!');
+      } else {
+        setPayrollMsg('Failed to apply standards.');
+      }
+    } catch {
+      setPayrollMsg('Network error.');
+    }
+    setPayrollLoading(false);
+  };
+
+  const handleAssignRole = async (empId, roleId) => {
+    setRoleAssignMsg('');
+    try {
+      const res = await fetch(`http://localhost:5050/api/employees/${empId}/role`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ roleId })
+      });
+      if (res.ok) {
+        setRoleAssignMsg('Role assigned!');
+        fetchCounts();
+      } else {
+        setRoleAssignMsg('Failed to assign role.');
+      }
+    } catch {
+      setRoleAssignMsg('Network error.');
+    }
+  };
 
   return (
     <div className="p-6 space-y-8">
@@ -454,32 +543,59 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
               </tbody>
             </table>
           </div>
+          <div className="flex gap-2 mb-2">
+            <Button size="sm" onClick={handleSaveStandards} disabled={payrollLoading}>Save Standards</Button>
+            <Button size="sm" variant="secondary" onClick={handleApplyStandards} disabled={payrollLoading}>Apply Standards to All Employees</Button>
+            {payrollLoading && <span className="text-xs text-gray-500 ml-2">Processing...</span>}
+          </div>
+          {payrollMsg && <div className={`text-xs mb-2 ${payrollMsg.startsWith('Failed') || payrollMsg.startsWith('Network') ? 'text-red-600' : 'text-green-600'}`}>{payrollMsg}</div>}
           <div className="text-xs text-gray-500">These values will be used as defaults for new employees. You can override them per employee.</div>
-          <Button
-            className="mb-4"
-            variant="outline"
-            onClick={async () => {
-              try {
-                const res = await fetch('http://localhost:5050/api/payroll/apply-standards-to-all', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    allowances: standardAllowances,
-                    deductions: standardDeductions
-                  })
-                });
-                if (res.ok) {
-                  alert('Standards applied to all employees!');
-                } else {
-                  alert('Failed to apply standards.');
-                }
-              } catch {
-                alert('Network error while applying standards.');
-              }
-            }}
-          >
-            Apply Standards to All Employees
-          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Custom Role Assignment */}
+      <Card className="max-w-2xl mx-auto mb-8">
+        <CardHeader>
+          <CardTitle>Custom Role Assignment</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="mb-2 text-sm text-gray-500">Assign a custom role to each employee:</div>
+          {roleAssignMsg && <div className={`mb-2 text-xs ${roleAssignMsg.startsWith('Role') ? 'text-green-600' : 'text-red-600'}`}>{roleAssignMsg}</div>}
+          <table className="w-full text-sm mb-2">
+            <thead>
+              <tr>
+                <th className="text-left">Name</th>
+                <th className="text-left">Current Role</th>
+                <th className="text-left">Custom Role</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {allEmployees.map(emp => (
+                <tr key={emp._id}>
+                  <td>{emp.firstname} {emp.lastname}</td>
+                  <td>{emp.role}</td>
+                  <td>
+                    <select
+                      value={emp.roleRef || ''}
+                      onChange={e => handleAssignRole(emp._id, e.target.value)}
+                      className="border rounded px-2 py-1"
+                    >
+                      <option value="">-- Select Role --</option>
+                      {roles.map(role => (
+                        <option key={role._id} value={role._id}>{role.name}</option>
+                      ))}
+                    </select>
+                  </td>
+                  <td>
+                    {emp.roleRef && roles.find(r => r._id === emp.roleRef) && (
+                      <span className="text-xs text-gray-500">{roles.find(r => r._id === emp.roleRef).permissions.join(', ')}</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </CardContent>
       </Card>
 
@@ -530,7 +646,7 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
             </div>
           </div>
         </div>
-            )}
+      )}
       {/* Deactivate Users Dialog */}
       {showDeactivateDialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
