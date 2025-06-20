@@ -1673,7 +1673,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                 )}
               </CardContent>
             </Card>
-            <Card className="max-w-2xl mx-auto">
+            <Card className="max-w-4xl mx-auto">
               <CardHeader>
                 <CardTitle>
                   <span className="flex items-center gap-2">
@@ -1700,7 +1700,8 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                   </div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-                  <div className="rounded-xl bg-gradient-to-br from-green-100/80 to-green-200/60 dark:from-green-900 dark:to-green-800 shadow p-6 flex flex-col items-center">
+                  {/* Present Card */}
+                  <div className="rounded-xl bg-gradient-to-br from-green-100/80 to-green-200/60 dark:from-green-900 dark:to-green-800 shadow-lg p-6 flex flex-col items-center">
                     <div className="flex items-center gap-2 mb-2">
                       <svg className="w-7 h-7 text-green-600 dark:text-green-300" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
@@ -1713,15 +1714,24 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                       {attendanceLoading ? (
                         <li>Loading...</li>
                       ) : presentEmployees.length === 0 ? (
-                        <li>No one present</li>
+                        <li>No one present.</li>
                       ) : (
                         presentEmployees.map(emp => (
-                          <li key={emp._id} className="truncate">{emp.firstname} {emp.lastname}</li>
+                          <li key={emp._id} className="flex items-center gap-2 py-1">
+                            <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-green-200 dark:bg-green-800 text-green-800 dark:text-green-200 font-bold text-base">
+                              {emp.firstname && emp.lastname
+                                ? `${emp.firstname[0]}${emp.lastname[0]}`
+                                : emp.firstname?.slice(0, 2) || 'EM'}
+                            </span>
+                            <span className="font-medium">{emp.firstname} {emp.lastname}</span>
+                            <span className="ml-2 text-xs text-muted-foreground">{emp.department}</span>
+                          </li>
                         ))
                       )}
                     </ul>
                   </div>
-                  <div className="rounded-xl bg-gradient-to-br from-red-100/80 to-red-200/60 dark:from-red-900 dark:to-red-800 shadow p-6 flex flex-col items-center">
+                  {/* Absent Card */}
+                  <div className="rounded-xl bg-gradient-to-br from-red-100/80 to-red-200/60 dark:from-red-900 dark:to-red-800 shadow-lg p-6 flex flex-col items-center">
                     <div className="flex items-center gap-2 mb-2">
                       <svg className="w-7 h-7 text-red-600 dark:text-red-300" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -1733,16 +1743,25 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                     <ul className="mt-2 text-sm text-red-900 dark:text-red-200 text-left max-h-32 overflow-y-auto w-full">
                       {attendanceLoading ? (
                         <li>Loading...</li>
-                      ): absentEmployees.length === 0 ? (
-                        <li>No one absent</li>
+                      ) : absentEmployees.length === 0 ? (
+                        <li>No one absent.</li>
                       ) : (
                         absentEmployees.map(emp => (
-                          <li key={emp._id} className="truncate">{emp.firstname} {emp.lastname}</li>
+                          <li key={emp._id} className="flex items-center gap-2 py-1">
+                            <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-red-200 dark:bg-red-800 text-red-800 dark:text-red-200 font-bold text-base">
+                              {emp.firstname && emp.lastname
+                                ? `${emp.firstname[0]}${emp.lastname[0]}`
+                                : emp.firstname?.slice(0, 2) || 'EM'}
+                            </span>
+                            <span className="font-medium">{emp.firstname} {emp.lastname}</span>
+                            <span className="ml-2 text-xs text-muted-foreground">{emp.department}</span>
+                          </li>
                         ))
                       )}
                     </ul>
                   </div>
-                  <div className="rounded-xl bg-gradient-to-br from-gray-100/80 to-gray-200/60 dark:from-gray-900 dark:to-gray-800 shadow p-6 flex flex-col items-center">
+                  {/* Total Card */}
+                  <div className="rounded-xl bg-gradient-to-br from-gray-100/80 to-gray-200/60 dark:from-gray-900 dark:to-gray-800 shadow-lg p-6 flex flex-col items-center">
                     <div className="flex items-center gap-2 mb-2">
                       <svg className="w-7 h-7 text-blue-600 dark:text-blue-300" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                         <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" fill="none" />

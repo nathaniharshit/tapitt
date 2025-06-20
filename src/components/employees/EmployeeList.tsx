@@ -143,6 +143,11 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
     return null;
   };
 
+  const getInitials = (emp: any) =>
+    emp?.firstname && emp?.lastname
+      ? `${emp.firstname[0]}${emp.lastname[0]}`
+      : emp?.firstname?.slice(0, 2) || 'EM';
+
   const groupedEmployees = {
     superadmin: employees.filter(e => e.role === 'superadmin' || e.role === 'superadmin'),
     admin: employees.filter(e => e.role === 'admin'),
@@ -202,69 +207,62 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
             <h3 className={`text-xl font-bold mb-4 ${section.border} text-foreground`}>
               {section.label}
             </h3>
-            <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 md:grid-cols-3">
+            <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
               {group.map((employee) => {
                 const profilePic = getProfilePicUrl(employee);
-                const initials =
-                  employee.firstname && employee.lastname
-                    ? `${employee.firstname[0]}${employee.lastname[0]}`.toUpperCase()
-                    : '?';
+                const initials = getInitials(employee);
                 return (
                   <Card
                     key={employee._id}
-                    className={`flex flex-col h-full border-2 ${section.border} ${section.bg} text-foreground transition-shadow hover:shadow-lg`}
+                    className={`flex flex-col h-full border-2 ${section.border} ${section.bg} text-foreground transition-shadow hover:shadow-xl hover:scale-[1.03] duration-200`}
                   >
-                    <CardContent className="p-6 flex flex-col flex-1">
-                      <div className="flex items-center space-x-4 mb-4">
-                        {profilePic ? (
-                          <img
-                            src={profilePic}
-                            alt="Profile"
-                            className="w-12 h-12 rounded-full object-cover border"
-                          />
-                        ) : (
-                          <div className={`w-12 h-12 ${section.badge} rounded-full flex items-center justify-center`}>
-                            <span className="font-semibold">
-                              {initials}
-                            </span>
+                    <CardHeader className="flex flex-col items-center pb-0">
+                      {profilePic ? (
+                        <img
+                          src={profilePic}
+                          alt="Profile"
+                          className="w-16 h-16 rounded-full object-cover border-2 border-white shadow -mt-8 mb-2"
+                        />
+                      ) : (
+                        <div className={`w-16 h-16 ${section.badge} rounded-full flex items-center justify-center text-2xl font-bold border-2 border-white shadow -mt-8 mb-2`}>
+                          {initials}
+                        </div>
+                      )}
+                      <CardTitle className="text-lg font-semibold text-center">{employee.firstname} {employee.lastname}</CardTitle>
+                      <div className="text-sm text-muted-foreground text-center">{employee.position} • {employee.department}</div>
+                      <div className="text-xs text-muted-foreground text-center">{employee.email}</div>
+                    </CardHeader>
+                    <CardContent className="flex flex-col flex-1 justify-between pt-2">
+                      <div className="flex flex-col items-center mb-2">
+                        <Badge className={`mb-1 ${section.badge}`}>{employee.status || 'active'}</Badge>
+                        <div className="text-xs text-muted-foreground">
+                          Joined: {employee.startDate ? new Date(employee.startDate).toLocaleDateString() : '-'}
+                        </div>
+                        {(userRole === 'superadmin' || userRole === 'admin') && (
+                          <div className="text-xs text-muted-foreground">
+                            Salary: {formatSalary(employee.salary)}
                           </div>
                         )}
-                        <div>
-                          <h3 className="text-lg font-semibold text-foreground">{employee.firstname} {employee.lastname}</h3>
-                          <p className="text-muted-foreground">{employee.position} • {employee.department}</p>
-                          <p className="text-xs text-muted-foreground">{employee.email}</p>
-                        </div>
                       </div>
-                      <div className="flex-1" />
-                      <div className="flex items-center justify-between mt-2">
-                        <div>
-                          <span className={`inline-block rounded px-2 py-1 text-xs font-semibold ${section.badge}`}>
-                            {employee.status || 'active'}
-                          </span>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            Joined: {new Date(employee.startDate).toLocaleDateString()}
-                          </p>
-                        </div>
-                        <div className="flex space-x-2">
-                          <Button variant="outline" size="sm" onClick={() => handleView(employee)}>
-                            <Eye className="h-4 w-4" />
+                      <div className="flex items-center justify-center gap-2 mt-2">
+                        <Button variant="outline" size="sm" onClick={() => handleView(employee)}>
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                        {canEdit && (
+                          <Button variant="outline" size="sm" onClick={() => handleEdit(employee)}>
+                            <Edit className="h-4 w-4" />
                           </Button>
-                          {canEdit && (
-                            <Button variant="outline" size="sm" onClick={() => handleEdit(employee)}>
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                          )}
-                          {canDelete && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
-                              onClick={() => handleDelete(employee)}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          )}
-                        </div>
+                        )}
+                        {canDelete && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
+                            onClick={() => handleDelete(employee)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
                       </div>
                     </CardContent>
                   </Card>
