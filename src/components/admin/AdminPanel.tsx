@@ -329,16 +329,19 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
   const handleAssignRole = async (empId, roleId) => {
     setRoleAssignMsg('');
     try {
+      // If demoting (roleId is empty string), send null instead
+      const payload = roleId === '' ? { roleId: null } : { roleId };
       const res = await fetch(`http://localhost:5050/api/employees/${empId}/role`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ roleId })
+        body: JSON.stringify(payload)
       });
       if (res.ok) {
         setRoleAssignMsg('Role assigned!');
         fetchCounts();
       } else {
-        setRoleAssignMsg('Failed to assign role.');
+        const err = await res.json();
+        setRoleAssignMsg('Error: ' + (err.error || 'Failed to assign role'));
       }
     } catch {
       setRoleAssignMsg('Network error.');
@@ -593,6 +596,7 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
                 <th className="text-left">Current Role</th>
                 <th className="text-left">Custom Role</th>
                 <th></th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
@@ -615,6 +619,14 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
                   <td>
                     {emp.roleRef && roles.find(r => r._id === emp.roleRef) && (
                       <span className="text-xs text-gray-500">{roles.find(r => r._id === emp.roleRef).permissions.join(', ')}</span>
+                    )}
+                  </td>
+                  <td>
+                    {/* Demote to Employee button if current custom role is manager */}
+                    {emp.roleRef && roles.find(r => r._id === emp.roleRef && r.name.toLowerCase() === 'manager') && (
+                      <Button size="sm" variant="outline" onClick={() => handleAssignRole(emp._id, '')}>
+                        Demote to Employee
+                      </Button>
                     )}
                   </td>
                 </tr>
