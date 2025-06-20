@@ -346,19 +346,43 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
   };
 
   return (
-    <div className="p-6 space-y-8 bg-background text-foreground dark:bg-gray-900 dark:text-gray-100">
+    <div className="relative min-h-screen bg-gradient-to-br from-blue-100 via-purple-50 to-pink-100 dark:from-gray-900 dark:via-gray-950 dark:to-gray-900 transition-colors duration-300">
+      {/* Decorative background shapes */}
+      <div className="pointer-events-none absolute inset-0 z-0">
+        <div className="absolute -top-24 -left-24 w-96 h-96 bg-blue-200 dark:bg-blue-900 rounded-full opacity-20 blur-3xl" />
+        <div className="absolute -bottom-24 -right-24 w-96 h-96 bg-pink-200 dark:bg-pink-900 rounded-full opacity-20 blur-3xl" />
+      </div>
+
+      {/* Admin Panel Header */}
+      <div className="relative z-10 px-6 pt-10 pb-6 flex flex-col items-start gap-2">
+        <div className="flex items-center gap-4">
+          <Shield className="h-10 w-10 text-blue-600 dark:text-blue-400 drop-shadow" />
+          <div>
+            <h1 className="text-4xl font-extrabold tracking-tight text-blue-900 dark:text-blue-200 drop-shadow">Admin Panel</h1>
+            <div className="text-lg text-blue-700 dark:text-blue-300 font-medium">Manage users, payroll, attendance, and more</div>
+          </div>
+        </div>
+      </div>
+      <hr className="border-blue-200 dark:border-gray-700 mb-8 mx-6" />
+
       {/* Admin Features Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="relative z-10 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 px-6">
         {adminFeatures.map((feature, index) => {
           const Icon = feature.icon;
           return (
-            <Card key={index} className="bg-card dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
+            <Card
+              key={index}
+              className="bg-white/80 dark:bg-gray-800/80 border-2 border-transparent dark:border-gray-700 rounded-2xl shadow-xl hover:scale-[1.03] hover:border-blue-400 dark:hover:border-blue-500 transition-all duration-200 group"
+            >
               <CardHeader className="flex flex-row items-center justify-between">
                 <div>
-                  <CardTitle className="text-foreground dark:text-gray-100">{feature.title}</CardTitle>
+                  <CardTitle className="text-foreground dark:text-gray-100 flex items-center gap-2">
+                    <Icon className="h-6 w-6 text-blue-500 dark:text-blue-300" />
+                    {feature.title}
+                  </CardTitle>
                   <p className="text-sm text-muted-foreground dark:text-gray-400">{feature.description}</p>
                 </div>
-                <Icon className="h-8 w-8 text-muted-foreground dark:text-gray-400" />
+                <Icon className="h-8 w-8 text-muted-foreground dark:text-gray-400 opacity-30 group-hover:opacity-60 transition-opacity" />
               </CardHeader>
               <CardContent>
                 <div className="space-y-2">
@@ -367,7 +391,7 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
                       key={actionIndex}
                       variant="outline"
                       size="sm"
-                      className="w-full justify-start bg-background dark:bg-gray-900 text-foreground dark:text-gray-100 border dark:border-gray-700"
+                      className="w-full justify-start bg-background dark:bg-gray-900 text-foreground dark:text-gray-100 border dark:border-gray-700 rounded-lg hover:bg-blue-50 dark:hover:bg-gray-700 transition"
                       onClick={action.onClick}
                     >
                       {action.label}
@@ -380,256 +404,296 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
         })}
       </div>
 
-      {/* System Statistics Card */}
-      <Card className="bg-card dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-foreground dark:text-gray-100">System Statistics</CardTitle>
-          <Button variant="ghost" size="icon" onClick={fetchCounts} title="Refresh" className="text-foreground dark:text-gray-100">
-            <RefreshCw className={loading ? "animate-spin" : ""} />
-          </Button>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="text-center">
-              <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                {loading ? '...' : counts.superadmin}
+      {/* Section: System Statistics */}
+      <div className="relative z-10 px-6 mt-12">
+        <Card className="bg-white/90 dark:bg-gray-800/90 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-lg">
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="text-foreground dark:text-gray-100 flex items-center gap-2">
+              <Database className="h-5 w-5 text-purple-500 dark:text-purple-300" />
+              System Statistics
+            </CardTitle>
+            <Button variant="ghost" size="icon" onClick={fetchCounts} title="Refresh" className="text-foreground dark:text-gray-100">
+              <RefreshCw className={loading ? "animate-spin" : ""} />
+            </Button>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+              <div className="flex flex-col items-center">
+                <div className="text-3xl font-extrabold text-blue-600 dark:text-blue-400 drop-shadow">{loading ? '...' : counts.superadmin}</div>
+                <div className="mt-1 px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-200 text-xs font-semibold">Super Admins</div>
               </div>
-              <div className="text-sm text-gray-600 dark:text-gray-300">Super Admins</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-green-600 dark:text-green-400">
-                {loading ? '...' : counts.admin}
+              <div className="flex flex-col items-center">
+                <div className="text-3xl font-extrabold text-green-600 dark:text-green-400 drop-shadow">{loading ? '...' : counts.admin}</div>
+                <div className="mt-1 px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-200 text-xs font-semibold">Admins</div>
               </div>
-              <div className="text-sm text-gray-600 dark:text-gray-300">Admins</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">
-                {loading ? '...' : counts.employee}
+              <div className="flex flex-col items-center">
+                <div className="text-3xl font-extrabold text-yellow-600 dark:text-yellow-400 drop-shadow">{loading ? '...' : counts.employee}</div>
+                <div className="mt-1 px-2 py-0.5 rounded-full bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-200 text-xs font-semibold">Employees</div>
               </div>
-              <div className="text-sm text-gray-600 dark:text-gray-300">Employees</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">
-                {loading ? '...' : counts.intern}
+              <div className="flex flex-col items-center">
+                <div className="text-3xl font-extrabold text-purple-600 dark:text-purple-400 drop-shadow">{loading ? '...' : counts.intern}</div>
+                <div className="mt-1 px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-200 text-xs font-semibold">Interns</div>
               </div>
-              <div className="text-sm text-gray-600 dark:text-gray-300">Interns</div>
             </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      </div>
 
-      {/* Mark Attendance Card */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Mark Employee Attendance</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="mb-4 flex items-center gap-4">
-            <label className="font-semibold text-foreground" htmlFor="attendance-date">Select Date:</label>
-            <input
-              id="attendance-date"
-              type="date"
-              value={attendanceDate}
-              onChange={e => setAttendanceDate(e.target.value)}
-              className="border rounded px-2 py-1 bg-background text-foreground dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700"
-              max={format(new Date(), 'yyyy-MM-dd')}
-            />
-          </div>
-          {attendanceMsg && (
-            <div className={`mb-2 text-sm ${attendanceMsg.startsWith('Error') ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
-              {attendanceMsg}
+      {/* Section: Attendance */}
+      <div className="relative z-10 px-6 mt-12">
+        <Card className="bg-white/90 dark:bg-gray-800/90 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-lg">
+          <CardHeader>
+            <CardTitle className="text-foreground dark:text-gray-100 flex items-center gap-2">
+              <Settings className="h-5 w-5 text-green-500 dark:text-green-300" />
+              Mark Employee Attendance
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="mb-4 flex items-center gap-4">
+              <label className="font-semibold text-foreground dark:text-gray-100" htmlFor="attendance-date">Select Date:</label>
+              <input
+                id="attendance-date"
+                type="date"
+                value={attendanceDate}
+                onChange={e => setAttendanceDate(e.target.value)}
+                className="border rounded px-2 py-1 bg-background text-foreground dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700"
+                max={format(new Date(), 'yyyy-MM-dd')}
+              />
             </div>
-          )}
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
-              <thead>
-                <tr>
-                  <th className="px-2 py-1 text-left">Name</th>
-                  <th className="px-2 py-1 text-left">Email</th>
-                  <th className="px-2 py-1 text-left">Role</th>
-                  <th className="px-2 py-1 text-left">Status</th>
-                  <th className="px-2 py-1 text-left">Present</th>
-                  <th className="px-2 py-1 text-left">Absent</th>
-                </tr>
-              </thead>
-              <tbody>
-                {allEmployees.map(emp => {
-                  const status = getAttendanceStatus(emp);
-                  return (
-                    <tr key={emp._id}>
-                      <td className="px-2 py-1">{emp.firstname} {emp.lastname}</td>
-                      <td className="px-2 py-1">{emp.email}</td>
-                      <td className="px-2 py-1">{emp.role}</td>
-                      <td className="px-2 py-1">
-                        {status === 'present' && <span className="text-green-600 dark:text-green-400 font-semibold">Present</span>}
-                        {status === 'absent' && <span className="text-red-600 dark:text-red-400 font-semibold">Absent</span>}
-                        {!status && <span className="text-muted-foreground">Not Marked</span>}
-                      </td>
-                      <td className="px-2 py-1">
-                        <Button
-                          size="sm"
-                          className="bg-green-600 text-white"
-                          disabled={attendanceMarking[emp._id] || !!status}
-                          onClick={() => markAttendance(emp._id, 'present')}
-                        >
-                          Present
-                        </Button>
-                      </td>
-                      <td className="px-2 py-1">
-                        <Button
-                          size="sm"
-                          className="bg-red-600 text-white"
-                          disabled={attendanceMarking[emp._id] || !!status}
-                          onClick={() => markAttendance(emp._id, 'absent')}
-                        >
-                          Absent
-                        </Button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
+            {attendanceMsg && (
+              <div className={`mb-2 text-sm ${attendanceMsg.startsWith('Error') ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
+                {attendanceMsg}
+              </div>
+            )}
+            <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow">
+              <table className="min-w-full text-sm bg-background dark:bg-gray-900 rounded-xl overflow-hidden">
+                <thead className="bg-gray-100 dark:bg-gray-800">
+                  <tr>
+                    <th className="px-2 py-2 text-left text-foreground dark:text-gray-100">Name</th>
+                    <th className="px-2 py-2 text-left text-foreground dark:text-gray-100">Email</th>
+                    <th className="px-2 py-2 text-left text-foreground dark:text-gray-100">Role</th>
+                    <th className="px-2 py-2 text-left text-foreground dark:text-gray-100">Status</th>
+                    <th className="px-2 py-2 text-left text-foreground dark:text-gray-100">Present</th>
+                    <th className="px-2 py-2 text-left text-foreground dark:text-gray-100">Absent</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {allEmployees.map((emp, idx) => {
+                    const status = getAttendanceStatus(emp);
+                    return (
+                      <tr
+                        key={emp._id}
+                        className={`border-b border-gray-200 dark:border-gray-700 transition
+                          ${idx % 2 === 0 ? 'bg-blue-50/40 dark:bg-gray-800/40' : 'bg-white/60 dark:bg-gray-900/60'}
+                          hover:bg-blue-100 dark:hover:bg-gray-800`}
+                      >
+                        <td className="px-2 py-2 text-foreground dark:text-gray-100 flex items-center gap-2">
+                          {emp.firstname} {emp.lastname}
+                          <span className={`ml-2 px-2 py-0.5 rounded-full text-xs font-semibold
+                            ${emp.role === 'superadmin' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200'
+                              : emp.role === 'admin' ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-200'
+                              : emp.role === 'employee' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-200'
+                              : 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-200'
+                            }`}>
+                            {emp.role.charAt(0).toUpperCase() + emp.role.slice(1)}
+                          </span>
+                        </td>
+                        <td className="px-2 py-2 text-foreground dark:text-gray-100">{emp.email}</td>
+                        <td className="px-2 py-2 text-foreground dark:text-gray-100">{emp.role}</td>
+                        <td className="px-2 py-2">
+                          {status === 'present' && <span className="text-green-600 dark:text-green-400 font-semibold">Present</span>}
+                          {status === 'absent' && <span className="text-red-600 dark:text-red-400 font-semibold">Absent</span>}
+                          {!status && <span className="text-muted-foreground dark:text-gray-400">Not Marked</span>}
+                        </td>
+                        <td className="px-2 py-2">
+                          <Button
+                            size="sm"
+                            className="bg-green-600 text-white dark:bg-green-700 rounded-lg shadow hover:scale-105 transition"
+                            disabled={attendanceMarking[emp._id] || !!status}
+                            onClick={() => markAttendance(emp._id, 'present')}
+                          >
+                            Present
+                          </Button>
+                        </td>
+                        <td className="px-2 py-2">
+                          <Button
+                            size="sm"
+                            className="bg-red-600 text-white dark:bg-red-700 rounded-lg shadow hover:scale-105 transition"
+                            disabled={attendanceMarking[emp._id] || !!status}
+                            onClick={() => markAttendance(emp._id, 'absent')}
+                          >
+                            Absent
+                          </Button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Section Divider */}
+      <div className="relative z-10 flex items-center gap-2 my-12 px-6">
+        <Settings className="h-5 w-5 text-indigo-500 dark:text-indigo-300" />
+        <h2 className="text-2xl font-bold text-indigo-700 dark:text-indigo-200">Payroll & Roles</h2>
+        <div className="flex-1 border-t border-indigo-200 dark:border-indigo-700" />
+      </div>
 
       {/* Standard Payroll Values Section */}
-      <Card className="max-w-2xl mx-auto mb-8">
-        <CardHeader>
-          <CardTitle>Standard Payroll Allowances & Deductions</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="mb-4">
-            <div className="flex justify-between items-center mb-2">
-              <span className="font-semibold text-green-700">Allowances (Monthly)</span>
-              <Button size="sm" variant="outline" onClick={handleAddAllowance}>Add Allowance</Button>
+      <div className="relative z-10 px-6">
+        <Card className="w-full mb-12 bg-white/90 dark:bg-gray-800/90 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-lg">
+          <CardHeader>
+            <CardTitle className="text-foreground dark:text-gray-100 flex items-center gap-2">
+              <Database className="h-5 w-5 text-pink-500 dark:text-pink-300" />
+              Standard Payroll Allowances & Deductions
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="mb-4">
+              <div className="flex justify-between items-center mb-2">
+                <span className="font-semibold text-green-700 dark:text-green-400">Allowances (Monthly)</span>
+                <Button size="sm" variant="outline" className="dark:bg-gray-900 dark:text-gray-100 dark:border-gray-700" onClick={handleAddAllowance}>Add Allowance</Button>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="min-w-[600px] w-full text-sm mb-2 bg-background dark:bg-gray-900 border dark:border-gray-700">
+                  <tbody>
+                    {standardAllowances.map((a, idx) => (
+                      <tr key={idx} className="border-b border-gray-200 dark:border-gray-700">
+                        <td>
+                          <input
+                            className="border rounded px-2 py-1 w-32 bg-background text-foreground dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700"
+                            value={a.name}
+                            onChange={e => handleAllowanceChange(idx, 'name', e.target.value)}
+                            placeholder="Name"
+                          />
+                        </td>
+                        <td>
+                          <input
+                            className="border rounded px-2 py-1 w-24 text-right bg-background text-foreground dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700"
+                            type="number"
+                            value={a.amount}
+                            onChange={e => handleAllowanceChange(idx, 'amount', Number(e.target.value))}
+                            placeholder="Amount"
+                          />
+                        </td>
+                        <td>
+                          <Button size="icon" variant="ghost" className="dark:text-gray-400" onClick={() => handleRemoveAllowance(idx)}><X className="w-4 h-4" /></Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
-            <table className="w-full text-sm mb-2">
-              <tbody>
-                {standardAllowances.map((a, idx) => (
-                  <tr key={idx}>
-                    <td>
-                      <input
-                        className="border rounded px-2 py-1 w-32"
-                        value={a.name}
-                        onChange={e => handleAllowanceChange(idx, 'name', e.target.value)}
-                        placeholder="Name"
-                      />
-                    </td>
-                    <td>
-                      <input
-                        className="border rounded px-2 py-1 w-24 text-right"
-                        type="number"
-                        value={a.amount}
-                        onChange={e => handleAllowanceChange(idx, 'amount', Number(e.target.value))}
-                        placeholder="Amount"
-                      />
-                    </td>
-                    <td>
-                      <Button size="icon" variant="ghost" onClick={() => handleRemoveAllowance(idx)}><X className="w-4 h-4" /></Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div className="mb-4">
-            <div className="flex justify-between items-center mb-2">
-              <span className="font-semibold text-red-700">Deductions (Monthly)</span>
-              <Button size="sm" variant="outline" onClick={handleAddDeduction}>Add Deduction</Button>
+            <div className="mb-4">
+              <div className="flex justify-between items-center mb-2">
+                <span className="font-semibold text-red-700 dark:text-red-400">Deductions (Monthly)</span>
+                <Button size="sm" variant="outline" className="dark:bg-gray-900 dark:text-gray-100 dark:border-gray-700" onClick={handleAddDeduction}>Add Deduction</Button>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="min-w-[600px] w-full text-sm mb-2 bg-background dark:bg-gray-900 border dark:border-gray-700">
+                  <tbody>
+                    {standardDeductions.map((d, idx) => (
+                      <tr key={idx} className="border-b border-gray-200 dark:border-gray-700">
+                        <td>
+                          <input
+                            className="border rounded px-2 py-1 w-32 bg-background text-foreground dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700"
+                            value={d.name}
+                            onChange={e => handleDeductionChange(idx, 'name', e.target.value)}
+                            placeholder="Name"
+                          />
+                        </td>
+                        <td>
+                          <input
+                            className="border rounded px-2 py-1 w-24 text-right bg-background text-foreground dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700"
+                            type="number"
+                            value={d.amount}
+                            onChange={e => handleDeductionChange(idx, 'amount', Number(e.target.value))}
+                            placeholder="Amount"
+                          />
+                        </td>
+                        <td>
+                          <Button size="icon" variant="ghost" className="dark:text-gray-400" onClick={() => handleRemoveDeduction(idx)}><X className="w-4 h-4" /></Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
-            <table className="w-full text-sm mb-2">
-              <tbody>
-                {standardDeductions.map((d, idx) => (
-                  <tr key={idx}>
-                    <td>
-                      <input
-                        className="border rounded px-2 py-1 w-32"
-                        value={d.name}
-                        onChange={e => handleDeductionChange(idx, 'name', e.target.value)}
-                        placeholder="Name"
-                      />
-                    </td>
-                    <td>
-                      <input
-                        className="border rounded px-2 py-1 w-24 text-right"
-                        type="number"
-                        value={d.amount}
-                        onChange={e => handleDeductionChange(idx, 'amount', Number(e.target.value))}
-                        placeholder="Amount"
-                      />
-                    </td>
-                    <td>
-                      <Button size="icon" variant="ghost" onClick={() => handleRemoveDeduction(idx)}><X className="w-4 h-4" /></Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div className="flex gap-2 mb-2">
-            <Button size="sm" onClick={handleSaveStandards} disabled={payrollLoading}>Save Standards</Button>
-            <Button size="sm" variant="secondary" onClick={handleApplyStandards} disabled={payrollLoading}>Apply Standards to All Employees</Button>
-            {payrollLoading && <span className="text-xs text-gray-500 ml-2">Processing...</span>}
-          </div>
-          {payrollMsg && <div className={`text-xs mb-2 ${payrollMsg.startsWith('Failed') || payrollMsg.startsWith('Network') ? 'text-red-600' : 'text-green-600'}`}>{payrollMsg}</div>}
-          <div className="text-xs text-gray-500">These values will be used as defaults for new employees. You can override them per employee.</div>
-        </CardContent>
-      </Card>
+            <div className="flex gap-2 mb-2">
+              <Button size="sm" className="dark:bg-gray-700 dark:text-gray-100" onClick={handleSaveStandards} disabled={payrollLoading}>Save Standards</Button>
+              <Button size="sm" variant="secondary" className="dark:bg-gray-700 dark:text-gray-100" onClick={handleApplyStandards} disabled={payrollLoading}>Apply Standards to All Employees</Button>
+              {payrollLoading && <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">Processing...</span>}
+            </div>
+            {payrollMsg && <div className={`text-xs mb-2 ${payrollMsg.startsWith('Failed') || payrollMsg.startsWith('Network') ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>{payrollMsg}</div>}
+            <div className="text-xs text-gray-500 dark:text-gray-400">These values will be used as defaults for new employees. You can override them per employee.</div>
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Custom Role Assignment */}
-      <Card className="max-w-2xl mx-auto mb-8">
-        <CardHeader>
-          <CardTitle>Custom Role Assignment</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="mb-2 text-sm text-gray-500">Assign a custom role to each employee:</div>
-          {roleAssignMsg && <div className={`mb-2 text-xs ${roleAssignMsg.startsWith('Role') ? 'text-green-600' : 'text-red-600'}`}>{roleAssignMsg}</div>}
-          <table className="w-full text-sm mb-2">
-            <thead>
-              <tr>
-                <th className="text-left">Name</th>
-                <th className="text-left">Current Role</th>
-                <th className="text-left">Custom Role</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {allEmployees.map(emp => (
-                <tr key={emp._id}>
-                  <td>{emp.firstname} {emp.lastname}</td>
-                  <td>{emp.role}</td>
-                  <td>
-                    <select
-                      value={emp.roleRef || ''}
-                      onChange={e => handleAssignRole(emp._id, e.target.value)}
-                      className="border rounded px-2 py-1"
-                    >
-                      <option value="">-- Select Role --</option>
-                      {roles.map(role => (
-                        <option key={role._id} value={role._id}>{role.name}</option>
-                      ))}
-                    </select>
-                  </td>
-                  <td>
-                    {emp.roleRef && roles.find(r => r._id === emp.roleRef) && (
-                      <span className="text-xs text-gray-500">{roles.find(r => r._id === emp.roleRef).permissions.join(', ')}</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </CardContent>
-      </Card>
+      <div className="relative z-10 px-6">
+        <Card className="w-full mb-12 bg-white/90 dark:bg-gray-800/90 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-lg">
+          <CardHeader>
+            <CardTitle className="text-foreground dark:text-gray-100 flex items-center gap-2">
+              <Users className="h-5 w-5 text-orange-500 dark:text-orange-300" />
+              Custom Role Assignment
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="mb-2 text-sm text-gray-500 dark:text-gray-400">Assign a custom role to each employee:</div>
+            {roleAssignMsg && <div className={`mb-2 text-xs ${roleAssignMsg.startsWith('Role') ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>{roleAssignMsg}</div>}
+            <div className="overflow-x-auto">
+              <table className="min-w-[700px] w-full text-sm mb-2 bg-background dark:bg-gray-900 border dark:border-gray-700">
+                <thead className="bg-gray-100 dark:bg-gray-800">
+                  <tr>
+                    <th className="text-left text-foreground dark:text-gray-100">Name</th>
+                    <th className="text-left text-foreground dark:text-gray-100">Current Role</th>
+                    <th className="text-left text-foreground dark:text-gray-100">Custom Role</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {allEmployees.map(emp => (
+                    <tr key={emp._id} className="border-b border-gray-200 dark:border-gray-700">
+                      <td className="text-foreground dark:text-gray-100">{emp.firstname} {emp.lastname}</td>
+                      <td className="text-foreground dark:text-gray-100">{emp.role}</td>
+                      <td>
+                        <select
+                          value={emp.roleRef || ''}
+                          onChange={e => handleAssignRole(emp._id, e.target.value)}
+                          className="border rounded px-2 py-1 bg-background text-foreground dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700"
+                        >
+                          <option value="">-- Select Role --</option>
+                          {roles.map(role => (
+                            <option key={role._id} value={role._id}>{role.name}</option>
+                          ))}
+                        </select>
+                      </td>
+                      <td>
+                        {emp.roleRef && roles.find(r => r._id === emp.roleRef) && (
+                          <span className="text-xs text-gray-500 dark:text-gray-400">{roles.find(r => r._id === emp.roleRef).permissions.join(', ')}</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Edit Roles Dialog */}
       {showEditRolesDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
-          <div className="bg-background text-foreground rounded-lg shadow-lg max-w-2xl w-full p-6 relative overflow-y-auto max-h-[90vh]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40 dark:bg-black dark:bg-opacity-70">
+          <div className="bg-background dark:bg-gray-900 text-foreground dark:text-gray-100 rounded-2xl shadow-2xl max-w-2xl w-full p-6 relative overflow-y-auto max-h-[90vh] border border-gray-200 dark:border-gray-700">
             <button
-              className="absolute top-2 right-2 text-muted-foreground hover:text-foreground"
+              className="absolute top-2 right-2 text-muted-foreground dark:text-gray-400 hover:text-foreground dark:hover:text-gray-100"
               onClick={() => setShowEditRolesDialog(false)}
               aria-label="Close"
             >
@@ -640,18 +704,18 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
             </h3>
             <div className="space-y-4">
               {allEmployees.length === 0 ? (
-                <div className="text-muted-foreground text-center">No users found.</div>
+                <div className="text-muted-foreground dark:text-gray-400 text-center">No users found.</div>
               ) : (
                 allEmployees.map(emp => (
-                  <div key={emp._id} className="flex items-center justify-between border-b border-muted py-2">
+                  <div key={emp._id} className="flex items-center justify-between border-b border-muted dark:border-gray-700 py-2">
                     <div>
                       <div className="font-semibold">{emp.firstname} {emp.lastname}</div>
-                      <div className="text-xs text-muted-foreground break-all">{emp.email}</div>
+                      <div className="text-xs text-muted-foreground dark:text-gray-400 break-all">{emp.email}</div>
                     </div>
                     <select
                       value={editRoles[emp._id] || emp.role}
                       onChange={e => handleRoleSelect(emp._id, e.target.value)}
-                      className="border rounded px-2 py-1 bg-background text-foreground"
+                      className="border rounded px-2 py-1 bg-background text-foreground dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700"
                       disabled={savingRoles}
                     >
                       <option value="superadmin">Super Admin</option>
@@ -664,8 +728,8 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
               )}
             </div>
             <div className="flex justify-end space-x-2 mt-6">
-              <Button variant="outline" onClick={() => setShowEditRolesDialog(false)} disabled={savingRoles}>Cancel</Button>
-              <Button onClick={handleSaveRoles} disabled={savingRoles}>
+              <Button variant="outline" className="dark:bg-gray-900 dark:text-gray-100 dark:border-gray-700" onClick={() => setShowEditRolesDialog(false)} disabled={savingRoles}>Cancel</Button>
+              <Button className="dark:bg-gray-700 dark:text-gray-100" onClick={handleSaveRoles} disabled={savingRoles}>
                 {savingRoles ? 'Saving...' : 'Save All'}
               </Button>
             </div>
@@ -674,10 +738,10 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
       )}
       {/* Deactivate Users Dialog */}
       {showDeactivateDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
-          <div className="bg-background text-foreground rounded-lg shadow-lg max-w-2xl w-full p-6 relative overflow-y-auto max-h-[90vh]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40 dark:bg-black dark:bg-opacity-70">
+          <div className="bg-background dark:bg-gray-900 text-foreground dark:text-gray-100 rounded-2xl shadow-2xl max-w-2xl w-full p-6 relative overflow-y-auto max-h-[90vh] border border-gray-200 dark:border-gray-700">
             <button
-              className="absolute top-2 right-2 text-muted-foreground hover:text-foreground"
+              className="absolute top-2 right-2 text-muted-foreground dark:text-gray-400 hover:text-foreground dark:hover:text-gray-100"
               onClick={() => setShowDeactivateDialog(false)}
               aria-label="Close"
             >
@@ -688,17 +752,18 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
             </h3>
             <div className="space-y-4">
               {activeUsers.length === 0 ? (
-                <div className="text-muted-foreground text-center">No active users found.</div>
+                <div className="text-muted-foreground dark:text-gray-400 text-center">No active users found.</div>
               ) : (
                 activeUsers.map(emp => (
-                  <div key={emp._id} className="flex items-center justify-between border-b border-muted py-2">
+                  <div key={emp._id} className="flex items-center justify-between border-b border-muted dark:border-gray-700 py-2">
                     <div>
                       <div className="font-semibold">{emp.firstname} {emp.lastname}</div>
-                      <div className="text-xs text-muted-foreground break-all">{emp.email}</div>
+                      <div className="text-xs text-muted-foreground dark:text-gray-400 break-all">{emp.email}</div>
                     </div>
                     <Button
                       variant="destructive"
                       size="sm"
+                      className="dark:bg-red-700 dark:text-gray-100"
                       onClick={() => setConfirmUser(emp)}
                       disabled={deactivateLoading && deactivatingId === emp._id}
                     >
@@ -709,17 +774,17 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
               )}
             </div>
             <div className="flex justify-end space-x-2 mt-6">
-              <Button variant="outline" onClick={() => setShowDeactivateDialog(false)} disabled={deactivateLoading}>Close</Button>
+              <Button variant="outline" className="dark:bg-gray-900 dark:text-gray-100 dark:border-gray-700" onClick={() => setShowDeactivateDialog(false)} disabled={deactivateLoading}>Close</Button>
             </div>
           </div>
         </div>
       )}
       {/* Deactivate Confirmation Dialog */}
       {confirmUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
-          <div className="bg-background text-foreground rounded-lg shadow-lg w-full max-w-xs p-6 relative">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40 dark:bg-black dark:bg-opacity-70">
+          <div className="bg-background dark:bg-gray-900 text-foreground dark:text-gray-100 rounded-2xl shadow-2xl w-full max-w-xs p-6 relative border border-gray-200 dark:border-gray-700">
             <button
-              className="absolute top-2 right-2 text-muted-foreground hover:text-foreground"
+              className="absolute top-2 right-2 text-muted-foreground dark:text-gray-400 hover:text-foreground dark:hover:text-gray-100"
               onClick={() => setConfirmUser(null)}
               aria-label="Close"
             >
@@ -731,9 +796,10 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
               <span className="font-semibold">{confirmUser.firstname} {confirmUser.lastname}</span>?
             </div>
             <div className="flex justify-end space-x-2">
-              <Button variant="outline" onClick={() => setConfirmUser(null)} disabled={deactivateLoading}>Cancel</Button>
+              <Button variant="outline" className="dark:bg-gray-900 dark:text-gray-100 dark:border-gray-700" onClick={() => setConfirmUser(null)} disabled={deactivateLoading}>Cancel</Button>
               <Button
                 variant="destructive"
+                className="dark:bg-red-700 dark:text-gray-100"
                 onClick={() => handleDeactivate(confirmUser._id)}
                 disabled={deactivateLoading}
               >
