@@ -1,8 +1,6 @@
 const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
-const authorizeRoles = require('./middleware/rbac');
-const authorizePermission = require('./middleware/permission');
 const bcrypt = require('bcrypt');
 const multer = require('multer');
 const path = require('path');
@@ -234,6 +232,10 @@ const scheduledReportSchema = new mongoose.Schema({
 });
 const ScheduledReport = mongoose.model('ScheduledReport', scheduledReportSchema);
 // --- End Scheduled Report Model ---
+
+// Now require middleware (after models are registered, before any routes)
+const authorizeRoles = require('./middleware/rbac');
+const authorizePermission = require('./middleware/permission');
 
 app.use(cors()); // allow all origins for now
 app.use(express.json());
@@ -1624,65 +1626,117 @@ app.put('/api/employees/:id/role', authorizePermission('assign_roles'), async (r
 // --- Manager API Endpoints ---
 // Get team members for a manager
 app.get('/api/manager/team', async (req, res) => {
-  const { managerId } = req.query;
-  if (!managerId) return res.status(400).json({ error: 'managerId required' });
-  // Assumes Employee schema has a 'manager' or 'managerId' field
-  const team = await Employee.find({ manager: managerId });
-  res.json(team);
+  try {
+    const { managerId } = req.query;
+    if (!managerId) return res.status(400).json({ error: 'managerId is required' });
+    // Find teams where this manager is the teamLead
+    const teams = await Team.find({ teamLead: managerId }).populate({ path: 'members', select: 'firstname lastname email department position role' });
+    // Flatten all members (if manager leads multiple teams)
+    let members = [];
+    teams.forEach(team => {
+      if (Array.isArray(team.members)) {
+        members = members.concat(team.members);
+      }
+    });
+    // Remove duplicates by _id
+    const uniqueMembers = Array.from(new Map(members.map(m => [m._id.toString(), m])).values());
+    res.json({ teamMembers: uniqueMembers });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch team members', details: err.message });
+  }
 });
 
 // Get leave requests for a manager's team
 app.get('/api/manager/leaves', async (req, res) => {
-  const { managerId } = req.query;
-  if (!managerId) return res.status(400).json({ error: 'managerId required' });
-  // Find team members
-  const team = await Employee.find({ manager: managerId });
-  const teamIds = team.map(e => e._id);
-  // Find pending leaves for team
-  const leaves = await Leave.find({ employee: { $in: teamIds }, status: 'Pending' }).populate('employee');
-  res.json(leaves.map(l => ({
-    _id: l._id,
-    employeeName: l.employee.firstname + ' ' + l.employee.lastname,
-    type: l.type,
-    from: l.from,
-    to: l.to,
-    reason: l.reason
-  })));
+  try {
+    const { managerId } = req.query;
+    if (!managerId) return res.status(400).json({ error: 'managerId is required' });
+    // Find teams managed by this manager
+    const teams = await Team.find({ teamLead: managerId });
+    const memberIds = teams.flatMap(team => team.members.map(m => m.toString()));
+    // Find leaves for these members
+    const leaves = await Leave.find({ employee: { $in: memberIds } })
+      .populate({ path: 'employee', select: 'firstname lastname email department' })
+      .sort({ createdAt: -1 });
+    res.json({ leaves });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch team leaves', details: err.message });
+  }
 });
 
-// Approve/reject leave
+// Approve/reject leave (manager action)
 app.post('/api/manager/leaves/:leaveId/:action', async (req, res) => {
-  const { leaveId, action } = req.params;
-  if (!['approve', 'reject'].includes(action)) return res.status(400).json({ error: 'Invalid action' });
-  const leave = await Leave.findById(leaveId);
-  if (!leave) return res.status(404).json({ error: 'Leave not found' });
-  leave.status = action === 'approve' ? 'Approved' : 'Rejected';
-  await leave.save();
-  res.json({ success: true });
+  try {
+    const { leaveId, action } = req.params;
+    const { managerId } = req.body;
+    if (!managerId) return res.status(400).json({ error: 'managerId is required' });
+    if (!['approve', 'reject'].includes(action)) return res.status(400).json({ error: 'Invalid action' });
+    // Find the leave
+    const leave = await Leave.findById(leaveId);
+    if (!leave) return res.status(404).json({ error: 'Leave not found' });
+    // Check if the employee is in a team managed by this manager
+    const teams = await Team.find({ teamLead: managerId });
+    const memberIds = teams.flatMap(team => team.members.map(m => m.toString()));
+    if (!memberIds.includes(leave.employee.toString())) {
+      return res.status(403).json({ error: 'Not authorized to approve/reject this leave' });
+    }
+    if (leave.status !== 'Pending') {
+      return res.status(400).json({ error: 'Leave already processed' });
+    }
+    leave.status = action === 'approve' ? 'Approved' : 'Rejected';
+    await leave.save();
+    // If approved, mark attendance as present for each date in the leave range
+    if (leave.status === 'Approved') {
+      const employee = await Employee.findById(leave.employee);
+      if (employee) {
+        const fromDate = new Date(leave.from);
+        const toDate = new Date(leave.to);
+        let current = new Date(fromDate);
+        while (current <= toDate) {
+          const dateStr = current.toISOString().slice(0, 10);
+          if (!Array.isArray(employee.attendance)) employee.attendance = [];
+          if (!employee.attendance.some(a => a.date === dateStr)) {
+            employee.attendance.push({ date: dateStr, status: 'present' });
+          }
+          current.setDate(current.getDate() + 1);
+        }
+        await employee.save();
+      }
+    }
+    res.json({ message: `Leave ${leave.status.toLowerCase()}`, leave });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to process leave', details: err.message });
+  }
 });
 
-// Team attendance summary
+// Team attendance summary for a manager
 app.get('/api/manager/attendance', async (req, res) => {
-  const { managerId } = req.query;
-  if (!managerId) return res.status(400).json({ error: 'managerId required' });
-  const team = await Employee.find({ manager: managerId });
-  const summary = team.map(emp => {
-    const present = (emp.attendance || []).filter(a => a.status === 'present').length;
-    const absent = (emp.attendance || []).filter(a => a.status === 'absent').length;
-    return {
-      _id: emp._id,
-      firstname: emp.firstname,
-      lastname: emp.lastname,
-      present,
-      absent
-    };
-  });
-  res.json(summary);
+  try {
+    const { managerId, month } = req.query;
+    if (!managerId) return res.status(400).json({ error: 'managerId is required' });
+    // Find teams managed by this manager
+    const teams = await Team.find({ teamLead: managerId });
+    const memberIds = teams.flatMap(team => team.members.map(m => m.toString()));
+    // Get attendance for each member for the given month
+    const employees = await Employee.find({ _id: { $in: memberIds } }, 'firstname lastname email attendance');
+    const summary = employees.map(emp => {
+      const attendance = (emp.attendance || []).filter(a => {
+        if (!a.date) return false;
+        if (!month) return true;
+        return a.date.startsWith(month); // month = 'YYYY-MM'
+      });
+      return {
+        _id: emp._id,
+        firstname: emp.firstname,
+        lastname: emp.lastname,
+        email: emp.email,
+        attendance
+      };
+    });
+    res.json({ summary });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch attendance summary', details: err.message });
+  }
 });
 // --- End Manager API Endpoints ---
-
-// --- TEMP: Add fixAdminRole route for permissions fix ---
-const fixAdminRole = require('./routes/fixAdminRole');
-app.use('/api', fixAdminRole);
-// --- End TEMP: Add fixAdminRole route for permissions fix ---
 
