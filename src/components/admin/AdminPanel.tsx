@@ -348,6 +348,19 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
     }
   };
 
+  // --- Org Structure Expand/Collapse State ---
+  const [expandedDepts, setExpandedDepts] = useState<{ [dept: string]: boolean }>({});
+  // Group employees by department
+  const employeesByDept: { [dept: string]: any[] } = {};
+  allEmployees.forEach(emp => {
+    const dept = emp.department || 'No Department';
+    if (!employeesByDept[dept]) employeesByDept[dept] = [];
+    employeesByDept[dept].push(emp);
+  });
+  const toggleDept = (dept: string) => {
+    setExpandedDepts(prev => ({ ...prev, [dept]: !prev[dept] }));
+  };
+
   return (
     <div className="relative min-h-screen bg-gradient-to-br from-blue-100 via-purple-50 to-pink-100 dark:from-gray-900 dark:via-gray-950 dark:to-gray-900 transition-colors duration-300">
       {/* Decorative background shapes */}
@@ -638,6 +651,73 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
         </Card>
       </div>
 
+      {/* Org Structure Section: Expand/Collapse by Department */}
+      <div className="relative z-10 px-6 mt-12">
+        <Card className="bg-white/90 dark:bg-gray-800/90 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-lg">
+          <CardHeader>
+            <CardTitle className="text-foreground dark:text-gray-100 flex items-center gap-2">
+              <Users className="h-5 w-5 text-blue-500 dark:text-blue-300" />
+              Organization Structure
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="divide-y divide-gray-200 dark:divide-gray-700">
+              {Object.keys(employeesByDept).length === 0 && (
+                <div className="text-muted-foreground dark:text-gray-400 py-4">No employees found.</div>
+              )}
+              {Object.entries(employeesByDept).map(([dept, emps]) => (
+                <div key={dept}>
+                  <button
+                    className="w-full flex items-center justify-between py-3 px-2 text-lg font-semibold text-left text-blue-700 dark:text-blue-200 hover:bg-blue-50 dark:hover:bg-gray-800 rounded transition"
+                    onClick={() => toggleDept(dept)}
+                  >
+                    <span>{dept}</span>
+                    <span className="ml-2 text-xs font-normal text-gray-500 dark:text-gray-400">({emps.length} member{emps.length !== 1 ? 's' : ''})</span>
+                    <span className="ml-auto">
+                      {expandedDepts[dept] ? (
+                        <svg className="w-5 h-5 inline-block" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" /></svg>
+                      ) : (
+                        <svg className="w-5 h-5 inline-block" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+                      )}
+                    </span>
+                  </button>
+                  {expandedDepts[dept] && (
+                    <div className="pl-6 pb-4">
+                      <ul className="space-y-2">
+                        {emps.map(emp => (
+                          <li key={emp._id} className="flex items-center gap-3 bg-blue-50/40 dark:bg-gray-900/40 rounded-lg px-3 py-2">
+                            {/* Avatar or initials */}
+                            {emp.picture ? (
+                              <img src={emp.picture} alt="avatar" className="w-8 h-8 rounded-full object-cover border border-gray-300 dark:border-gray-700" />
+                            ) : (
+                              <div className="w-8 h-8 rounded-full bg-blue-200 dark:bg-blue-700 flex items-center justify-center text-blue-900 dark:text-blue-100 font-bold text-sm">
+                                {emp.firstname?.[0]}{emp.lastname?.[0]}
+                              </div>
+                            )}
+                            <div>
+                              <div className="font-medium text-foreground dark:text-gray-100">{emp.firstname} {emp.lastname}</div>
+                              <div className="text-xs text-gray-500 dark:text-gray-400">{emp.email}</div>
+                            </div>
+                            <span className={`ml-auto px-2 py-0.5 rounded-full text-xs font-semibold
+                              ${emp.role === 'superadmin' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200'
+                                : emp.role === 'admin' ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-200'
+                                : emp.role === 'employee' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-200'
+                                : 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-200'
+                              }`}>
+                              {emp.role.charAt(0).toUpperCase() + emp.role.slice(1)}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
       {/* Custom Role Assignment */}
       <div className="relative z-10 px-6">
         <Card className="w-full mb-12 bg-white/90 dark:bg-gray-800/90 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-lg">
@@ -685,11 +765,7 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
                       </td>
                       <td>
                         {/* Demote to Employee button if current custom role is manager */}
-                        {emp.roleRef && roles.find(r => r._id === emp.roleRef && r.name.toLowerCase() === 'manager') && (
-                          <Button size="sm" variant="outline" onClick={() => handleAssignRole(emp._id, '')}>
-                            Demote to Employee
-                          </Button>
-                        )}
+                        {/* Removed Demote to Employee button */}
                       </td>
                     </tr>
                   ))}

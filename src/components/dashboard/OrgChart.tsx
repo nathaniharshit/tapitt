@@ -6,7 +6,7 @@ function buildOrgTree(employees) {
   const superAdmins = employees.filter(e => e.role === "superadmin" || e.role === "superadmin");
   const admins = employees.filter(e => e.role === "admin");
   const departments = Array.from(new Set(employees.map(e => e.department).filter(Boolean)));
-  const deptMap: { [key: string]: Array<any> } = {};
+  const deptMap: { [key: string]: any[] } = {};
   employees.forEach(e => {
     if (e.role === "employee" || e.role === "intern") {
       if (!deptMap[e.department || "No Department"]) deptMap[e.department || "No Department"] = [];
@@ -17,22 +17,31 @@ function buildOrgTree(employees) {
   return {
     name: superAdmins.map(a => `${a.firstname} ${a.lastname}`).join(", ") || "Super Admin",
     title: superAdmins.length > 0 && superAdmins[0].position ? superAdmins[0].position : "Super Admin",
+    type: "superadmin",
     children: admins.map(admin => ({
       name: `${admin.firstname} ${admin.lastname}`,
       title: admin.position || "Admin",
+      type: "admin",
       children: departments.map(dept => ({
         name: dept,
         title: "Department",
-        children: (deptMap[dept as string] || []).map(emp => ({
+        type: "department",
+        children: (deptMap[dept] || []).map(emp => ({
           name: `${emp.firstname} ${emp.lastname}`,
-          title: emp.position || (emp.role.charAt(0).toUpperCase() + emp.role.slice(1))
+          title: emp.position || (emp.role.charAt(0).toUpperCase() + emp.role.slice(1)),
+          type: "employee"
         }))
       }))
     }))
   };
 }
 
-function OrgNode({ node, level = 0 }) {
+function OrgNode({ node, level = 0, path = "root", expandedMap, setExpandedMap }) {
+  const isExpandable = node.type === "admin" || node.type === "department";
+  // By default, only root is expanded; all others are collapsed unless expandedMap[path] === true
+  const isExpanded = path === "root" || expandedMap[path] === true;
+  const toggle = () => setExpandedMap(prev => ({ ...prev, [path]: !isExpanded }));
+
   // For department nodes, chunk children if too many employees
   if (node.title === "Department" && node.children && node.children.length > MAX_EMPLOYEES_PER_ROW) {
     const chunks = [];
@@ -41,35 +50,52 @@ function OrgNode({ node, level = 0 }) {
     }
     return (
       <div className="flex flex-col items-center relative">
-        <div className="bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg shadow px-4 py-2 mb-2 min-w-[120px] text-center">
-          <div className="font-bold text-blue-700 dark:text-blue-300">{node.name}</div>
-          <div className="text-xs text-gray-500 dark:text-gray-400">{node.title}</div>
-        </div>
-        <div className="flex flex-col gap-2">
-          {chunks.map((chunk, idx) => (
-            <div key={idx} className="flex flex-row gap-8 pt-4 z-10 justify-center">
-              {chunk.map((child, cidx) => (
-                <OrgNode key={cidx} node={child} level={level + 1} />
-              ))}
-              {idx === chunks.length - 1 && node.children.length > MAX_EMPLOYEES_PER_ROW * (idx + 1) && (
-                <div className="flex items-center justify-center text-xs text-muted-foreground">
-                  +{node.children.length - MAX_EMPLOYEES_PER_ROW * (idx + 1)} more
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
+        <button
+          className="bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg shadow px-4 py-2 mb-2 min-w-[120px] text-center flex items-center justify-center gap-2 hover:bg-blue-50 dark:hover:bg-gray-800 transition"
+          onClick={toggle}
+        >
+          <span className="font-bold text-blue-700 dark:text-blue-300">{node.name}</span>
+          <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">{node.title}</span>
+          <span className="ml-2">{isExpanded ? "−" : "+"}</span>
+        </button>
+        {isExpanded && (
+          <div className="flex flex-col gap-2">
+            {chunks.map((chunk, idx) => (
+              <div key={idx} className="flex flex-row gap-8 pt-4 z-10 justify-center">
+                {chunk.map((child, cidx) => (
+                  <OrgNode key={cidx} node={child} level={level + 1} path={`${path}.emp${idx}_${cidx}`} expandedMap={expandedMap} setExpandedMap={setExpandedMap} />
+                ))}
+                {idx === chunks.length - 1 && node.children.length > MAX_EMPLOYEES_PER_ROW * (idx + 1) && (
+                  <div className="flex items-center justify-center text-xs text-muted-foreground">
+                    +{node.children.length - MAX_EMPLOYEES_PER_ROW * (idx + 1)} more
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     );
   }
 
   return (
     <div className="flex flex-col items-center relative">
-      <div className="bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg shadow px-4 py-2 mb-2 min-w-[120px] text-center">
-        <div className="font-bold text-blue-700 dark:text-blue-300">{node.name}</div>
-        <div className="text-xs text-gray-500 dark:text-gray-400">{node.title}</div>
-      </div>
-      {node.children && node.children.length > 0 && (
+      {isExpandable ? (
+        <button
+          className="bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg shadow px-4 py-2 mb-2 min-w-[120px] text-center flex items-center justify-center gap-2 hover:bg-blue-50 dark:hover:bg-gray-800 transition"
+          onClick={toggle}
+        >
+          <span className="font-bold text-blue-700 dark:text-blue-300">{node.name}</span>
+          <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">{node.title}</span>
+          <span className="ml-2">{isExpanded ? "−" : "+"}</span>
+        </button>
+      ) : (
+        <div className="bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg shadow px-4 py-2 mb-2 min-w-[120px] text-center">
+          <div className="font-bold text-blue-700 dark:text-blue-300">{node.name}</div>
+          <div className="text-xs text-gray-500 dark:text-gray-400">{node.title}</div>
+        </div>
+      )}
+      {node.children && node.children.length > 0 && isExpanded && (
         <div className="flex flex-row justify-center items-start relative">
           {/* Vertical line from parent to children */}
           <div className="absolute left-1/2 top-0 w-0.5 h-4 bg-gray-400 dark:bg-gray-600 -translate-x-1/2 z-0" />
@@ -78,7 +104,7 @@ function OrgNode({ node, level = 0 }) {
           {/* Children nodes */}
           <div className="flex flex-row gap-8 pt-4 z-10">
             {node.children.map((child, idx) => (
-              <OrgNode key={idx} node={child} level={level + 1} />
+              <OrgNode key={idx} node={child} level={level + 1} path={`${path}.${idx}`} expandedMap={expandedMap} setExpandedMap={setExpandedMap} />
             ))}
           </div>
         </div>
@@ -90,6 +116,7 @@ function OrgNode({ node, level = 0 }) {
 const OrgChart = () => {
   const [employees, setEmployees] = useState([]);
   const [orgTree, setOrgTree] = useState(null);
+  const [expandedMap, setExpandedMap] = useState({});
 
   useEffect(() => {
     fetch("http://localhost:5050/api/employees")
@@ -104,10 +131,10 @@ const OrgChart = () => {
     <div className="p-8">
       <h2 className="text-2xl font-bold mb-8 text-center">Organization Structure</h2>
       <div className="flex justify-center overflow-x-auto">
-        {orgTree ? <OrgNode node={orgTree} /> : <div>Loading...</div>}
+        {orgTree ? <OrgNode node={orgTree} expandedMap={expandedMap} setExpandedMap={setExpandedMap} /> : <div>Loading...</div>}
       </div>
       <div className="mt-4 text-center text-xs text-muted-foreground">
-        <span>Tip: Scroll horizontally if the chart is wide. Large departments will show "+N more" if too many employees.</span>
+        <span>Tip: Click on admins or departments to expand/collapse. Scroll horizontally if the chart is wide. Large departments will show "+N more" if too many employees.</span>
       </div>
     </div>
   );
