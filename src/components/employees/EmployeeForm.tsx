@@ -198,6 +198,7 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
                   <option value="Marketing">Marketing</option>
                   <option value="Finance">Finance</option>
                   <option value="Support">Support</option>
+                  <option value="Designer">Designer</option>
                   <option value="Other">Other</option>
                 </select>
               </div>
