@@ -163,7 +163,7 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 h-full overflow-y-auto scroll-smooth" style={{ maxHeight: 'calc(100vh - 64px)' }}>
       {/* Show message */}
       {message.text && (
         <div
@@ -192,86 +192,81 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
       </div>
 
       {/* Grouped Employee Sections */}
-      {roleSections.map(section => {
-        const group = groupedEmployees[section.key].filter(employee => {
-          // Apply search filter
+      <div className="scroll-smooth" style={{ maxHeight: '70vh' }}>
+        {roleSections.map(section => {
+          const group = groupedEmployees[section.key].filter(employee => {
+            // Apply search filter
+            return (
+              `${employee.firstname} ${employee.lastname}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
+              (employee.email || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+              (employee.department || '').toLowerCase().includes(searchTerm.toLowerCase())
+            );
+          });
+          if (group.length === 0) return null;
           return (
-            `${employee.firstname} ${employee.lastname}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            (employee.email || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-            (employee.department || '').toLowerCase().includes(searchTerm.toLowerCase())
-          );
-        });
-        if (group.length === 0) return null;
-        return (
-          <div key={section.key}>
-            <h3 className={`text-xl font-bold mb-4 ${section.border} text-foreground`}>
-              {section.label}
-            </h3>
-            <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-              {group.map((employee) => {
-                const profilePic = getProfilePicUrl(employee);
-                const initials = getInitials(employee);
-                return (
-                  <Card
-                    key={employee._id}
-                    className={`flex flex-col h-full border-2 ${section.border} ${section.bg} text-foreground transition-shadow hover:shadow-xl hover:scale-[1.03] duration-200`}
-                  >
-                    <CardHeader className="flex flex-col items-center pb-0">
-                      {profilePic ? (
-                        <img
-                          src={profilePic}
-                          alt="Profile"
-                          className="w-16 h-16 rounded-full object-cover border-2 border-white shadow -mt-8 mb-2"
-                        />
-                      ) : (
-                        <div className={`w-16 h-16 ${section.badge} rounded-full flex items-center justify-center text-2xl font-bold border-2 border-white shadow -mt-8 mb-2`}>
-                          {initials}
-                        </div>
-                      )}
-                      <CardTitle className="text-lg font-semibold text-center">{employee.firstname} {employee.lastname}</CardTitle>
-                      <div className="text-sm text-muted-foreground text-center">{employee.position} • {employee.department}</div>
-                      <div className="text-xs text-muted-foreground text-center">{employee.email}</div>
-                    </CardHeader>
-                    <CardContent className="flex flex-col flex-1 justify-between pt-2">
-                      <div className="flex flex-col items-center mb-2">
-                        <Badge className={`mb-1 ${section.badge}`}>{employee.status || 'active'}</Badge>
-                        <div className="text-xs text-muted-foreground">
-                          Joined: {employee.startDate ? new Date(employee.startDate).toLocaleDateString() : '-'}
-                        </div>
-                        {(userRole === 'superadmin' || userRole === 'admin') && (
-                          <div className="text-xs text-muted-foreground">
-                            Salary: {formatSalary(employee.salary)}
+            <div key={section.key}>
+              <h3 className={`text-xl font-bold mb-4 ${section.border} text-foreground`}>
+                {section.label}
+              </h3>
+              <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+                {group.map((employee) => {
+                  const profilePic = getProfilePicUrl(employee);
+                  const initials = getInitials(employee);
+                  return (
+                    <Card
+                      key={employee._id}
+                      className={`flex flex-col h-full border-2 ${section.border} ${section.bg} text-foreground transition-shadow hover:shadow-xl hover:scale-[1.03] duration-200`}
+                    >
+                      <CardHeader className="flex flex-col items-center pb-0">
+                        {profilePic ? (
+                          <img
+                            src={profilePic}
+                            alt="Profile"
+                            className="w-16 h-16 rounded-full object-cover border-2 border-white shadow -mt-8 mb-2"
+                          />
+                        ) : (
+                          <div className={`w-16 h-16 ${section.badge} rounded-full flex items-center justify-center text-2xl font-bold border-2 border-white shadow -mt-8 mb-2`}>
+                            {initials}
                           </div>
                         )}
-                      </div>
-                      <div className="flex items-center justify-center gap-2 mt-2">
-                        <Button variant="outline" size="sm" onClick={() => handleView(employee)}>
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                        {canEdit && (
-                          <Button variant="outline" size="sm" onClick={() => handleEdit(employee)}>
-                            <Edit className="h-4 w-4" />
+                        <CardTitle className="text-lg font-semibold text-center">{employee.firstname} {employee.lastname}</CardTitle>
+                        <div className="text-sm text-muted-foreground text-center">{employee.position} • {employee.department}</div>
+                        <div className="text-xs text-muted-foreground text-center">{employee.email}</div>
+                      </CardHeader>
+                      <CardContent className="flex flex-col flex-1 justify-between pt-2">
+                        <div className="flex flex-col items-center mb-2">
+                          <Badge className={`mb-1 ${section.badge}`}>{employee.status || 'active'}</Badge>
+                          {/* Removed Joined date and Salary from card */}
+                        </div>
+                        <div className="flex items-center justify-center gap-2 mt-2">
+                          <Button variant="outline" size="sm" onClick={() => handleView(employee)}>
+                            <Eye className="h-4 w-4" />
                           </Button>
-                        )}
-                        {canDelete && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
-                            onClick={() => handleDelete(employee)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
+                          {canEdit && (
+                            <Button variant="outline" size="sm" onClick={() => handleEdit(employee)}>
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                          )}
+                          {canDelete && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
+                              onClick={() => handleDelete(employee)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
             </div>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
 
       {/* No employees found */}
       {roleSections.every(section =>

@@ -1,110 +1,197 @@
-import React, { useEffect, useState } from "react";
+import { useState, useEffect } from 'react';
 
-const MAX_EMPLOYEES_PER_ROW = 5;
-
+// Build a hierarchy: superadmin(s) -> admin(s) -> others
 function buildOrgTree(employees) {
-  const superAdmins = employees.filter(e => e.role === "superadmin" || e.role === "superadmin");
-  const admins = employees.filter(e => e.role === "admin");
-  const departments = Array.from(new Set(employees.map(e => e.department).filter(Boolean)));
-  const deptMap: { [key: string]: any[] } = {};
-  employees.forEach(e => {
-    if (e.role === "employee" || e.role === "intern") {
-      if (!deptMap[e.department || "No Department"]) deptMap[e.department || "No Department"] = [];
-      deptMap[e.department || "No Department"].push(e);
+  const empMap = {};
+  employees.forEach(emp => {
+    empMap[emp._id] = { ...emp, children: [] };
+  });
+
+  // Assign children to their reporting manager
+  employees.forEach(emp => {
+    if (emp.reportingManager && empMap[emp.reportingManager]) {
+      empMap[emp.reportingManager].children.push(empMap[emp._id]);
     }
   });
 
-  return {
-    name: superAdmins.map(a => `${a.firstname} ${a.lastname}`).join(", ") || "Super Admin",
-    title: superAdmins.length > 0 && superAdmins[0].position ? superAdmins[0].position : "Super Admin",
-    type: "superadmin",
-    children: admins.map(admin => ({
-      name: `${admin.firstname} ${admin.lastname}`,
-      title: admin.position || "Admin",
-      type: "admin",
-      children: departments.map((dept: string) => ({
-        name: dept,
-        title: "Department",
-        type: "department",
-        children: (deptMap[dept] || []).map(emp => ({
-          name: `${emp.firstname} ${emp.lastname}`,
-          title: emp.position || (emp.role.charAt(0).toUpperCase() + emp.role.slice(1)),
-          type: "employee"
-        }))
-      }))
-    }))
-  };
-}
+  // Find all superadmins (no reportingManager, role === 'superadmin')
+  const superAdmins = employees.filter(emp => emp.role === 'superadmin' && !emp.reportingManager);
 
-function OrgNode({ node, level = 0, path = "root", expandedMap, setExpandedMap }) {
-  const isExpandable = node.type === "admin" || node.type === "department";
-  // By default, only root is expanded; all others are collapsed unless expandedMap[path] === true
-  const isExpanded = path === "root" || expandedMap[path] === true;
-  const toggle = () => setExpandedMap(prev => ({ ...prev, [path]: !isExpanded }));
-
-  // For department nodes, chunk children if too many employees
-  if (node.title === "Department" && node.children && node.children.length > MAX_EMPLOYEES_PER_ROW) {
-    const chunks = [];
-    for (let i = 0; i < node.children.length; i += MAX_EMPLOYEES_PER_ROW) {
-      chunks.push(node.children.slice(i, i + MAX_EMPLOYEES_PER_ROW));
-    }
-    return (
-      <div className="flex flex-col items-center relative">
-        <button
-          className="bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg shadow px-4 py-2 mb-2 min-w-[120px] text-center flex items-center justify-center gap-2 hover:bg-blue-50 dark:hover:bg-gray-800 transition"
-          onClick={toggle}
-        >
-          <span className="font-bold text-blue-700 dark:text-blue-300">{node.name}</span>
-          <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">{node.title}</span>
-          <span className="ml-2">{isExpanded ? "−" : "+"}</span>
-        </button>
-        {isExpanded && (
-          <div className="flex flex-col gap-2">
-            {chunks.map((chunk, idx) => (
-              <div key={idx} className="flex flex-row gap-8 pt-4 z-10 justify-center">
-                {chunk.map((child, cidx) => (
-                  <OrgNode key={cidx} node={child} level={level + 1} path={`${path}.emp${idx}_${cidx}`} expandedMap={expandedMap} setExpandedMap={setExpandedMap} />
-                ))}
-                {idx === chunks.length - 1 && node.children.length > MAX_EMPLOYEES_PER_ROW * (idx + 1) && (
-                  <div className="flex items-center justify-center text-xs text-muted-foreground">
-                    +{node.children.length - MAX_EMPLOYEES_PER_ROW * (idx + 1)} more
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    );
+  // If multiple superadmins, group under a virtual node
+  let root;
+  if (superAdmins.length > 1) {
+    root = {
+      name: 'Super Admins',
+      type: 'virtual-root',
+      children: superAdmins.map(sa => empMap[sa._id]),
+    };
+  } else if (superAdmins.length === 1) {
+    root = empMap[superAdmins[0]._id];
+  } else {
+    // fallback: anyone without reportingManager
+    const roots = employees.filter(emp => !emp.reportingManager).map(emp => empMap[emp._id]);
+    root = {
+      name: 'Organization',
+      type: 'virtual-root',
+      children: roots,
+    };
   }
 
+  return root;
+}
+
+function getDisplayName(node) {
+  return node.type === 'virtual-root'
+    ? node.name
+    : `${node.firstname || ''} ${node.lastname || ''}`.trim() || node.name;
+}
+
+function getRoleColor(role) {
+  switch (role) {
+    case 'superadmin': return '#2563eb';
+    case 'admin': return '#059669';
+    case 'manager': return '#f59e42';
+    case 'employee': return '#eab308';
+    case 'intern': return '#a21caf';
+    default: return '#64748b';
+  }
+}
+
+function groupChildrenByDepartment(children) {
+  const grouped: { [dept: string]: any[] } = {};
+  children.forEach(child => {
+    const dept = child.department || 'No Department';
+    if (!grouped[dept]) grouped[dept] = [];
+    grouped[dept].push(child);
+  });
+  return grouped;
+}
+
+function GraphNode({ node, expandedMap, setExpandedMap }) {
+  const hasChildren = node.children && node.children.length > 0;
+  const isExpanded = expandedMap[node._id || node.name] || node.type === 'virtual-root';
+
+  const toggleExpand = () => {
+    if (!hasChildren) return;
+    setExpandedMap((prev) => ({
+      ...prev,
+      [node._id || node.name]: !isExpanded,
+    }));
+  };
+
+  const cardStyle = {
+    display: 'inline-block',
+    padding: '16px 28px',
+    background: '#fff',
+    borderRadius: 12,
+    fontWeight: node.type === 'virtual-root' ? 700 : 500,
+    fontSize: node.type === 'virtual-root' ? 22 : 16,
+    marginBottom: 8,
+    minWidth: 200,
+    textAlign: 'center',
+    border: `3px solid ${getRoleColor(node.role)}`,
+    boxShadow: '0 4px 24px #6366f11a',
+    color: getRoleColor(node.role),
+    position: 'relative' as 'relative',
+    transition: 'box-shadow 0.2s, border 0.2s',
+    cursor: hasChildren ? 'pointer' : 'default',
+    userSelect: 'none',
+  };
+
+  const badgeStyle = {
+    display: 'inline-block',
+    marginLeft: 8,
+    padding: '2px 10px',
+    borderRadius: 8,
+    fontSize: 13,
+    background: getRoleColor(node.role) + '22',
+    color: getRoleColor(node.role),
+    fontWeight: 600,
+  };
+
   return (
-    <div className="flex flex-col items-center relative">
-      {isExpandable ? (
-        <button
-          className="bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg shadow px-4 py-2 mb-2 min-w-[120px] text-center flex items-center justify-center gap-2 hover:bg-blue-50 dark:hover:bg-gray-800 transition"
-          onClick={toggle}
-        >
-          <span className="font-bold text-blue-700 dark:text-blue-300">{node.name}</span>
-          <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">{node.title}</span>
-          <span className="ml-2">{isExpanded ? "−" : "+"}</span>
-        </button>
-      ) : (
-        <div className="bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg shadow px-4 py-2 mb-2 min-w-[120px] text-center">
-          <div className="font-bold text-blue-700 dark:text-blue-300">{node.name}</div>
-          <div className="text-xs text-gray-500 dark:text-gray-400">{node.title}</div>
-        </div>
-      )}
-      {node.children && node.children.length > 0 && isExpanded && (
-        <div className="flex flex-row justify-center items-start relative">
-          {/* Vertical line from parent to children */}
-          <div className="absolute left-1/2 top-0 w-0.5 h-4 bg-gray-400 dark:bg-gray-600 -translate-x-1/2 z-0" />
-          {/* Horizontal line connecting children */}
-          <div className="absolute top-4 left-0 right-0 h-0.5 bg-gray-400 dark:bg-gray-600 z-0" />
-          {/* Children nodes */}
-          <div className="flex flex-row gap-8 pt-4 z-10">
-            {node.children.map((child, idx) => (
-              <OrgNode key={idx} node={child} level={level + 1} path={`${path}.${idx}`} expandedMap={expandedMap} setExpandedMap={setExpandedMap} />
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative', minWidth: 200 }}>
+      <div style={{ ...cardStyle, textAlign: 'center' as 'center', userSelect: 'none' as const }} onClick={toggleExpand}>
+        {getDisplayName(node)}
+        {node.position && (
+          <span style={{ marginLeft: 8, color: '#64748b', fontSize: 14 }}>
+            {node.position}
+          </span>
+        )}
+        {node.role && node.type !== 'virtual-root' && (
+          <span style={badgeStyle}>
+            {node.role.charAt(0).toUpperCase() + node.role.slice(1)}
+          </span>
+        )}
+        {hasChildren && (
+          <span style={{
+            marginLeft: 12,
+            fontWeight: 900,
+            fontSize: 18,
+            color: '#6366f1',
+            cursor: 'pointer',
+            userSelect: 'none',
+            verticalAlign: 'middle',
+          }}>
+            {isExpanded ? '−' : '+'}
+          </span>
+        )}
+      </div>
+      {hasChildren && isExpanded && (
+        <div style={{ width: '100%', position: 'relative' }}>
+          <svg width="2" height="30" style={{ display: 'block', margin: '0 auto' }}>
+            <line x1="1" y1="0" x2="1" y2="30" stroke="#6366f1" strokeWidth="2" />
+          </svg>
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'flex-start', marginTop: 0 }}>
+            {Object.keys(groupChildrenByDepartment(node.children)).length > 1 && (
+              <svg
+                width={Math.max(Object.keys(groupChildrenByDepartment(node.children)).length * 220, 220)}
+                height="24"
+                style={{ position: 'absolute', left: 0, top: 0, zIndex: 0 }}
+              >
+                <line
+                  x1={100}
+                  y1={12}
+                  x2={Math.max(Object.keys(groupChildrenByDepartment(node.children)).length * 220 - 100, 100)}
+                  y2={12}
+                  stroke="#6366f1"
+                  strokeWidth="2"
+                />
+                {Object.keys(groupChildrenByDepartment(node.children)).map((_, idx) => (
+                  <line
+                    key={idx}
+                    x1={100 + idx * 220}
+                    y1={12}
+                    x2={100 + idx * 220}
+                    y2={30}
+                    stroke="#6366f1"
+                    strokeWidth="2"
+                  />
+                ))}
+              </svg>
+            )}
+            {Object.entries(groupChildrenByDepartment(node.children)).map(([dept, deptChildren], idx) => (
+              <div key={dept} style={{ margin: '0 20px', position: 'relative', zIndex: 1 }}>
+                <div style={{
+                  fontWeight: 600,
+                  color: '#6366f1',
+                  marginBottom: 4,
+                  fontSize: 15,
+                  background: '#e0e7ff',
+                  borderRadius: 6,
+                  padding: '2px 10px',
+                  display: 'inline-block'
+                }}>
+                  {dept}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'row', justifyContent: 'center' }}>
+                  {deptChildren.map((child, cidx) => (
+                    <div key={child._id || child.name} style={{ margin: '0 10px' }}>
+                      <GraphNode node={child} expandedMap={expandedMap} setExpandedMap={setExpandedMap} />
+                    </div>
+                  ))}
+                </div>
+              </div>
             ))}
           </div>
         </div>
@@ -115,26 +202,26 @@ function OrgNode({ node, level = 0, path = "root", expandedMap, setExpandedMap }
 
 const OrgChart = () => {
   const [employees, setEmployees] = useState([]);
-  const [orgTree, setOrgTree] = useState(null);
-  const [expandedMap, setExpandedMap] = useState({});
+  const [expandedMap, setExpandedMap] = useState<{ [key: string]: boolean }>({});
 
   useEffect(() => {
-    fetch("http://localhost:5050/api/employees")
+    fetch('http://localhost:5050/api/employees')
       .then(res => res.json())
-      .then(data => {
-        setEmployees(data);
-        setOrgTree(buildOrgTree(data));
-      });
+      .then(data => setEmployees(data))
+      .catch(() => setEmployees([]));
   }, []);
 
+  if (!employees.length) {
+    return <div className="p-8">Loading organization structure...</div>;
+  }
+
+  const tree = buildOrgTree(employees);
+
   return (
-    <div className="p-8">
-      <h2 className="text-2xl font-bold mb-8 text-center">Organization Structure</h2>
-      <div className="flex justify-center overflow-x-auto">
-        {orgTree ? <OrgNode node={orgTree} expandedMap={expandedMap} setExpandedMap={setExpandedMap} /> : <div>Loading...</div>}
-      </div>
-      <div className="mt-4 text-center text-xs text-muted-foreground">
-        <span>Tip: Click on admins or departments to expand/collapse. Scroll horizontally if the chart is wide. Large departments will show "+N more" if too many employees.</span>
+    <div className="p-8" style={{ overflowX: 'auto', minHeight: 400 }}>
+      <h2 className="text-2xl font-bold mb-6">Organization Structure</h2>
+      <div style={{ minWidth: 800, paddingBottom: 24, background: '#f8fafc', borderRadius: 16, padding: 24 }}>
+        <GraphNode node={tree} expandedMap={expandedMap} setExpandedMap={setExpandedMap} />
       </div>
     </div>
   );
