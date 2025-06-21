@@ -6,6 +6,14 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Eye, EyeOff } from 'lucide-react';
 
+const passwordRules = [
+  { regex: /.{8,}/, message: 'At least 8 characters' },
+  { regex: /[A-Z]/, message: 'At least one uppercase letter' },
+  { regex: /[a-z]/, message: 'At least one lowercase letter' },
+  { regex: /[0-9]/, message: 'At least one number' },
+  { regex: /[^A-Za-z0-9]/, message: 'At least one special character' },
+];
+
 const EmployeeSetPassword = () => {
   const location = useLocation();
   const navigate = useNavigate();
@@ -17,16 +25,22 @@ const EmployeeSetPassword = () => {
   const [showConfirm, setShowConfirm] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [touched, setTouched] = useState(false);
+
+  const failedRules = passwordRules.filter(rule => !rule.regex.test(newPassword));
+  const isValid = failedRules.length === 0;
+  const passwordsMatch = newPassword === confirmPassword && newPassword.length > 0;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setTouched(true);
     setError('');
     setSuccess('');
-    if (!newPassword || newPassword.length < 8) {
-      setError('Password must be at least 8 characters.');
+    if (!isValid) {
+      setError('Please fulfill all password requirements.');
       return;
     }
-    if (newPassword !== confirmPassword) {
+    if (!passwordsMatch) {
       setError('Passwords do not match.');
       return;
     }
@@ -93,6 +107,7 @@ const EmployeeSetPassword = () => {
                   required
                   placeholder="At least 8 characters"
                   className="pr-10 dark:bg-gray-800 dark:text-gray-100 dark:placeholder-gray-400"
+                  onBlur={() => setTouched(true)}
                 />
                 <button
                   type="button"
@@ -116,6 +131,7 @@ const EmployeeSetPassword = () => {
                   required
                   placeholder="Re-enter new password"
                   className="pr-10 dark:bg-gray-800 dark:text-gray-100 dark:placeholder-gray-400"
+                  onBlur={() => setTouched(true)}
                 />
                 <button
                   type="button"
@@ -127,9 +143,44 @@ const EmployeeSetPassword = () => {
                 </button>
               </div>
             </div>
+            <div>
+              <ul className="text-sm space-y-1">
+                {passwordRules.map(rule => (
+                  <li
+                    key={rule.message}
+                    className={
+                      rule.regex.test(newPassword)
+                        ? 'text-green-600 flex items-center'
+                        : touched && newPassword
+                        ? 'text-red-600 flex items-center'
+                        : 'text-gray-500 flex items-center'
+                    }
+                  >
+                    <span className="mr-2">
+                      {rule.regex.test(newPassword) ? '✓' : '✗'}
+                    </span>
+                    {rule.message}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            {touched && !isValid && (
+              <div className="text-red-600 text-sm font-medium">
+                Please fulfill all password requirements.
+              </div>
+            )}
+            {touched && newPassword && confirmPassword && !passwordsMatch && (
+              <div className="text-red-600 text-sm font-medium">
+                Passwords do not match.
+              </div>
+            )}
             {error && <div className="text-red-600 dark:text-red-400 text-sm">{error}</div>}
             {success && <div className="text-green-600 dark:text-green-400 text-sm">{success}</div>}
-            <Button type="submit" className="w-full dark:bg-indigo-700 dark:hover:bg-indigo-800">
+            <Button
+              type="submit"
+              className={`w-full dark:bg-indigo-700 dark:hover:bg-indigo-800 ${!isValid || !passwordsMatch ? 'opacity-60 cursor-not-allowed' : ''}`}
+              disabled={!isValid || !passwordsMatch}
+            >
               Set Password
             </Button>
           </form>

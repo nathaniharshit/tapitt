@@ -163,7 +163,7 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
   ];
 
   return (
-    <div className="space-y-6 h-full overflow-y-auto scroll-smooth" style={{ maxHeight: 'calc(100vh - 64px)' }}>
+    <div className="space-y-6 h-full overflow-y-auto scroll-smooth" style={{ maxHeight: 'calc(100vh - 64px)', padding: 0 }}>
       {/* Show message */}
       {message.text && (
         <div
@@ -192,7 +192,7 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
       </div>
 
       {/* Grouped Employee Sections */}
-      <div className="scroll-smooth" style={{ maxHeight: '70vh' }}>
+      <div className="scroll-smooth" style={{ maxHeight: '70vh', padding: 0 }}>
         {roleSections.map(section => {
           const group = groupedEmployees[section.key].filter(employee => {
             // Apply search filter
@@ -204,11 +204,17 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
           });
           if (group.length === 0) return null;
           return (
-            <div key={section.key}>
+            <div key={section.key} className="mb-8">
               <h3 className={`text-xl font-bold mb-4 ${section.border} text-foreground`}>
                 {section.label}
               </h3>
-              <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+              <div
+                className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 px-4"
+                style={{
+                  gap: '12px',
+                  overflow: 'visible'
+                }}
+              >
                 {group.map((employee) => {
                   const profilePic = getProfilePicUrl(employee);
                   const initials = getInitials(employee);
