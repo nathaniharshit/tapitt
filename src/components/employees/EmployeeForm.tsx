@@ -14,22 +14,19 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
     firstName: '',
     lastName: '',
     email: '',
-    phone: '',
-    countryCode: '+91', // Add country code
+    countryCode: '+91', // Optionally remove if only used for phone
     department: '',
     position: '',
     role: '',
     salary: '',
-    startDate: '',
-    address: '',
     password: '',
-    aadhar: '', // Add this field for the number
   });
 
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
-  const [phoneError, setPhoneError] = useState(''); // Add phone error state
   const [showPassword, setShowPassword] = useState(false); // Add this state
+  const [reportingManager, setReportingManager] = useState('');
+  const [managerOptions, setManagerOptions] = useState<{ value: string; label: string }[]>([]);
 
   useEffect(() => {
     if (message) {
@@ -38,21 +35,31 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
     }
   }, [message]);
 
+  useEffect(() => {
+    // Fetch admins and superadmins for reporting manager options
+    fetch('http://localhost:5050/api/employees')
+      .then(res => res.json())
+      .then(data => {
+        // Filter for both admins and superadmins
+        const managers = data.filter(
+          (emp: any) => emp.role === 'admin' || emp.role === 'superadmin'
+        );
+        setManagerOptions(
+          managers.map((emp: any) => ({
+            value: emp._id,
+            label: `${emp.firstname} ${emp.lastname} (${emp.role === 'superadmin' ? 'Super Admin' : 'Admin'})`
+          }))
+        );
+      })
+      .catch(() => setManagerOptions([]));
+  }, []);
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     if (name === 'salary') {
       // Remove all non-digit except dot, then format with commas for display
       const numericValue = value.replace(/[^0-9.]/g, '');
       setFormData({ ...formData, [name]: numericValue });
-    } else if (name === 'phone') {
-      // Only allow digits, max 10
-      const digits = value.replace(/\D/g, '').slice(0, 10);
-      setFormData({ ...formData, phone: digits });
-      if (digits.length > 0 && digits.length !== 10) {
-        setPhoneError('Phone number must be exactly 10 digits');
-      } else {
-        setPhoneError('');
-      }
     } else {
       setFormData({ ...formData, [name]: value });
     }
@@ -69,13 +76,7 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-
-    // Phone validation
-    if (formData.phone.length !== 10) {
-      setPhoneError('Phone number must be exactly 10 digits');
-      setLoading(false);
-      return;
-    }
+    console.log('Submitting employee form', formData); // Debug: check if called
 
     try {
       const response = await fetch('http://localhost:5050/api/employees', {
@@ -87,14 +88,12 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
           firstname: formData.firstName, // <-- correct field name
           lastname: formData.lastName,   // <-- correct field name
           email: formData.email,
-          phone: `${formData.countryCode}${formData.phone}`,
           department: formData.department,
           position: formData.position,
           role: formData.role,
           salary: formData.salary ? parseFloat(formData.salary.replace(/,/g, '')) : undefined, // ensure number
-          startDate: formData.startDate, // (optionally convert to ISO string)
-          address: formData.address,
-          password: formData.password // ensure this is present
+          password: formData.password, // ensure this is present
+          reportingManager: reportingManager || undefined // Optional field
         })
       });
 
@@ -104,17 +103,14 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
           firstName: '',
           lastName: '',
           email: '',
-          phone: '',
           countryCode: '+91', // Reset to default value
           department: '',
           position: '',
           role: '',
           salary: '',
-          startDate: '',
-          address: '',
           password: '',
-          aadhar: '',
         });
+        setReportingManager('');
 
         if (onEmployeeAdded) onEmployeeAdded();
       } else {
@@ -164,37 +160,20 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
                 <Label htmlFor="email" className="dark:text-gray-200">Email</Label>
                 <Input type="email" name="email" value={formData.email} onChange={handleChange} required className="bg-background dark:bg-gray-800 text-foreground dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-400 dark:placeholder-gray-400" />
               </div>
+              {/* Reporting Manager (optional) */}
               <div>
-                <Label htmlFor="phone" className="dark:text-gray-200">Phone</Label>
-                <div className="flex">
-                  <select
-                    name="countryCode"
-                    value={formData.countryCode}
-                    onChange={handleChange}
-                    className="border rounded-l-lg px-2 py-2 bg-background dark:bg-gray-800 text-foreground dark:text-gray-100 font-bold text-lg focus:ring-2 focus:ring-blue-400 flex-shrink-0"
-                    style={{ minWidth: 90 }}
-                  >
-                    <option value="+91">🇮🇳 +91</option>
-                    <option value="+1">🇺🇸 +1</option>
-                    <option value="+44">🇬🇧 +44</option>
-                    <option value="+61">🇦🇺 +61</option>
-                    <option value="+81">🇯🇵 +81</option>
-                    <option value="+971">🇦🇪 +971</option>
-                  </select>
-                  <Input
-                    name="phone"
-                    value={formData.phone}
-                    onChange={handleChange}
-                    maxLength={10}
-                    minLength={10}
-                    pattern="\d{10}"
-                    className="rounded-l-none rounded-r-lg bg-background dark:bg-gray-800 text-foreground dark:text-gray-100 focus:ring-2 focus:ring-blue-400 flex-1 dark:placeholder-gray-400"
-                    required
-                    placeholder="10 digit number"
-                    type="tel"
-                  />
-                </div>
-                {phoneError && <div className="text-xs text-red-600 dark:text-red-400 mt-1">{phoneError}</div>}
+                <Label htmlFor="reportingManager" className="dark:text-gray-200">Reporting Manager (optional)</Label>
+                <select
+                  name="reportingManager"
+                  value={reportingManager}
+                  onChange={e => setReportingManager(e.target.value)}
+                  className="w-full mt-1 mb-2 border rounded-lg px-3 py-2 bg-background dark:bg-gray-800 text-foreground dark:text-gray-100 focus:ring-2 focus:ring-blue-400 dark:placeholder-gray-400"
+                >
+                  <option value="">Select reporting manager</option>
+                  {managerOptions.map(opt => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
               </div>
             </div>
           </div>
@@ -255,14 +234,6 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
                   autoComplete="off"
                   className="bg-background dark:bg-gray-800 text-foreground dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-400 dark:placeholder-gray-400"
                 />
-              </div>
-              <div>
-                <Label htmlFor="startDate" className="dark:text-gray-200">Start Date</Label>
-                <Input type="date" name="startDate" value={formData.startDate} onChange={handleChange} className="bg-background dark:bg-gray-800 text-foreground dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-400 dark:placeholder-gray-400" />
-              </div>
-              <div>
-                <Label htmlFor="address" className="dark:text-gray-200">Address</Label>
-                <Input name="address" value={formData.address} onChange={handleChange} className="bg-background dark:bg-gray-800 text-foreground dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-400 dark:placeholder-gray-400" />
               </div>
             </div>
           </div>

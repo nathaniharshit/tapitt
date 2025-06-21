@@ -122,7 +122,8 @@ const employeeSchema = new mongoose.Schema({
       }
     ],
     default: undefined
-  }
+  },
+  reportingManager: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', default: null } // <-- Add
 }, { timestamps: true });
 
 // Add remoteWork field to employee schema if not present
@@ -263,7 +264,8 @@ const allowedFields = [
   'firstname', 'lastname', 'email', 'phone', 'dob', 'city', 'state', 'zipcode', 'country',
   'emergencyContact', 'upi', 'ifsc', 'experience', 'currentCompany', 'previousCompany', 'skills',
   'linkedin', 'github', 'status', 'picture', 'role',
-  'department', 'position', 'salary', 'startDate', 'address', 'aadhar'
+  'department', 'position', 'salary', 'startDate', 'address', 'aadhar',
+  'reportingManager' // <-- Add this line
   // DO NOT include 'password' here
 ];
 
@@ -711,7 +713,7 @@ app.get('/api/employees', async (req, res) => {
 });
 
 // Update employee with file upload
-app.put('/api/employees/:id', authorizePermission('edit_employee'), upload.fields([
+app.put('/api/employees/:id', upload.fields([
   { name: 'picture', maxCount: 1 }
 ]), async (req, res) => {
   try {

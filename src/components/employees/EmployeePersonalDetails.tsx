@@ -10,6 +10,8 @@ interface EmployeePersonalDetailsProps {
     name: string;
     email: string;
     role: string;
+    address?: string;
+    aadhar?: string;
   };
 }
 
@@ -24,6 +26,7 @@ const EmployeePersonalDetails = ({ user }: EmployeePersonalDetailsProps) => {
     phone: string;
     dob: string;
     aadhar: string;
+    address: string;
     city: string;
     state: string;
     zipcode: string;
@@ -45,7 +48,8 @@ const EmployeePersonalDetails = ({ user }: EmployeePersonalDetailsProps) => {
     email: '',
     phone: '',
     dob: '',
-    aadhar: '',
+    aadhar: user.aadhar || '',
+    address: user.address || '',
     city: '',
     state: '',
     zipcode: '',
@@ -73,6 +77,7 @@ const EmployeePersonalDetails = ({ user }: EmployeePersonalDetailsProps) => {
       phone: emp?.phone || '',
       dob: emp?.dob || '',
       aadhar: emp?.aadhar || '',
+      address: emp?.address || '',
       city: emp?.city || '',
       state: emp?.state || '',
       zipcode: emp?.zipcode || '',
@@ -123,36 +128,49 @@ const EmployeePersonalDetails = ({ user }: EmployeePersonalDetailsProps) => {
     if (!details) return;
     setSaving(true);
     try {
+      // Only send fields that are not empty strings or undefined
+      const allowedFields = [
+        'firstname', 'lastname', 'email', 'phone', 'dob', 'aadhar', 'address', 'city', 'state', 'zipcode', 'country',
+        'emergencyContact', 'upi', 'ifsc', 'experience', 'currentCompany', 'previousCompany', 'skills',
+        'linkedin', 'github', 'status', 'picture'
+      ];
       let body;
       let headers;
-      // If either picture or aadhar is a new File, use FormData
-      const isPictureFile = form.picture && form.picture !== details.picture && form.picture instanceof File;
-      const isAadharFile = form.aadhar && form.aadhar !== details.aadhar && typeof form.aadhar === 'object' && form.aadhar !== null && 'name' in (form.aadhar as any);
-      if (isPictureFile || isAadharFile) {
+      const filteredForm: any = {};
+      allowedFields.forEach(field => {
+        if (
+          form[field] !== undefined &&
+          form[field] !== '' &&
+          !(form[field] instanceof File && !form[field])
+        ) {
+          filteredForm[field] = form[field];
+        }
+      });
+
+      // If picture is a new File, use FormData
+      const isPictureFile = filteredForm.picture && filteredForm.picture !== details.picture && filteredForm.picture instanceof File;
+      if (isPictureFile) {
         body = new FormData();
-        Object.entries(form).forEach(([key, value]) => {
-          if ((key === 'picture' || key === 'aadhar') && value instanceof File) {
+        Object.entries(filteredForm).forEach(([key, value]) => {
+          if (key === 'picture' && value instanceof File) {
             body.append(key, value);
-          } else if (key !== 'picture' && key !== 'aadhar') {
+          } else if (key !== 'picture') {
             body.append(key, value as string);
           }
         });
         headers = undefined;
       } else {
-        // Don't send the picture/aadhar field if it's a File (only send string/URL)
-        const formToSend = { ...form };
-        if (formToSend.picture instanceof File) delete formToSend.picture;
-        if (formToSend.aadhar && typeof formToSend.aadhar === 'object' && 'name' in (formToSend.aadhar as any)) delete formToSend.aadhar;
-        body = JSON.stringify({ ...details, ...formToSend });
+        if (filteredForm.picture instanceof File) delete filteredForm.picture;
+        body = JSON.stringify(filteredForm);
         headers = { 'Content-Type': 'application/json' };
       }
+
       const response = await fetch(`http://localhost:5050/api/employees/${details._id}`, {
         method: 'PUT',
         headers,
         body,
       });
       if (response.ok) {
-        // Fetch the latest employee data from backend to ensure summary is up to date
         const refreshed = await fetch(`http://localhost:5050/api/employees`)
           .then(res => res.json())
           .then(data => data.find((e: any) => e.email === user.email));
@@ -161,7 +179,8 @@ const EmployeePersonalDetails = ({ user }: EmployeePersonalDetailsProps) => {
         resetForm(refreshed);
         setViewMode(true);
       } else {
-        setMessage('Failed to update details.');
+        const err = await response.json();
+        setMessage(err.error || 'Failed to update details.');
       }
     } catch {
       setMessage('Network error.');
@@ -220,6 +239,7 @@ const EmployeePersonalDetails = ({ user }: EmployeePersonalDetailsProps) => {
                 <div><b>Phone:</b> {summary.phone}</div>
                 <div><b>Date of Birth:</b> {summary.dob}</div>
                 <div><b>Aadhar Number:</b> {summary.aadhar}</div>
+                <div><b>Address:</b> {summary.address}</div>
                 <div><b>City:</b> {summary.city}</div>
                 <div><b>State:</b> {summary.state}</div>
                 <div><b>Zip Code:</b> {summary.zipcode}</div>
@@ -321,6 +341,10 @@ const EmployeePersonalDetails = ({ user }: EmployeePersonalDetailsProps) => {
                   pattern="\d{12}"
                   className="bg-background dark:bg-gray-800 text-foreground dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-400 dark:placeholder-gray-400"
                 />
+              </div>
+              <div>
+                <Label htmlFor="address" className="dark:text-gray-200">Address</Label>
+                <Input name="address" placeholder="Address" value={form.address} onChange={handleChange} className="bg-background dark:bg-gray-800 text-foreground dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-400 dark:placeholder-gray-400" />
               </div>
               <div>
                 <Label htmlFor="city" className="dark:text-gray-200">City</Label>

@@ -22,7 +22,7 @@ function buildOrgTree(employees) {
       name: `${admin.firstname} ${admin.lastname}`,
       title: admin.position || "Admin",
       type: "admin",
-      children: departments.map(dept => ({
+      children: departments.map((dept: string) => ({
         name: dept,
         title: "Department",
         type: "department",

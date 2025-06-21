@@ -344,14 +344,20 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
                     <p className="text-lg font-semibold text-foreground">{formatSalary(viewedEmployee?.salary)}</p>
                   </div>
                 )}
-                <div>
-                  <p className="text-muted-foreground font-medium">Start Date</p>
-                  <p className="text-lg font-semibold text-foreground">{viewedEmployee?.startDate ? new Date(viewedEmployee.startDate).toLocaleDateString() : '-'}</p>
-                </div>
-                <div>
-                  <p className="text-muted-foreground font-medium">Address</p>
-                  <p className="text-lg font-semibold text-foreground">{viewedEmployee?.address || '-'}</p>
-                </div>
+                {/* Only show Start Date if present and not empty */}
+                {viewedEmployee?.startDate && viewedEmployee.startDate.trim() !== '' && (
+                  <div>
+                    <p className="text-muted-foreground font-medium">Start Date</p>
+                    <p className="text-lg font-semibold text-foreground">{new Date(viewedEmployee.startDate).toLocaleDateString()}</p>
+                  </div>
+                )}
+                {/* Only show Address if present and not empty */}
+                {viewedEmployee?.address && viewedEmployee.address.trim() !== '' && (
+                  <div>
+                    <p className="text-muted-foreground font-medium">Address</p>
+                    <p className="text-lg font-semibold text-foreground">{viewedEmployee?.address}</p>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -462,14 +468,6 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
                 <div>
                   <label className="text-sm text-muted-foreground">Start Date</label>
                   <Input name="startDate" type="date" value={editEmployee.startDate ? editEmployee.startDate.substring(0, 10) : ''} onChange={handleEditChange} className="bg-background text-foreground" />
-                </div>
-                <div>
-                  <label className="text-sm text-muted-foreground">Address</label>
-                  <Input name="address" value={editEmployee.address || ''} onChange={handleEditChange} className="bg-background text-foreground" />
-                </div>
-                <div>
-                  <label className="text-sm text-muted-foreground">Aadhar Number</label>
-                  <Input name="aadhar" value={editEmployee?.aadhar || ''} onChange={handleEditChange} className="bg-background text-foreground" />
                 </div>
               </div>
               <div className="flex justify-end space-x-2">
