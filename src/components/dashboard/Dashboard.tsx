@@ -2214,16 +2214,21 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium mb-1 text-foreground">Project Lead (Admin/Super Admin)</label>
+                      <label className="block text-sm font-medium mb-1 text-foreground dark:text-gray-200">
+                        Project Lead (Admin/Super Admin)
+                      </label>
                       <select
                         name="lead"
                         value={projectForm.lead}
                         onChange={handleProjectFormChange}
                         required
-                                           >
-                        <option value="">Select project lead</option>
+                        className="w-full border rounded px-3 py-2 bg-background text-foreground dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
+                      >
+                        <option value="" className="text-gray-400 dark:text-gray-500">Select project lead</option>
                         {leadOptions.map(opt => (
-                          <option key={opt.value} value={opt.value}>{opt.label}</option>
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
                         ))}
                       </select>
                     </div>
@@ -2447,17 +2452,21 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium mb-1 text-foreground">Project Lead (Admin/Super Admin)</label>
+                      <label className="block text-sm font-medium mb-1 text-foreground dark:text-gray-200">
+                        Project Lead (Admin/Super Admin)
+                      </label>
                       <select
                         name="lead"
                         value={editProject.lead}
                         onChange={handleEditProjectChange}
                         required
-                        className="w-full border rounded px-3 py-2 bg-background text-foreground"
+                        className="w-full border rounded px-3 py-2 bg-background text-foreground dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
                       >
-                        <option value="">Select project lead</option>
+                        <option value="" className="text-gray-400 dark:text-gray-500">Select project lead</option>
                         {leadOptions.map(opt => (
-                          <option key={opt.value} value={opt.value}>{opt.label}</option>
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
                         ))}
                       </select>
                     </div>

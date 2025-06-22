@@ -76,21 +76,30 @@ function GraphNode({ node, expandedMap, setExpandedMap }) {
     }));
   };
 
+  // Detect dark mode using a CSS class on body or documentElement
+  const isDark = typeof window !== 'undefined' && document.documentElement.classList.contains('dark');
+
+  // Adjust colors for dark mode
+  const cardBg = isDark ? '#1e293b' : '#fff';
+  const cardBorder = isDark ? '#334155' : '#fff';
+  const textColor = isDark ? '#f1f5f9' : '#22223b';
+  const shadowColor = isDark ? '#0f172a55' : '#6366f133';
+
   const cardStyle = {
-    background: getRoleColor(node.role),
-    color: '#fff',
+    background: cardBg,
+    color: textColor,
     borderRadius: 12,
-    width: 130, // reduced from 180
-    height: 100, // reduced from 110
+    width: 130,
+    height: 100,
     padding: '10px 10px',
-    boxShadow: '0 2px 12px #6366f133',
+    boxShadow: `0 2px 12px ${shadowColor}`,
     display: 'flex',
     flexDirection: 'column' as const,
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
     position: 'relative' as const,
-    margin: '0 4px', // reduced margin
-    border: '2px solid #fff',
+    margin: '0 4px',
+    border: `2px solid ${cardBorder}`,
     fontWeight: 600,
     fontSize: 13,
     cursor: hasChildren ? 'pointer' : 'default',
@@ -99,10 +108,10 @@ function GraphNode({ node, expandedMap, setExpandedMap }) {
     overflow: 'hidden'
   };
   const avatarStyle = {
-    width: 36, // reduced from 44
+    width: 36,
     height: 36,
     borderRadius: '50%',
-    background: '#fff',
+    background: isDark ? '#334155' : '#fff',
     color: getRoleColor(node.role),
     display: 'flex',
     alignItems: 'center',
@@ -111,7 +120,7 @@ function GraphNode({ node, expandedMap, setExpandedMap }) {
     fontSize: 15,
     marginBottom: 4,
     border: `1.5px solid ${getRoleColor(node.role)}`,
-    boxShadow: '0 1px 4px #6366f122',
+    boxShadow: `0 1px 4px ${shadowColor}`,
     flexShrink: 0
   };
 
@@ -119,24 +128,28 @@ function GraphNode({ node, expandedMap, setExpandedMap }) {
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative' }}>
       <div style={cardStyle} onClick={toggleExpand}>
         <div style={avatarStyle}>{getInitials(node)}</div>
-        <div style={{ fontSize: 14, fontWeight: 700, textAlign: 'center', width: '100%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        <div style={{ fontSize: 14, fontWeight: 700, textAlign: 'center', width: '100%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: textColor }}>
           {getDisplayName(node)}
         </div>
         {node.position && (
-          <div style={{ fontSize: 11, fontWeight: 400, opacity: 0.95, textAlign: 'center', width: '100%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          <div style={{ fontSize: 11, fontWeight: 400, opacity: 0.95, textAlign: 'center', width: '100%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: isDark ? '#cbd5e1' : '#334155' }}>
             {node.position}
           </div>
         )}
-        {hasChildren && (
-          <span
+        {node.children && node.children.length > 0 && (
+          <button
+            type="button"
+            aria-label={isExpanded ? "Collapse" : "Expand"}
+            tabIndex={0}
             style={{
               position: 'absolute',
               top: 8,
               right: 10,
               fontWeight: 900,
-              fontSize: 16,
-              color: '#fff',
-              background: '#6366f1',
+              fontSize: 14,
+              color: isDark ? '#fbbf24' : '#6366f1',
+              background: isDark ? '#334155' : '#f1f5f9',
+              border: `2px solid ${isDark ? '#fbbf24' : '#6366f1'}`,
               borderRadius: '50%',
               width: 20,
               height: 20,
@@ -145,18 +158,30 @@ function GraphNode({ node, expandedMap, setExpandedMap }) {
               justifyContent: 'center',
               cursor: 'pointer',
               userSelect: 'none',
-              boxShadow: '0 1px 4px #6366f122',
+              boxShadow: `0 2px 8px ${shadowColor}`,
+              transition: 'background 0.2s, border 0.2s, color 0.2s',
+              outline: 'none',
+              zIndex: 2,
+              padding: 0,
             }}
-            onClick={toggleExpand}
+            onClick={e => { e.stopPropagation(); toggleExpand(); }}
+            onKeyDown={e => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                toggleExpand();
+              }
+            }}
+            onMouseOver={e => (e.currentTarget.style.background = isDark ? '#475569' : '#e0e7ef')}
+            onMouseOut={e => (e.currentTarget.style.background = isDark ? '#334155' : '#f1f5f9')}
           >
             {isExpanded ? '−' : '+'}
-          </span>
+          </button>
         )}
       </div>
       {/* Connector down */}
       {hasChildren && isExpanded && (
         <svg width="2" height="24" style={{ margin: '0 auto', display: 'block', zIndex: 1 }}>
-          <line x1="1" y1="0" x2="1" y2="24" stroke="#c7d2fe" strokeWidth="2" />
+          <line x1="1" y1="0" x2="1" y2="24" stroke={isDark ? "#64748b" : "#c7d2fe"} strokeWidth="2" />
         </svg>
       )}
       {/* Children */}
@@ -165,7 +190,7 @@ function GraphNode({ node, expandedMap, setExpandedMap }) {
           {/* Horizontal connector */}
           {node.children.length > 1 && (
             <svg
-              width={node.children.length * 140} // reduced from 190
+              width={node.children.length * 140}
               height="24"
               style={{ position: 'absolute', left: `calc(50% - ${(node.children.length * 140) / 2}px)`, top: 0, zIndex: 0 }}
             >
@@ -174,7 +199,7 @@ function GraphNode({ node, expandedMap, setExpandedMap }) {
                 y1={12}
                 x2={node.children.length * 140 - 20}
                 y2={12}
-                stroke="#c7d2fe"
+                stroke={isDark ? "#64748b" : "#c7d2fe"}
                 strokeWidth="2"
               />
               {node.children.map((_, idx) => (
@@ -184,7 +209,7 @@ function GraphNode({ node, expandedMap, setExpandedMap }) {
                   y1={12}
                   x2={20 + idx * 140}
                   y2={24}
-                  stroke="#c7d2fe"
+                  stroke={isDark ? "#64748b" : "#c7d2fe"}
                   strokeWidth="2"
                 />
               ))}
@@ -228,9 +253,32 @@ function OrgChart() {
   }
 
   return (
-    <div className="p-8 flex flex-col items-center" style={{ overflowX: 'auto', minHeight: 400 }}>
-      <h2 className="text-3xl font-bold mb-8">Team Structure</h2>
-      <div style={{ minWidth: 600, paddingBottom: 24, background: '#f8fafc', borderRadius: 16, padding: 24, boxShadow: '0 2px 16px #6366f122' }}>
+    <div
+      className="p-8 flex flex-col items-center"
+      style={{
+        overflowX: 'auto',
+        minHeight: 400,
+        background: 'var(--orgchart-bg, #f8fafc)',
+        ...(typeof window !== 'undefined' && document.documentElement.classList.contains('dark')
+          ? { background: '#0f172a' }
+          : {})
+      }}
+    >
+      <h2 className="text-3xl font-bold mb-8 text-foreground dark:text-gray-100">Team Structure</h2>
+      <div
+        style={{
+          minWidth: 600,
+          paddingBottom: 24,
+          background: typeof window !== 'undefined' && document.documentElement.classList.contains('dark')
+            ? '#1e293b'
+            : '#f8fafc',
+          borderRadius: 16,
+          padding: 24,
+          boxShadow: typeof window !== 'undefined' && document.documentElement.classList.contains('dark')
+            ? '0 2px 16px #0f172a55'
+            : '0 2px 16px #6366f122'
+        }}
+      >
         <GraphNode node={tree} expandedMap={expandedMap} setExpandedMap={setExpandedMap} />
       </div>
     </div>

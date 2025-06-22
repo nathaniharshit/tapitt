@@ -359,6 +359,28 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
                     <p className="text-lg font-semibold text-foreground">{viewedEmployee?.address}</p>
                   </div>
                 )}
+                {/* Reporting Manager */}
+                {viewedEmployee?.role !== 'superadmin' && (
+                  <div>
+                    <p className="text-muted-foreground font-medium">Reporting Manager</p>
+                    <p className="text-lg font-semibold text-foreground">
+                      {viewedEmployee.reportingManager && typeof viewedEmployee.reportingManager === 'string' ? (
+                        <ReportingManagerDetails managerId={viewedEmployee.reportingManager} />
+                      ) : viewedEmployee.reportingManager && typeof viewedEmployee.reportingManager === 'object' ? (
+                        <>
+                          {viewedEmployee.reportingManager.firstname} {viewedEmployee.reportingManager.lastname}
+                          {viewedEmployee.reportingManager.email && (
+                            <span className="text-xs text-muted-foreground ml-2">
+                              ({viewedEmployee.reportingManager.email})
+                            </span>
+                          )}
+                        </>
+                      ) : (
+                        <span className="text-muted-foreground">Not assigned</span>
+                      )}
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -504,6 +526,32 @@ const EmployeeList = ({ userRole }: EmployeeListProps) => {
         </DialogContent>
       </Dialog>
     </div>
+  );
+};
+
+const ReportingManagerDetails = ({ managerId }: { managerId: string }) => {
+  const [manager, setManager] = useState<any>(null);
+
+  useEffect(() => {
+    fetch(`http://localhost:5050/api/employees/${managerId}`)
+      .then(res => res.json())
+      .then(data => setManager(data))
+      .catch(() => setManager(null));
+  }, [managerId]);
+
+  if (!manager) {
+    return <span className="text-muted-foreground">Not assigned</span>;
+  }
+
+  return (
+    <>
+      {manager.firstname} {manager.lastname}
+      {manager.email && (
+        <span className="text-xs text-muted-foreground ml-2">
+          ({manager.email})
+        </span>
+      )}
+    </>
   );
 };
 
