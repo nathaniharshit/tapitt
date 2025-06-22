@@ -1509,27 +1509,42 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                   <CardTitle>Attendance</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="flex items-center space-x-4">
-                    <div>
-                      <div className="text-2xl font-bold text-green-600">
-                        {todayTotalMarked > 0
-                          ? `${Math.round((todayPresent / todayTotalMarked) * 100)}%`
-                          : 'N/A'}
-                      </div>
-                      <div className="text-muted-foreground text-sm">Present</div>
-                    </div>
-                    <div>
-                      <div className="text-2xl font-bold text-red-500">
-                        {todayTotalMarked > 0
-                          ? `${Math.round((todayAbsent / todayTotalMarked) * 100)}%`
-                          : 'N/A'}
-                      </div>
-                      <div className="text-muted-foreground text-sm">Absent</div>
-                    </div>
-                  </div>
-                  <div className="mt-2 text-xs text-muted-foreground">
-                    {todayTotalMarked} marked today
-                  </div>
+                  {(() => {
+                    const today = new Date();
+                    const day = today.getDay();
+                    if (day === 0 || day === 6) {
+                      // Saturday or Sunday: show only the holiday message, big font, nothing else
+                      return (
+                        <div className="flex flex-col items-center justify-center h-32">
+                          <span className="text-2xl md:text-3xl font-bold text-blue-600 dark:text-blue-300 text-center">
+                            Today is a holiday
+                          </span>
+                        </div>
+                      );
+                    }
+                    // Weekday: show present/absent counts, not percentages or N/A
+                    return (
+                      <>
+                        <div className="flex items-center space-x-4">
+                          <div>
+                            <div className="text-2xl font-bold text-green-600">
+                              {todayPresent}
+                            </div>
+                            <div className="text-muted-foreground text-sm">Present</div>
+                          </div>
+                          <div>
+                            <div className="text-2xl font-bold text-red-500">
+                              {todayAbsent}
+                            </div>
+                            <div className="text-muted-foreground text-sm">Absent</div>
+                          </div>
+                        </div>
+                        <div className="mt-2 text-xs text-muted-foreground">
+                          {todayTotalMarked} marked today
+                        </div>
+                      </>
+                    );
+                  })()}
                 </CardContent>
               </Card>
             </div>
@@ -1635,7 +1650,6 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                 </CardContent>
               </Card>
             </div>
-            
           </div>
         );
       case 'personal-details':
