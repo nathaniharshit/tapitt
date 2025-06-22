@@ -102,7 +102,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
 
   // Fetch employees and interns for team selection
   const [teamOptions, setTeamOptions] = useState<{ value: string; label: string }[]>([]);
-  // Fetch admins/superadmins for project lead selection
+  // Fetch all employees for project lead selection (changed from only admins/superadmins)
   const [leadOptions, setLeadOptions] = useState<{ value: string; label: string }[]>([]);
   useEffect(() => {
     const fetchTeamOptions = async () => {
@@ -119,12 +119,9 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
             label: `${emp.firstname} ${emp.lastname} (${emp.department || 'N/A'})`
           }))
         );
-        // Filter for admins and superadmins
-        const admins = data.filter((emp: any) =>
-          emp.role === 'admin' || emp.role === 'superadmin'
-        );
+        // Use all employees for project lead selection
         setLeadOptions(
-          admins.map((emp: any) => ({
+          data.map((emp: any) => ({
             value: emp._id,
             label: `${emp.firstname} ${emp.lastname} (${emp.department || 'N/A'})`
           }))
@@ -1359,22 +1356,75 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
               {/* Welcome New Employees Widget */}
-              <Card className="col-span-1">
+              <Card className="col-span-1 bg-gradient-to-br from-yellow-100 via-pink-100 to-blue-100 dark:from-yellow-900 dark:via-pink-900 dark:to-blue-900 border-2 border-yellow-300 dark:border-yellow-700 shadow-xl relative overflow-hidden">
                 <CardHeader>
-                  <CardTitle>Welcome New Employees</CardTitle>
+                  <CardTitle>
+                    <span className="flex items-center gap-2 text-2xl font-extrabold text-yellow-700 dark:text-yellow-200">
+                      🎉 Welcome New Employees!
+                    </span>
+                  </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <ul className="text-muted-foreground space-y-1">
-                    {employees.length === 0 ? (
-                      <li>No employees found.</li>
+                  <div className="absolute right-4 top-4 text-4xl opacity-30 pointer-events-none select-none">🎊</div>
+                  <ul className="space-y-3 mt-2">
+                    {employees.filter(emp => {
+                      if (!emp.createdAt) return false;
+                      const created = new Date(emp.createdAt);
+                      const now = new Date();
+                      return (
+                        created.getFullYear() === now.getFullYear() &&
+                        created.getMonth() === now.getMonth() &&
+                        created.getDate() === now.getDate()
+                      );
+                    }).length === 0 ? (
+                      <li className="text-center text-muted-foreground text-lg font-semibold py-4">
+                        No new employees today.
+                      </li>
                     ) : (
-                      employees.map(emp => (
-                        <li key={emp._id}>
-                          {emp.firstname} {emp.lastname} ({emp.department || 'N/A'})
-                        </li>
-                      ))
-                    )};
+                      employees
+                        .filter(emp => {
+                          if (!emp.createdAt) return false;
+                          const created = new Date(emp.createdAt);
+                          const now = new Date();
+                          return (
+                            created.getFullYear() === now.getFullYear() &&
+                            created.getMonth() === now.getMonth() &&
+                            created.getDate() === now.getDate()
+                          );
+                        })
+                        .map(emp => (
+                          <li key={emp._id} className="flex items-center gap-3 bg-white/70 dark:bg-gray-800/70 rounded-lg px-3 py-2 shadow border border-yellow-200 dark:border-yellow-700">
+                            {/* Avatar or initials */}
+                            {emp.picture ? (
+                              <img src={emp.picture} alt="avatar" className="w-10 h-10 rounded-full object-cover border border-yellow-400 dark:border-yellow-700" />
+                            ) : (
+                              <div className="w-10 h-10 rounded-full bg-yellow-200 dark:bg-yellow-700 flex items-center justify-center text-yellow-900 dark:text-yellow-100 font-bold text-lg">
+                                {emp.firstname?.[0]}{emp.lastname?.[0]}
+                              </div>
+                            )}
+                            <div>
+                              <div className="font-semibold text-foreground dark:text-yellow-100 text-lg">
+                                {emp.firstname} {emp.lastname}
+                              </div>
+                              <div className="text-xs text-yellow-700 dark:text-yellow-200">{emp.department || 'N/A'}</div>
+                            </div>
+                            <span className="ml-auto text-2xl animate-bounce">🎈</span>
+                          </li>
+                        ))
+                    )}
                   </ul>
+                  <div className="mt-4 text-center text-yellow-700 dark:text-yellow-200 font-bold text-lg">
+                    {employees.some(emp => {
+                      if (!emp.createdAt) return false;
+                      const created = new Date(emp.createdAt);
+                      const now = new Date();
+                      return (
+                        created.getFullYear() === now.getFullYear() &&
+                        created.getMonth() === now.getMonth() &&
+                        created.getDate() === now.getDate()
+                      );
+                    }) && "We're excited to have you join the team!"}
+                  </div>
                 </CardContent>
               </Card>
               {/* Working Remotely Widget */}

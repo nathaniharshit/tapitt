@@ -62,29 +62,44 @@ function getInitials(node) {
   return (first + last).toUpperCase() || '?';
 }
 
-function GraphNode({ node }) {
+function GraphNode({ node, expandedMap, setExpandedMap }) {
   const hasChildren = node.children && node.children.length > 0;
-  // Card style using EmployeeList color scheme
+  const nodeKey = node._id || node.name;
+  const isExpanded = expandedMap[nodeKey] || false;
+
+  const toggleExpand = (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    if (!hasChildren) return;
+    setExpandedMap(prev => ({
+      ...prev,
+      [nodeKey]: !isExpanded,
+    }));
+  };
+
   const cardStyle = {
     background: getRoleColor(node.role),
     color: '#fff',
     borderRadius: 12,
-    minWidth: 120,
-    minHeight: 56,
-    padding: '12px 16px',
+    width: 130, // reduced from 180
+    height: 100, // reduced from 110
+    padding: '10px 10px',
     boxShadow: '0 2px 12px #6366f133',
     display: 'flex',
     flexDirection: 'column' as const,
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
     position: 'relative' as const,
-    margin: '0 8px',
+    margin: '0 4px', // reduced margin
     border: '2px solid #fff',
     fontWeight: 600,
-    fontSize: 14,
+    fontSize: 13,
+    cursor: hasChildren ? 'pointer' : 'default',
+    userSelect: 'none' as const,
+    transition: 'box-shadow 0.2s, border 0.2s, background 0.2s',
+    overflow: 'hidden'
   };
   const avatarStyle = {
-    width: 36,
+    width: 36, // reduced from 44
     height: 36,
     borderRadius: '50%',
     background: '#fff',
@@ -93,40 +108,71 @@ function GraphNode({ node }) {
     alignItems: 'center',
     justifyContent: 'center',
     fontWeight: 700,
-    fontSize: 16,
-    marginBottom: 6,
+    fontSize: 15,
+    marginBottom: 4,
     border: `1.5px solid ${getRoleColor(node.role)}`,
     boxShadow: '0 1px 4px #6366f122',
+    flexShrink: 0
   };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative' }}>
-      <div style={cardStyle}>
+      <div style={cardStyle} onClick={toggleExpand}>
         <div style={avatarStyle}>{getInitials(node)}</div>
-        <div style={{ fontSize: 15, fontWeight: 700 }}>{getDisplayName(node)}</div>
+        <div style={{ fontSize: 14, fontWeight: 700, textAlign: 'center', width: '100%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          {getDisplayName(node)}
+        </div>
         {node.position && (
-          <div style={{ fontSize: 12, fontWeight: 400, opacity: 0.95 }}>{node.position}</div>
+          <div style={{ fontSize: 11, fontWeight: 400, opacity: 0.95, textAlign: 'center', width: '100%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {node.position}
+          </div>
+        )}
+        {hasChildren && (
+          <span
+            style={{
+              position: 'absolute',
+              top: 8,
+              right: 10,
+              fontWeight: 900,
+              fontSize: 16,
+              color: '#fff',
+              background: '#6366f1',
+              borderRadius: '50%',
+              width: 20,
+              height: 20,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              userSelect: 'none',
+              boxShadow: '0 1px 4px #6366f122',
+            }}
+            onClick={toggleExpand}
+          >
+            {isExpanded ? '−' : '+'}
+          </span>
         )}
       </div>
       {/* Connector down */}
-      {hasChildren && (
+      {hasChildren && isExpanded && (
         <svg width="2" height="24" style={{ margin: '0 auto', display: 'block', zIndex: 1 }}>
           <line x1="1" y1="0" x2="1" y2="24" stroke="#c7d2fe" strokeWidth="2" />
         </svg>
       )}
       {/* Children */}
-      {hasChildren && (
+      {hasChildren && isExpanded && (
         <div style={{ position: 'relative', width: '100%' }}>
           {/* Horizontal connector */}
           {node.children.length > 1 && (
             <svg
-              width={node.children.length * 130}
+              width={node.children.length * 140} // reduced from 190
               height="24"
-              style={{ position: 'absolute', left: `calc(50% - ${(node.children.length * 130) / 2}px)`, top: 0, zIndex: 0 }}
+              style={{ position: 'absolute', left: `calc(50% - ${(node.children.length * 140) / 2}px)`, top: 0, zIndex: 0 }}
             >
               <line
-                x1={30}
+                x1={20}
                 y1={12}
-                x2={node.children.length * 130 - 30}
+                x2={node.children.length * 140 - 20}
                 y2={12}
                 stroke="#c7d2fe"
                 strokeWidth="2"
@@ -134,9 +180,9 @@ function GraphNode({ node }) {
               {node.children.map((_, idx) => (
                 <line
                   key={idx}
-                  x1={30 + idx * 130}
+                  x1={20 + idx * 140}
                   y1={12}
-                  x2={30 + idx * 130}
+                  x2={20 + idx * 140}
                   y2={24}
                   stroke="#c7d2fe"
                   strokeWidth="2"
@@ -146,7 +192,7 @@ function GraphNode({ node }) {
           )}
           <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'flex-start', marginTop: 24 }}>
             {node.children.map((child, idx) => (
-              <GraphNode key={child._id || child.name} node={child} />
+              <GraphNode key={child._id || child.name} node={child} expandedMap={expandedMap} setExpandedMap={setExpandedMap} />
             ))}
           </div>
         </div>
@@ -157,21 +203,35 @@ function GraphNode({ node }) {
 
 function OrgChart() {
   const [employees, setEmployees] = useState([]);
+  const [expandedMap, setExpandedMap] = useState<{ [key: string]: boolean }>({});
+
   useEffect(() => {
     fetch('http://localhost:5050/api/employees')
       .then(res => res.json())
       .then(data => setEmployees(data))
       .catch(() => setEmployees([]));
   }, []);
-  if (!employees.length) {
+
+  const tree = buildOrgTree(employees);
+
+  // By default, expand the CEO node only once
+  useEffect(() => {
+    if (tree && tree._id && !expandedMap[tree._id]) {
+      setExpandedMap(prev => ({ ...prev, [tree._id]: true }));
+    }
+    // Only run when tree._id changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tree && tree._id]);
+
+  if (!employees.length || !tree) {
     return <div className="p-8">Loading organization structure...</div>;
   }
-  const tree = buildOrgTree(employees);
+
   return (
     <div className="p-8 flex flex-col items-center" style={{ overflowX: 'auto', minHeight: 400 }}>
       <h2 className="text-3xl font-bold mb-8">Team Structure</h2>
       <div style={{ minWidth: 600, paddingBottom: 24, background: '#f8fafc', borderRadius: 16, padding: 24, boxShadow: '0 2px 16px #6366f122' }}>
-        <GraphNode node={tree} />
+        <GraphNode node={tree} expandedMap={expandedMap} setExpandedMap={setExpandedMap} />
       </div>
     </div>
   );
