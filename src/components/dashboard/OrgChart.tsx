@@ -1,43 +1,41 @@
 import { useState, useEffect } from 'react';
 
-// Build a hierarchy: superadmin(s) -> admin(s) -> others
 function buildOrgTree(employees) {
   const empMap = {};
   employees.forEach(emp => {
     empMap[emp._id] = { ...emp, children: [] };
   });
-
-  // Assign children to their reporting manager
   employees.forEach(emp => {
     if (emp.reportingManager && empMap[emp.reportingManager]) {
       empMap[emp.reportingManager].children.push(empMap[emp._id]);
     }
   });
+  // Find CEO (superadmin, no reportingManager)
+  const ceo = employees.find(emp => emp.role === 'superadmin' && !emp.reportingManager);
+  if (!ceo) return null;
 
-  // Find all superadmins (no reportingManager, role === 'superadmin')
-  const superAdmins = employees.filter(emp => emp.role === 'superadmin' && !emp.reportingManager);
-
-  // If multiple superadmins, group under a virtual node
-  let root;
-  if (superAdmins.length > 1) {
-    root = {
-      name: 'Super Admins',
-      type: 'virtual-root',
-      children: superAdmins.map(sa => empMap[sa._id]),
-    };
-  } else if (superAdmins.length === 1) {
-    root = empMap[superAdmins[0]._id];
-  } else {
-    // fallback: anyone without reportingManager
-    const roots = employees.filter(emp => !emp.reportingManager).map(emp => empMap[emp._id]);
-    root = {
-      name: 'Organization',
-      type: 'virtual-root',
-      children: roots,
-    };
+  // Find Siddhi Patel (by name or position contains 'coo')
+  const siddhi = employees.find(emp =>
+    (emp.firstname && emp.firstname.toLowerCase() === 'siddhi' && emp.lastname && emp.lastname.toLowerCase() === 'patel') ||
+    (emp.position && emp.position.toLowerCase().includes('coo'))
+  );
+  if (siddhi && !empMap[ceo._id].children.some(child => child._id === siddhi._id)) {
+    empMap[ceo._id].children.unshift(empMap[siddhi._id]);
   }
 
-  return root;
+  // Find all admins (role === 'admin', reports to CEO)
+  const admins = employees.filter(emp => emp.role === 'admin' && emp.reportingManager === ceo._id);
+  // Remove any admins from CEO's children to avoid duplicates
+  empMap[ceo._id].children = empMap[ceo._id].children.filter(child => !admins.some(admin => admin._id === child._id));
+  // Add all admins as children of CEO (left and right)
+  empMap[ceo._id].children = [...admins.map(admin => empMap[admin._id]), ...empMap[ceo._id].children];
+
+  // For each admin, only keep employees/interns as children
+  admins.forEach(admin => {
+    empMap[admin._id].children = empMap[admin._id].children.filter(child => child.role === 'employee' || child.role === 'intern');
+  });
+
+  return empMap[ceo._id];
 }
 
 function getDisplayName(node) {
@@ -48,8 +46,8 @@ function getDisplayName(node) {
 
 function getRoleColor(role) {
   switch (role) {
-    case 'superadmin': return '#2563eb';
-    case 'admin': return '#059669';
+    case 'superadmin': return '#2563eb'; // CEO
+    case 'admin': return '#059669';      // Director
     case 'manager': return '#f59e42';
     case 'employee': return '#eab308';
     case 'intern': return '#a21caf';
@@ -57,141 +55,98 @@ function getRoleColor(role) {
   }
 }
 
-function groupChildrenByDepartment(children) {
-  const grouped: { [dept: string]: any[] } = {};
-  children.forEach(child => {
-    const dept = child.department || 'No Department';
-    if (!grouped[dept]) grouped[dept] = [];
-    grouped[dept].push(child);
-  });
-  return grouped;
+function getInitials(node) {
+  if (node.type === 'virtual-root') return node.name[0] || '?';
+  const first = node.firstname ? node.firstname[0] : '';
+  const last = node.lastname ? node.lastname[0] : '';
+  return (first + last).toUpperCase() || '?';
 }
 
-function GraphNode({ node, expandedMap, setExpandedMap }) {
+function GraphNode({ node }) {
   const hasChildren = node.children && node.children.length > 0;
-  const isExpanded = expandedMap[node._id || node.name] || node.type === 'virtual-root';
-
-  const toggleExpand = () => {
-    if (!hasChildren) return;
-    setExpandedMap((prev) => ({
-      ...prev,
-      [node._id || node.name]: !isExpanded,
-    }));
-  };
-
+  // Card style using EmployeeList color scheme
   const cardStyle = {
-    display: 'inline-block',
-    padding: '16px 28px',
-    background: '#fff',
+    background: getRoleColor(node.role),
+    color: '#fff',
     borderRadius: 12,
-    fontWeight: node.type === 'virtual-root' ? 700 : 500,
-    fontSize: node.type === 'virtual-root' ? 22 : 16,
-    marginBottom: 8,
-    minWidth: 200,
-    textAlign: 'center',
-    border: `3px solid ${getRoleColor(node.role)}`,
-    boxShadow: '0 4px 24px #6366f11a',
-    color: getRoleColor(node.role),
-    position: 'relative' as 'relative',
-    transition: 'box-shadow 0.2s, border 0.2s',
-    cursor: hasChildren ? 'pointer' : 'default',
-    userSelect: 'none',
-  };
-
-  const badgeStyle = {
-    display: 'inline-block',
-    marginLeft: 8,
-    padding: '2px 10px',
-    borderRadius: 8,
-    fontSize: 13,
-    background: getRoleColor(node.role) + '22',
-    color: getRoleColor(node.role),
+    minWidth: 120,
+    minHeight: 56,
+    padding: '12px 16px',
+    boxShadow: '0 2px 12px #6366f133',
+    display: 'flex',
+    flexDirection: 'column' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    position: 'relative' as const,
+    margin: '0 8px',
+    border: '2px solid #fff',
     fontWeight: 600,
+    fontSize: 14,
   };
-
+  const avatarStyle = {
+    width: 36,
+    height: 36,
+    borderRadius: '50%',
+    background: '#fff',
+    color: getRoleColor(node.role),
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontWeight: 700,
+    fontSize: 16,
+    marginBottom: 6,
+    border: `1.5px solid ${getRoleColor(node.role)}`,
+    boxShadow: '0 1px 4px #6366f122',
+  };
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative', minWidth: 200 }}>
-      <div style={{ ...cardStyle, textAlign: 'center' as 'center', userSelect: 'none' as const }} onClick={toggleExpand}>
-        {getDisplayName(node)}
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative' }}>
+      <div style={cardStyle}>
+        <div style={avatarStyle}>{getInitials(node)}</div>
+        <div style={{ fontSize: 15, fontWeight: 700 }}>{getDisplayName(node)}</div>
         {node.position && (
-          <span style={{ marginLeft: 8, color: '#64748b', fontSize: 14 }}>
-            {node.position}
-          </span>
-        )}
-        {node.role && node.type !== 'virtual-root' && (
-          <span style={badgeStyle}>
-            {node.role.charAt(0).toUpperCase() + node.role.slice(1)}
-          </span>
-        )}
-        {hasChildren && (
-          <span style={{
-            marginLeft: 12,
-            fontWeight: 900,
-            fontSize: 18,
-            color: '#6366f1',
-            cursor: 'pointer',
-            userSelect: 'none',
-            verticalAlign: 'middle',
-          }}>
-            {isExpanded ? '−' : '+'}
-          </span>
+          <div style={{ fontSize: 12, fontWeight: 400, opacity: 0.95 }}>{node.position}</div>
         )}
       </div>
-      {hasChildren && isExpanded && (
-        <div style={{ width: '100%', position: 'relative' }}>
-          <svg width="2" height="30" style={{ display: 'block', margin: '0 auto' }}>
-            <line x1="1" y1="0" x2="1" y2="30" stroke="#6366f1" strokeWidth="2" />
-          </svg>
-          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'flex-start', marginTop: 0 }}>
-            {Object.keys(groupChildrenByDepartment(node.children)).length > 1 && (
-              <svg
-                width={Math.max(Object.keys(groupChildrenByDepartment(node.children)).length * 220, 220)}
-                height="24"
-                style={{ position: 'absolute', left: 0, top: 0, zIndex: 0 }}
-              >
+      {/* Connector down */}
+      {hasChildren && (
+        <svg width="2" height="24" style={{ margin: '0 auto', display: 'block', zIndex: 1 }}>
+          <line x1="1" y1="0" x2="1" y2="24" stroke="#c7d2fe" strokeWidth="2" />
+        </svg>
+      )}
+      {/* Children */}
+      {hasChildren && (
+        <div style={{ position: 'relative', width: '100%' }}>
+          {/* Horizontal connector */}
+          {node.children.length > 1 && (
+            <svg
+              width={node.children.length * 130}
+              height="24"
+              style={{ position: 'absolute', left: `calc(50% - ${(node.children.length * 130) / 2}px)`, top: 0, zIndex: 0 }}
+            >
+              <line
+                x1={30}
+                y1={12}
+                x2={node.children.length * 130 - 30}
+                y2={12}
+                stroke="#c7d2fe"
+                strokeWidth="2"
+              />
+              {node.children.map((_, idx) => (
                 <line
-                  x1={100}
+                  key={idx}
+                  x1={30 + idx * 130}
                   y1={12}
-                  x2={Math.max(Object.keys(groupChildrenByDepartment(node.children)).length * 220 - 100, 100)}
-                  y2={12}
-                  stroke="#6366f1"
+                  x2={30 + idx * 130}
+                  y2={24}
+                  stroke="#c7d2fe"
                   strokeWidth="2"
                 />
-                {Object.keys(groupChildrenByDepartment(node.children)).map((_, idx) => (
-                  <line
-                    key={idx}
-                    x1={100 + idx * 220}
-                    y1={12}
-                    x2={100 + idx * 220}
-                    y2={30}
-                    stroke="#6366f1"
-                    strokeWidth="2"
-                  />
-                ))}
-              </svg>
-            )}
-            {Object.entries(groupChildrenByDepartment(node.children)).map(([dept, deptChildren], idx) => (
-              <div key={dept} style={{ margin: '0 20px', position: 'relative', zIndex: 1 }}>
-                <div style={{
-                  fontWeight: 600,
-                  color: '#6366f1',
-                  marginBottom: 4,
-                  fontSize: 15,
-                  background: '#e0e7ff',
-                  borderRadius: 6,
-                  padding: '2px 10px',
-                  display: 'inline-block'
-                }}>
-                  {dept}
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'row', justifyContent: 'center' }}>
-                  {deptChildren.map((child, cidx) => (
-                    <div key={child._id || child.name} style={{ margin: '0 10px' }}>
-                      <GraphNode node={child} expandedMap={expandedMap} setExpandedMap={setExpandedMap} />
-                    </div>
-                  ))}
-                </div>
-              </div>
+              ))}
+            </svg>
+          )}
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'flex-start', marginTop: 24 }}>
+            {node.children.map((child, idx) => (
+              <GraphNode key={child._id || child.name} node={child} />
             ))}
           </div>
         </div>
@@ -200,31 +155,26 @@ function GraphNode({ node, expandedMap, setExpandedMap }) {
   );
 }
 
-const OrgChart = () => {
+function OrgChart() {
   const [employees, setEmployees] = useState([]);
-  const [expandedMap, setExpandedMap] = useState<{ [key: string]: boolean }>({});
-
   useEffect(() => {
     fetch('http://localhost:5050/api/employees')
       .then(res => res.json())
       .then(data => setEmployees(data))
       .catch(() => setEmployees([]));
   }, []);
-
   if (!employees.length) {
     return <div className="p-8">Loading organization structure...</div>;
   }
-
   const tree = buildOrgTree(employees);
-
   return (
-    <div className="p-8" style={{ overflowX: 'auto', minHeight: 400 }}>
-      <h2 className="text-2xl font-bold mb-6">Organization Structure</h2>
-      <div style={{ minWidth: 800, paddingBottom: 24, background: '#f8fafc', borderRadius: 16, padding: 24 }}>
-        <GraphNode node={tree} expandedMap={expandedMap} setExpandedMap={setExpandedMap} />
+    <div className="p-8 flex flex-col items-center" style={{ overflowX: 'auto', minHeight: 400 }}>
+      <h2 className="text-3xl font-bold mb-8">Team Structure</h2>
+      <div style={{ minWidth: 600, paddingBottom: 24, background: '#f8fafc', borderRadius: 16, padding: 24, boxShadow: '0 2px 16px #6366f122' }}>
+        <GraphNode node={tree} />
       </div>
     </div>
   );
-};
+}
 
 export default OrgChart;
