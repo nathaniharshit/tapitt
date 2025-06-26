@@ -22,6 +22,7 @@ const AttendanceCalendar: React.FC<AttendanceCalendarProps> = ({ user, month }) 
   const [attendance, setAttendance] = useState<{ date: string; status: string }[]>([]);
   const [workSessions, setWorkSessions] = useState<{ start: string; end?: string }[]>([]);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [holidays, setHolidays] = useState<{ date: string; name: string }[]>([]);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -32,7 +33,10 @@ const AttendanceCalendar: React.FC<AttendanceCalendarProps> = ({ user, month }) 
     fetch(`http://localhost:5050/api/sessions?employeeId=${user.id}`)
       .then(res => res.json())
       .then(data => setWorkSessions((data.sessions || []).map((s: any) => ({ start: s.startTime, end: s.endTime }))));
-
+    // Fetch holidays for the calendar
+    fetch('http://localhost:5050/api/holidays')
+      .then(res => res.json())
+      .then(data => setHolidays(Array.isArray(data.holidays) ? data.holidays : []));
   }, [user?.id]);
 
   // Use selected month or current month
@@ -49,6 +53,11 @@ const AttendanceCalendar: React.FC<AttendanceCalendarProps> = ({ user, month }) 
   const daysInMonth = getDaysInMonth(year, monthIdx);
   const firstDay = new Date(year, monthIdx, 1).getDay();
 
+  // Helper to check if a date is a declared holiday
+  function getHoliday(dateStr: string) {
+    return holidays.find(h => h.date === dateStr);
+  }
+
   // Build calendar grid
   const weeks: Array<Array<number | null>> = [];
   let week: Array<number | null> = Array(firstDay).fill(null);
@@ -61,20 +70,25 @@ const AttendanceCalendar: React.FC<AttendanceCalendarProps> = ({ user, month }) 
   }
   if (week.length) weeks.push([...week, ...Array(7 - week.length).fill(null)]);
 
-  // Attendance percentage calculation for the month (excluding weekends, till today if current month)
+  // Attendance percentage calculation for the month (excluding weekends and declared holidays, till today if current month)
   const monthStr = `${year}-${String(monthIdx + 1).padStart(2, '0')}`;
   const today = new Date();
-  // Get all days in the month that are NOT weekends and (if current month) <= today
+  // Get all days in the month that are NOT weekends, NOT declared holidays, and (if current month) <= today
   const allDays: string[] = [];
   for (let d = 1; d <= daysInMonth; d++) {
     const dateStr = `${year}-${String(monthIdx + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
     const dateObj = new Date(dateStr);
-    if (!isWeekend(dateStr) && (year !== today.getFullYear() || monthIdx !== today.getMonth() || dateObj <= today)) {
+    const isWeekendDay = isWeekend(dateStr);
+    const isDeclaredHoliday = !!getHoliday(dateStr);
+    if (!isWeekendDay && !isDeclaredHoliday && (year !== today.getFullYear() || monthIdx !== today.getMonth() || dateObj <= today)) {
       allDays.push(dateStr);
     }
   }
-  // Only consider attendance for non-weekend days and till today if current month
-  const monthAttendance = attendance.filter(a => a.date.startsWith(monthStr) && !isWeekend(a.date) && (year !== today.getFullYear() || monthIdx !== today.getMonth() || new Date(a.date) <= today));
+  // Only consider attendance for non-weekend, non-holiday days and till today if current month
+  const monthAttendance = attendance.filter(a => {
+    const isDeclaredHoliday = !!getHoliday(a.date);
+    return a.date.startsWith(monthStr) && !isWeekend(a.date) && !isDeclaredHoliday && (year !== today.getFullYear() || monthIdx !== today.getMonth() || new Date(a.date) <= today);
+  });
   const presentDays = monthAttendance.filter(a => a.status === 'present').length;
   const markedDays = monthAttendance.length;
   const totalWorkingDays = allDays.length;
@@ -110,9 +124,16 @@ const AttendanceCalendar: React.FC<AttendanceCalendarProps> = ({ user, month }) 
               const dateStr = `${year}-${String(monthIdx + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
               const att = attendance.find(a => a.date === dateStr);
               const isHoliday = isWeekend(dateStr);
+              const holidayObj = getHoliday(dateStr);
               let cellClass = "rounded p-2 font-bold text-center cursor-pointer ";
-              if (isHoliday) {
+              let tooltip = "";
+              if (holidayObj) {
+                // Use blue for declared holidays
+                cellClass += "bg-purple-200 text-blue-900 dark:bg-blue-800 dark:text-blue-100 border border-blue-500";
+                tooltip = `Declared Holiday: ${holidayObj.name}`;
+              } else if (isHoliday) {
                 cellClass += "bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-200";
+                tooltip = "Weekend";
               } else if (att?.status === 'present') {
                 cellClass += "bg-green-200 dark:bg-green-900 text-green-900 dark:text-green-200";
               } else if (att?.status === 'absent') {
@@ -125,14 +146,19 @@ const AttendanceCalendar: React.FC<AttendanceCalendarProps> = ({ user, month }) 
                 cellClass += " ring-2 ring-blue-500";
               }
               return (
-                <div key={j} className={cellClass} onClick={() => setSelectedDate(dateStr)}>
+                <div
+                  key={j}
+                  className={cellClass}
+                  onClick={() => setSelectedDate(dateStr)}
+                  title={tooltip}
+                >
                   {d}
                 </div>
               );
             })}
           </div>
         ))}
-        <div className="mt-2 flex space-x-4 text-xs">
+        <div className="mt-2 flex flex-wrap gap-4 text-xs">
           <span className="inline-block w-3 h-3 bg-green-200 dark:bg-green-900 rounded-full mr-1 align-middle border border-green-400 dark:border-green-700" /> 
           <span className="text-muted-foreground">Present</span>
           <span className="inline-block w-3 h-3 bg-red-100 dark:bg-red-900 rounded-full mr-1 align-middle border border-red-400 dark:border-red-700" /> 
@@ -140,7 +166,9 @@ const AttendanceCalendar: React.FC<AttendanceCalendarProps> = ({ user, month }) 
           <span className="inline-block w-3 h-3 bg-muted rounded-full mr-1 align-middle border border-gray-300 dark:border-gray-700" /> 
           <span className="text-muted-foreground">Not Marked</span>
           <span className="inline-block w-3 h-3 bg-yellow-100 dark:bg-yellow-900 rounded-full mr-1 align-middle border border-yellow-400 dark:border-yellow-700" /> 
-          <span className="text-muted-foreground">Holiday</span>
+          <span className="text-muted-foreground">Weekend</span>
+          <span className="inline-block w-3 h-3 bg-blue-200 dark:bg-blue-800 rounded-full mr-1 align-middle border border-blue-500 dark:border-blue-800" /> 
+          <span className="text-muted-foreground">Declared Holiday</span>
         </div>
       </div>
       {/* Session History separate box, filtered by selectedDate */}

@@ -10,10 +10,9 @@ import { Navigate, useLocation } from 'react-router-dom';
 import EmployeePersonalDetails from '../employees/EmployeePersonalDetails';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import AttendanceCalendar from '../attendance/AttendanceCalendar';
-import { Dialog } from '@/components/ui/dialog'; // If you use a dialog/modal component
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'; // If you use a dialog/modal component
 import OrgChart from './OrgChart';
 import { socket } from '@/lib/socket';
-
 
 interface User {
   id: string;
@@ -28,7 +27,6 @@ interface DashboardProps {
 }
 // src/components/auth/protectedroute.tsx
 
-
 const ProtectedRoute = ({ user, allowedRoles, children }) => {
   if (!user || !allowedRoles.includes(user.role)) {
     return <Navigate to="/login" />;
@@ -36,10 +34,21 @@ const ProtectedRoute = ({ user, allowedRoles, children }) => {
   return children;
 };
 
-
 const Dashboard = ({ user, onLogout }: DashboardProps) => {
   const location = useLocation();
-  const [activeTab, setActiveTab] = useState('dashboard');
+  // Persist activeTab in localStorage
+  const getInitialTab = () => {
+    const saved = localStorage.getItem('tapitt-active-tab');
+    return saved || 'dashboard';
+  };
+  const [activeTab, setActiveTabState] = useState(getInitialTab());
+
+  // Wrap setActiveTab to persist in localStorage
+  const setActiveTab = (tab: string) => {
+    setActiveTabState(tab);
+    localStorage.setItem('tapitt-active-tab', tab);
+  };
+
   const [loginTime, setLoginTime] = useState<string | null>(null);
   const [clockInTime, setClockInTime] = useState<string | null>(null);
   const [clockOutTime, setClockOutTime] = useState<string | null>(null);
@@ -57,6 +66,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
   const [holidays, setHolidays] = useState<{ name: string; date: string }[]>([]);
   const [holidayForm, setHolidayForm] = useState({ name: '', date: '' });
   const [holidayMsg, setHolidayMsg] = useState('');
+  const [holidayErrorPopup, setHolidayErrorPopup] = useState(false);
 
   // Fetch holidays
   const fetchHolidays = useCallback(async () => {
@@ -80,6 +90,13 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
   const handleAddHoliday = async (e: React.FormEvent) => {
     e.preventDefault();
     setHolidayMsg('');
+    // Check if a holiday already exists for the selected date
+    const exists = holidays.some(h => h.date === holidayForm.date);
+    if (exists) {
+      setHolidayMsg('A holiday already exists for this date.');
+      setHolidayErrorPopup(true);
+      return;
+    }
     try {
       const res = await fetch('http://localhost:5050/api/holidays', {
         method: 'POST',
@@ -671,9 +688,10 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
     fetchEmployees();
   }, []);
 
-  // Set admin panel tab if navigated from View Users
+  // Set admin panel tab if navigated from View Users, but only if no tab is saved in localStorage
   useEffect(() => {
-    if (location.state && (location.state as any).adminPanel) {
+    const saved = localStorage.getItem('tapitt-active-tab');
+    if (!saved && location.state && (location.state as any).adminPanel) {
       setActiveTab('admin-panel');
     }
     // eslint-disable-next-line
@@ -1329,7 +1347,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                       >
                         Add Holiday
                       </button>
-                      {holidayMsg && (
+                      {holidayMsg && !holidayErrorPopup && (
                         <div className="text-xs mt-1 text-red-600 dark:text-red-400">{holidayMsg}</div>
                       )}
                     </form>
@@ -1413,18 +1431,6 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                         ))
                     )}
                   </ul>
-                  <div className="mt-4 text-center text-yellow-700 dark:text-yellow-200 font-bold text-lg">
-                    {employees.some(emp => {
-                      if (!emp.createdAt) return false;
-                      const created = new Date(emp.createdAt);
-                      const now = new Date();
-                      return (
-                        created.getFullYear() === now.getFullYear() &&
-                        created.getMonth() === now.getMonth() &&
-                        created.getDate() === now.getDate()
-                      );
-                    }) && "We're excited to have you join the team!"}
-                  </div>
                 </CardContent>
               </Card>
               {/* Working Remotely Widget */}
@@ -2838,6 +2844,23 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
               </ul>
             </div>
           )}
+          {/* Holiday duplicate error popup */}
+          <Dialog open={holidayErrorPopup} onOpenChange={setHolidayErrorPopup}>
+            <DialogContent className="max-w-xs">
+              <DialogHeader>
+                <DialogTitle>Error</DialogTitle>
+              </DialogHeader>
+              <div className="mb-4 text-red-600">{holidayMsg}</div>
+              <div className="flex justify-end">
+                <button
+                  className="px-4 py-2 bg-blue-600 text-white rounded font-semibold"
+                  onClick={() => setHolidayErrorPopup(false)}
+                >
+                  Close
+                </button>
+              </div>
+            </DialogContent>
+          </Dialog>
           {renderContent()}
         </main>
       </div>
