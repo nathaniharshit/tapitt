@@ -1551,6 +1551,15 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                       </>
                     );
                   })()}
+                  {/* Left-justified current date at the bottom */}
+                  <div className="mt-6 text-xs font-medium text-blue-700 dark:text-blue-300 text-left">
+                    {new Date().toLocaleDateString(undefined, {
+                      weekday: 'long',
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric'
+                    })}
+                  </div>
                 </CardContent>
               </Card>
             </div>
@@ -3062,7 +3071,8 @@ function AwardsSection({ user, employees }) {
                 `}
               >
                 <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-full bg-blue-200 dark:bg-blue-900 flex items-center justify-center text-3xl font-bold text-blue-700 dark:text-blue-200 border border-blue-400 dark:border-blue-700 mb-2">
+                  {/* Smaller avatar for initials */}
+                  <div className="w-8 h-8 rounded-full bg-blue-200 dark:bg-blue-900 flex items-center justify-center text-lg font-bold text-blue-700 dark:text-blue-200 border border-blue-400 dark:border-blue-700">
                     {getInitials(nom.employee)}
                   </div>
                   <div>
@@ -3080,9 +3090,12 @@ function AwardsSection({ user, employees }) {
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
-                  <span className="inline-block px-3 py-1 rounded-full bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-200 font-semibold text-sm shadow">
-                    {nom.votes.length} vote{nom.votes.length !== 1 ? 's' : ''}
-                  </span>
+                  {/* Only show vote count to admin/superadmin */}
+                  {(user.role === 'admin' || user.role === 'superadmin') && (
+                    <span className="inline-block px-3 py-1 rounded-full bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-200 font-semibold text-sm shadow">
+                      {nom.votes.length} vote{nom.votes.length !== 1 ? 's' : ''}
+                    </span>
+                  )}
                   {/* Voting button for employees (not admin/superadmin) */}
                   {user.role === 'employee' && (
                     <button

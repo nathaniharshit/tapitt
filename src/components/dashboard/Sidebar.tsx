@@ -75,12 +75,7 @@ const Sidebar = ({ userRole, activeTab, setActiveTab }: SidebarProps) => {
       icon: Shield,
       roles: ['superadmin', 'admin'] // <-- Allow both admin and superadmin
     },
-    {
-      id: 'reports',
-      label: 'Reports',
-      icon: BarChart3,
-      roles: ['superadmin', 'admin']
-    },
+    // Removed Reports section/item
     {
       id: 'settings',
       label: 'Settings',
