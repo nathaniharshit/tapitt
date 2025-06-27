@@ -2210,9 +2210,21 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
           </div>
         );
       case 'projects':
+        // Filter projects for visibility
+        let visibleProjects = [];
+        if (user.role === 'admin' || user.role === 'superadmin') {
+          visibleProjects = projects;
+        } else {
+          visibleProjects = projects.filter(
+            proj =>
+              Array.isArray(proj.team) &&
+              proj.team.includes(user.id)
+          );
+        }
         return (
           <div className="p-8">
-            
+            {/* Only admin/superadmin can add new projects */}
+            {(user.role === 'admin' || user.role === 'superadmin') && (
               <Card className="max-w-3xl mx-auto mb-8 bg-card text-foreground">
                 <CardHeader>
                   <CardTitle>Add New Project</CardTitle>
@@ -2298,11 +2310,11 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                   </form>
                 </CardContent>
               </Card>
-            
+            )}
             <div className="max-w-6xl mx-auto">
               <Card className="bg-gray-50 dark:bg-gray-900 text-foreground mb-6 border-2 border-gray-300 dark:border-gray-700 shadow-lg">
                 <CardHeader>
-                  <CardTitle>Ongoing Company Projects</CardTitle>
+                  <CardTitle>Your Ongoing Projects</CardTitle>
                 </CardHeader>
                 <CardContent>
                   {deleteMsg && (
@@ -2320,11 +2332,15 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                       {concludeMsg}
                     </div>
                   )}
-                  {projects.length === 0 ? (
-                    <div className="py-6 text-center text-muted-foreground">No projects found.</div>
+                  {visibleProjects.length === 0 ? (
+                    <div className="py-6 text-center text-muted-foreground">
+                      {user.role === 'admin' || user.role === 'superadmin'
+                        ? 'No projects found.'
+                        : 'You are not assigned to any ongoing projects.'}
+                    </div>
                   ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-                      {projects.map((proj) => (
+                      {visibleProjects.map((proj) => (
                         <div
                           key={proj._id || proj.name}
                           className={`rounded-xl border p-6 flex flex-col min-h-[200px] shadow-md
@@ -2358,7 +2374,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                               </ul>
                             </div>
                           )}
-                          {/* Action Buttons */}
+                          {/* Action Buttons: only for admin/superadmin */}
                           {(user.role === 'admin' || user.role === 'superadmin') && (
                             <div className="flex gap-2 mb-2 flex-wrap">
                               {proj.status !== 'over' && (
@@ -2442,7 +2458,6 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                           </div>
                         </div>
                       ))}
-
                     </div>
                   )}
                 </CardContent>
