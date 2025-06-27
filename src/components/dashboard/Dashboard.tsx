@@ -773,164 +773,179 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
     setTodayTotalMarked(marked);
   }, [employees]);
 
-  // --- Leaves state and logic ---
-  const [leaves, setLeaves] = useState<any[]>([]);
-  const [leaveForm, setLeaveForm] = useState({
-    type: 'Annual',
-    from: '',
-    to: '',
-    reason: ''
-  });
-  const [leaveMsg, setLeaveMsg] = useState('');
-  const [leaveLoading, setLeaveLoading] = useState(false);
-  const [editingLeaveId, setEditingLeaveId] = useState<string | null>(null);
-  const [confirmDeleteLeaveId, setConfirmDeleteLeaveId] = useState<string | null>(null);
+// --- Leaves state and logic ---
+const LEAVE_TYPES = [
+  { type: 'Sick', label: 'Sick', limit: 2 },
+  { type: 'Casual', label: 'Casual', limit: 2 },
+  { type: 'Paid', label: 'Paid', limit: 2 }
+];
 
-  // Fetch leaves for current user or all if admin/superadmin
-  const fetchLeaves = useCallback(async () => {
-    try {
-      let url = '';
-      if (user.role === 'admin' || user.role === 'superadmin') {
-        url = 'http://localhost:5050/api/leaves';
-      } else {
-        url = `http://localhost:5050/api/leaves/${user.id}`;
-      }
-      const res = await fetch(url);
-      const data = await res.json();
-      setLeaves(Array.isArray(data) ? data : []);
-    } catch {
-      setLeaves([]);
-    }
-  }, [user?.id, user.role]);
-
-  useEffect(() => {
-    if (activeTab === 'leaves') fetchLeaves();
-  }, [activeTab, fetchLeaves]);
-
-  // Submit leave request
-  const handleLeaveFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    setLeaveForm({ ...leaveForm, [e.target.name]: e.target.value });
+// Helper to get current quarter start/end
+function getQuarterRange(date = new Date()) {
+  const year = date.getFullYear();
+  const month = date.getMonth();
+  const quarter = Math.floor(month / 3);
+  const start = new Date(year, quarter * 3, 1);
+  const end = new Date(year, quarter * 3 + 3, 0);
+  return {
+    start: start.toISOString().slice(0, 10),
+    end: end.toISOString().slice(0, 10)
   };
+}
 
-  const handleLeaveSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLeaveMsg('');
-    setLeaveLoading(true);
-    try {
-      const resp = await fetch('http://localhost:5050/api/leaves', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          employeeId: user.id,
-          ...leaveForm
-        })
-      });
-      if (resp.ok) {
-        setLeaveMsg('Leave requested!');
-        setLeaveForm({ type: 'Annual', from: '', to: '', reason: '' });
-        fetchLeaves();
-      } else {
-        const err = await resp.json();
-        setLeaveMsg('Error: ' + (err.error || 'Could not request leave'));
-      }
-    } catch {
-      setLeaveMsg('Network error.');
+const [leaves, setLeaves] = useState<any[]>([]);
+const [leaveForm, setLeaveForm] = useState({
+  type: 'Annual',
+  from: '',
+  to: '',
+  reason: ''
+});
+const [leaveMsg, setLeaveMsg] = useState('');
+const [leaveLoading, setLeaveLoading] = useState(false);
+const [editingLeaveId, setEditingLeaveId] = useState<string | null>(null);
+const [confirmDeleteLeaveId, setConfirmDeleteLeaveId] = useState<string | null>(null);
+
+// Fetch leaves for current user or all if admin/superadmin
+const fetchLeaves = useCallback(async () => {
+  try {
+    let url = '';
+    if (user.role === 'admin' || user.role === 'superadmin') {
+      url = 'http://localhost:5050/api/leaves';
+    } else {
+      url = `http://localhost:5050/api/leaves/${user.id}`;
     }
-    setLeaveLoading(false);
-  };
+    const res = await fetch(url);
+    const data = await res.json();
+    setLeaves(Array.isArray(data) ? data : []);
+  } catch {
+    setLeaves([]);
+  }
+}, [user?.id, user.role]);
 
-  // Approve/reject leave (admin/superadmin)
-  const handleLeaveStatus = async (leaveId: string, status: 'Approved' | 'Rejected') => {
-    setLeaveMsg('');
-    try {
-      const resp = await fetch(`http://localhost:5050/api/leaves/${leaveId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status })
-      });
-      if (resp.ok) {
-        setLeaveMsg(`Leave ${status.toLowerCase()}!`);
-        fetchLeaves();
-      } else {
-        const err = await resp.json();
-        setLeaveMsg('Error: ' + (err.error || `Could not ${status.toLowerCase()} leave`));
-      }
-    } catch {
-      setLeaveMsg('Network error.');
-    }
-  };
+useEffect(() => {
+  if (activeTab === 'leaves') fetchLeaves();
+}, [activeTab, fetchLeaves]);
 
-  // Calculate leave balances (simple example: count by type)
-  const annualLeaves = leaves.filter(l => l.type === 'Annual' && l.status === 'Approved').length;
-  const sickLeaves = leaves.filter(l => l.type === 'Sick' && l.status === 'Approved').length;
+// Submit leave request
+const handleLeaveFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+  setLeaveForm({ ...leaveForm, [e.target.name]: e.target.value });
+};
 
-  // Edit leave
-  const handleEditLeave = (leave: any) => {
-    setEditingLeaveId(leave._id);
-    setLeaveForm({
-      type: leave.type,
-      from: leave.from,
-      to: leave.to,
-      reason: leave.reason || ''
+const handleLeaveSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
+  setLeaveMsg('');
+  setLeaveLoading(true);
+  try {
+    const resp = await fetch('http://localhost:5050/api/leaves', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        employeeId: user.id,
+        ...leaveForm
+      })
     });
-    setLeaveMsg('');
-  };
-
-  // Cancel edit
-  const handleCancelEditLeave = () => {
-    setEditingLeaveId(null);
-    setLeaveForm({ type: 'Annual', from: '', to: '', reason: '' });
-    setLeaveMsg('');
-  };
-
-  // Update leave
-  const handleUpdateLeave = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLeaveMsg('');
-    setLeaveLoading(true);
-    try {
-      const resp = await fetch(`http://localhost:5050/api/leaves/${editingLeaveId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...leaveForm,
-          employeeId: user.id // for backend validation
-        })
-      });
-      if (resp.ok) {
-        setLeaveMsg('Leave updated!');
-        setEditingLeaveId(null);
-        setLeaveForm({ type: 'Annual', from: '', to: '', reason: '' });
-        fetchLeaves();
-      } else {
-        const err = await resp.json();
-        setLeaveMsg('Error: ' + (err.error || 'Could not update leave'));
-      }
-    } catch {
-      setLeaveMsg('Network error.');
+    if (resp.ok) {
+      setLeaveMsg('Leave requested!');
+      setLeaveForm({ type: 'Annual', from: '', to: '', reason: '' });
+      fetchLeaves();
+    } else {
+      const err = await resp.json();
+      setLeaveMsg('Error: ' + (err.error || 'Could not request leave'));
     }
-  };
+  } catch {
+    setLeaveMsg('Network error.');
+  }
+  setLeaveLoading(false);
+};
 
-  // Delete leave
-  const handleDeleteLeave = async (leaveId: string) => {
-    setLeaveMsg('');
-    setLeaveLoading(true);
-    try {
-      const resp = await fetch(`http://localhost:5050/api/leaves/${leaveId}`, {
-        method: 'DELETE'
-      });
-      if (resp.ok) {
-        setLeaveMsg('Leave deleted!');
-        fetchLeaves();
-      } else {
-        const err = await resp.json();
-        setLeaveMsg('Error: ' + (err.error || 'Could not delete leave'));
-      }
-    } catch {
-      setLeaveMsg('Network error.');
+// Approve/reject leave (admin/superadmin)
+const handleLeaveStatus = async (leaveId: string, status: 'Approved' | 'Rejected') => {
+  setLeaveMsg('');
+  try {
+    const resp = await fetch(`http://localhost:5050/api/leaves/${leaveId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status })
+    });
+    if (resp.ok) {
+      setLeaveMsg(`Leave ${status.toLowerCase()}!`);
+      fetchLeaves();
+    } else {
+      const err = await resp.json();
+      setLeaveMsg('Error: ' + (err.error || `Could not ${status.toLowerCase()} leave`));
     }
-    setLeaveLoading(false);
-  };
+  } catch {
+    setLeaveMsg('Network error.');
+  }
+};
+
+// Edit leave
+const handleEditLeave = (leave: any) => {
+  setEditingLeaveId(leave._id);
+  setLeaveForm({
+    type: leave.type,
+    from: leave.from,
+    to: leave.to,
+    reason: leave.reason || ''
+  });
+  setLeaveMsg('');
+};
+
+// Cancel edit
+const handleCancelEditLeave = () => {
+  setEditingLeaveId(null);
+  setLeaveForm({ type: 'Annual', from: '', to: '', reason: '' });
+  setLeaveMsg('');
+};
+
+// Update leave
+const handleUpdateLeave = async (e: React.FormEvent) => {
+  e.preventDefault();
+  setLeaveMsg('');
+  setLeaveLoading(true);
+  try {
+    const resp = await fetch(`http://localhost:5050/api/leaves/${editingLeaveId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...leaveForm,
+        employeeId: user.id // for backend validation
+      })
+    });
+    if (resp.ok) {
+      setLeaveMsg('Leave updated!');
+      setEditingLeaveId(null);
+      setLeaveForm({ type: 'Annual', from: '', to: '', reason: '' });
+      fetchLeaves();
+    } else {
+      const err = await resp.json();
+      setLeaveMsg('Error: ' + (err.error || 'Could not update leave'));
+    }
+  } catch {
+    setLeaveMsg('Network error.');
+  }
+};
+
+// Delete leave
+const handleDeleteLeave = async (leaveId: string) => {
+  setLeaveMsg('');
+  setLeaveLoading(true);
+  try {
+    const resp = await fetch(`http://localhost:5050/api/leaves/${leaveId}`, {
+      method: 'DELETE'
+    });
+    if (resp.ok) {
+      setLeaveMsg('Leave deleted!');
+      fetchLeaves();
+    } else {
+      const err = await resp.json();
+      setLeaveMsg('Error: ' + (err.error || 'Could not delete leave'));
+    }
+  } catch {
+    setLeaveMsg('Network error.');
+  }
+  setLeaveLoading(false);
+};
 
   // --- Payroll state and logic ---
   interface AllowanceOrDeduction {
@@ -1877,24 +1892,51 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
         );
       case 'leaves':
         // Leaves feature: show leave balance, request leave, and leave history
+        const { start: quarterStart, end: quarterEnd } = getQuarterRange();
+        const leavesThisQuarter = leaves.filter(l =>
+          l.status === 'Approved' &&
+          l.from >= quarterStart &&
+          l.from <= quarterEnd
+        );
+        const leaveTypeCounts = LEAVE_TYPES.reduce((acc, lt) => {
+          acc[lt.type] = leavesThisQuarter.filter(l => l.type === lt.type).length;
+          return acc;
+        }, {} as Record<string, number>);
         return (
           <div className="p-8">
             {/* Only show leave request form for employees */}
             {user.role === 'employee' && (
               <Card className="max-w-2xl mx-auto mb-8">
                 <CardHeader>
-                  <CardTitle>My Leave Balance</CardTitle>
+                  <CardTitle>My Leave Balance (This Quarter)</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-2 gap-4 mb-4">
-                    <div className="bg-blue-100 dark:bg-blue-900 rounded-lg p-4 text-center">
-                      <div className="text-2xl font-bold text-blue-700 dark:text-blue-200">{12 - annualLeaves}</div>
-                      <div className="text-muted-foreground text-sm">Annual Leaves Left</div>
-                    </div>
-                    <div className="bg-green-100 dark:bg-green-900 rounded-lg p-4 text-center">
-                      <div className="text-2xl font-bold text-green-700 dark:text-green-200">{5 - sickLeaves}</div>
-                      <div className="text-muted-foreground text-sm">Sick Leaves Left</div>
-                    </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+                    {LEAVE_TYPES.map(lt => (
+                      <div
+                        key={lt.type}
+                        className="rounded-lg p-4 text-center"
+                        style={{
+                          backgroundColor:
+                            lt.type === 'Sick'
+                              ? 'var(--green-100, #dcfce7)'
+                              : lt.type === 'Casual'
+                              ? 'var(--yellow-100, #fef9c3)'
+                              : 'var(--blue-100, #dbeafe)'
+                        }}
+                      >
+                        <div className={`text-2xl font-bold ${
+                          lt.type === 'Sick'
+                            ? 'text-green-700 dark:text-green-200'
+                            : lt.type === 'Casual'
+                            ? 'text-yellow-700 dark:text-yellow-200'
+                            : 'text-blue-700 dark:text-blue-200'
+                        }`}>
+                          {lt.limit - (leaveTypeCounts[lt.type] || 0)}
+                        </div>
+                        <div className="text-muted-foreground text-sm">{lt.label} Leaves Left</div>
+                      </div>
+                    ))}
                   </div>
                   <form className="space-y-4" onSubmit={editingLeaveId ? handleUpdateLeave : handleLeaveSubmit}>
                     <div>
@@ -1907,9 +1949,9 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                         required
                         disabled={leaveLoading}
                       >
-                        <option value="Annual">Annual</option>
-                        <option value="Sick">Sick</option>
-                        <option value="Unpaid">Unpaid</option>
+                        {LEAVE_TYPES.map(lt => (
+                          <option key={lt.type} value={lt.type}>{lt.label}</option>
+                        ))}
                       </select>
                     </div>
                     <div>
@@ -2511,7 +2553,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                     </div>
                     <div>
                       <label className="block text-sm font-medium mb-1 text-foreground dark:text-gray-200">
-                        Project Lead (Admin/Super Admin)
+                        Project Lead
                       </label>
                       <select
                         name="lead"

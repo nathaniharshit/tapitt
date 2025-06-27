@@ -718,64 +718,6 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
         </Card>
       </div>
 
-      {/* Custom Role Assignment */}
-      <div className="relative z-10 px-6">
-        <Card className="w-full mb-12 bg-white/90 dark:bg-gray-800/90 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-lg">
-          <CardHeader>
-            <CardTitle className="text-foreground dark:text-gray-100 flex items-center gap-2">
-              <Users className="h-5 w-5 text-orange-500 dark:text-orange-300" />
-              Custom Role Assignment
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="mb-2 text-sm text-gray-500 dark:text-gray-400">Assign a custom role to each employee:</div>
-            {roleAssignMsg && <div className={`mb-2 text-xs ${roleAssignMsg.startsWith('Role') ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>{roleAssignMsg}</div>}
-            <div className="overflow-x-auto">
-              <table className="min-w-[700px] w-full text-sm mb-2 bg-background dark:bg-gray-900 border dark:border-gray-700">
-                <thead className="bg-gray-100 dark:bg-gray-800">
-                  <tr>
-                    <th className="text-left text-foreground dark:text-gray-100">Name</th>
-                    <th className="text-left text-foreground dark:text-gray-100">Current Role</th>
-                    <th className="text-left text-foreground dark:text-gray-100">Custom Role</th>
-                    <th></th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {allEmployees.map(emp => (
-                    <tr key={emp._id} className="border-b border-gray-200 dark:border-gray-700">
-                      <td className="text-foreground dark:text-gray-100">{emp.firstname} {emp.lastname}</td>
-                      <td className="text-foreground dark:text-gray-100">{emp.role}</td>
-                      <td>
-                        <select
-                          value={emp.roleRef || ''}
-                          onChange={e => handleAssignRole(emp._id, e.target.value)}
-                          className="border rounded px-2 py-1 bg-background text-foreground dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700"
-                        >
-                          <option value="">-- Select Role --</option>
-                          {roles.map(role => (
-                            <option key={role._id} value={role._id}>{role.name}</option>
-                          ))}
-                        </select>
-                      </td>
-                      <td>
-                        {emp.roleRef && roles.find(r => r._id === emp.roleRef) && (
-                          <span className="text-xs text-gray-500 dark:text-gray-400">{roles.find(r => r._id === emp.roleRef).permissions.join(', ')}</span>
-                        )}
-                      </td>
-                      <td>
-                        {/* Demote to Employee button if current custom role is manager */}
-                        {/* Removed Demote to Employee button */}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
       {/* Edit Roles Dialog */}
       {showEditRolesDialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40 dark:bg-black dark:bg-opacity-70">
