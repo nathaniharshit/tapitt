@@ -1356,20 +1356,34 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                            
                  )}
               <Card className="col-span-1">
-              <CardHeader>
-              <CardTitle>Upcoming Holidays</CardTitle>
-              </CardHeader>
-              <CardContent>
-               <ul className="text-muted-foreground space-y-1">
-                 {holidays.length === 0 ? (
-                 <li>No holidays found.</li>
-                  ) : (
-                 holidays.map((h, i) => (
-                 <li key={i}>{h.name} - {new Date(h.date).toLocaleDateString()}</li>
-                  ))
-                    )}
+                <CardHeader>
+                  <CardTitle className="text-2xl font-bold mb-6">Upcoming Holidays</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="rounded-lg bg-blue-50 dark:bg-blue-900 border border-blue-200 dark:border-blue-700 shadow p-2 max-h-44 overflow-y-auto">
+                    <ul className="space-y-2">
+                      {holidays.length === 0 ? (
+                        <li className="text-center text-muted-foreground text-sm font-medium py-2">
+                          No holidays found.
+                        </li>
+                      ) : (
+                        holidays.map((h, i) => (
+                          <li key={i} className="flex items-center gap-2 bg-white/80 dark:bg-gray-800/80 rounded px-2 py-1 border border-blue-100 dark:border-blue-700">
+                            <span className="text-lg">📅</span>
+                            <div>
+                              <div className="font-medium text-foreground text-sm">
+                                {h.name}
+                              </div>
+                              <div className="text-xs text-blue-700 dark:text-blue-200">
+                                {new Date(h.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', weekday: 'short' })}
+                              </div>
+                            </div>
+                          </li>
+                        ))
+                      )}
                     </ul>
-                   </CardContent>
+                  </div>
+                </CardContent>
               </Card>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
