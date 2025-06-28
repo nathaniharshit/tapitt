@@ -75,7 +75,12 @@ const Sidebar = ({ userRole, activeTab, setActiveTab }: SidebarProps) => {
       icon: Shield,
       roles: ['superadmin', 'admin'] // <-- Allow both admin and superadmin
     },
-    // Removed Reports section/item
+    {
+      id: 'company-policy-docs',
+      label: 'Company Policy & Docs',
+      icon: FileText,
+      roles: ['superadmin', 'admin', 'employee', 'manager']
+    },
     {
       id: 'settings',
       label: 'Settings',

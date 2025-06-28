@@ -4,6 +4,7 @@ const mongoose = require('mongoose');
 const bcrypt = require('bcrypt');
 const multer = require('multer');
 const path = require('path');
+const fs = require('fs');
 const cron = require('node-cron');
 const nodemailer = require('nodemailer');
 const PDFDocument = require('pdfkit');
@@ -1491,6 +1492,114 @@ const io = new Server(server, {
 
 global._io = io; // Make io accessible globally if needed
 // --- END SOCKET.IO SETUP ---
+
+// --- Document (Company Policy) Model ---
+const documentSchema = new mongoose.Schema({
+  title: { type: String, required: true },
+  description: { type: String }, // Add description field
+  filePath: { type: String, required: true },
+  uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', required: true },
+  uploadedAt: { type: Date, default: Date.now }
+});
+const Document = mongoose.model('Document', documentSchema);
+
+// Policy model (alias for Document to match frontend expectations)
+const PolicyDoc = Document;
+// --- End Document Model ---
+
+// --- Policy Endpoints (Compatible with frontend) ---
+// Get all policies
+app.get('/api/policies', async (req, res) => {
+  try {
+    const policies = await PolicyDoc.find({}).populate('uploadedBy', 'firstname lastname email').sort({ uploadedAt: -1 });
+    // Transform to match frontend expectations
+    const transformedPolicies = policies.map(policy => ({
+      _id: policy._id,
+      title: policy.title,
+      description: policy.description,
+      fileUrl: `http://localhost:5050${policy.filePath}`, // Full URL for file access
+      uploadedBy: policy.uploadedBy,
+      uploadedAt: policy.uploadedAt
+    }));
+    res.json(transformedPolicies);
+  } catch (err) {
+    console.error('Error fetching policies:', err);
+    res.status(500).json({ error: 'Failed to fetch policies', details: err.message });
+  }
+});
+
+// Upload a new policy document
+app.post('/api/policies', upload.single('file'), async (req, res) => {
+  try {
+    // Check if file is uploaded
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+    
+    // Only allow PDF files
+    if (req.file.mimetype !== 'application/pdf') {
+      return res.status(400).json({ error: 'Only PDF files are allowed' });
+    }
+    
+    const { title, description } = req.body;
+    if (!title) {
+      return res.status(400).json({ error: 'Title is required' });
+    }
+    
+    // Create new policy document
+    const policy = new PolicyDoc({
+      title,
+      description: description || '',
+      filePath: `/uploads/${req.file.filename}`,
+      uploadedBy: new mongoose.Types.ObjectId() // You might want to get this from auth middleware
+    });
+    
+    await policy.save();
+    
+    // Return the created policy with populated data
+    const populatedPolicy = await PolicyDoc.findById(policy._id).populate('uploadedBy', 'firstname lastname email');
+    
+    res.status(201).json({
+      message: 'Policy document uploaded successfully',
+      policy: {
+        _id: populatedPolicy._id,
+        title: populatedPolicy.title,
+        description: populatedPolicy.description,
+        fileUrl: `http://localhost:5050${populatedPolicy.filePath}`,
+        uploadedBy: populatedPolicy.uploadedBy,
+        uploadedAt: populatedPolicy.uploadedAt
+      }
+    });
+  } catch (err) {
+    console.error('Error uploading policy:', err);
+    res.status(500).json({ error: 'Failed to upload policy document', details: err.message });
+  }
+});
+
+// Delete a policy document
+app.delete('/api/policies/:id', async (req, res) => {
+  try {
+    const policy = await PolicyDoc.findById(req.params.id);
+    if (!policy) {
+      return res.status(404).json({ error: 'Policy document not found' });
+    }
+    
+    // Delete the file from filesystem
+    const filePath = path.join(__dirname, policy.filePath.replace('/uploads', 'uploads'));
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+    
+    // Delete from database
+    await PolicyDoc.findByIdAndDelete(req.params.id);
+    
+    res.json({ message: 'Policy document deleted successfully' });
+  } catch (err) {
+    console.error('Error deleting policy:', err);
+    res.status(500).json({ error: 'Failed to delete policy document', details: err.message });
+  }
+});
+// --- End Policy Endpoints ---
 
 server.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
