@@ -287,149 +287,156 @@ const EmployeePersonalDetails = ({ user }: EmployeePersonalDetailsProps) => {
   }
 
   return (
-    <Card className="max-w-2xl mx-auto mt-8 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 shadow-2xl rounded-2xl">
-      <CardHeader className="flex flex-col items-center justify-center bg-blue-600 dark:bg-blue-900 rounded-t-2xl pb-6">
-        <CardTitle className="text-white text-2xl">Employee Details</CardTitle>
-      </CardHeader>
-      <CardContent className="pt-8 pb-6 px-6">
-        {message && (
-          <div className={`text-sm font-medium mb-4 ${
-            message.startsWith('Error') || message === 'Network error.'
-              ? 'text-red-600 dark:text-red-400'
-              : 'text-green-600 dark:text-green-400'
-          }`}>
-            {message}
-          </div>
-        )}
-        <form className="space-y-8" onSubmit={e => {
-          e.preventDefault();
-          handleSave();
-        }}>
-          <div>
-            <h2 className="text-lg font-bold mb-2 text-blue-700 dark:text-blue-300">Personal Details</h2>
-            <div className="grid grid-cols-2 gap-4 mb-2">
+    <div className="max-w-2xl mx-auto">
+      <div
+        className="overflow-y-auto"
+        style={{ maxHeight: '70vh', minHeight: '300px', paddingRight: '2px' }}
+      >
+        <Card className="mt-8 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 shadow-2xl rounded-2xl">
+          <CardHeader className="flex flex-col items-center justify-center bg-blue-600 dark:bg-blue-900 rounded-t-2xl pb-6">
+            <CardTitle className="text-white text-2xl">Employee Details</CardTitle>
+          </CardHeader>
+          <CardContent className="pt-8 pb-6 px-6">
+            {message && (
+              <div className={`text-sm font-medium mb-4 ${
+                message.startsWith('Error') || message === 'Network error.'
+                  ? 'text-red-600 dark:text-red-400'
+                  : 'text-green-600 dark:text-green-400'
+              }`}>
+                {message}
+              </div>
+            )}
+            <form className="space-y-8" onSubmit={e => {
+              e.preventDefault();
+              handleSave();
+            }}>
               <div>
-                <Label htmlFor="firstname" className="dark:text-gray-200">First Name</Label>
-                <Input name="firstname" placeholder="First Name" value={form.firstname} onChange={handleChange} className="bg-background dark:bg-gray-800 text-foreground dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-400 dark:placeholder-gray-400" />
+                <h2 className="text-lg font-bold mb-2 text-blue-700 dark:text-blue-300">Personal Details</h2>
+                <div className="grid grid-cols-2 gap-4 mb-2">
+                  <div>
+                    <Label htmlFor="firstname" className="dark:text-gray-200">First Name</Label>
+                    <Input name="firstname" placeholder="First Name" value={form.firstname} onChange={handleChange} className="bg-background dark:bg-gray-800 text-foreground dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-400 dark:placeholder-gray-400" />
+                  </div>
+                  <div>
+                    <Label htmlFor="lastname" className="dark:text-gray-200">Last Name</Label>
+                    <Input name="lastname" placeholder="Last Name" value={form.lastname} onChange={handleChange} className="bg-background dark:bg-gray-800 text-foreground dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-400 dark:placeholder-gray-400" />
+                  </div>
+                  <div>
+                    <Label htmlFor="email" className="dark:text-gray-200">Email</Label>
+                    <Input name="email" placeholder="Email" value={form.email} onChange={handleChange} className="bg-background dark:bg-gray-800 text-foreground dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-400 dark:placeholder-gray-400" />
+                  </div>
+                  <div>
+                    <Label htmlFor="phone" className="dark:text-gray-200">Phone</Label>
+                    <Input name="phone" placeholder="Phone Number" value={form.phone} onChange={handleChange} className="bg-background dark:bg-gray-800 text-foreground dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-400 dark:placeholder-gray-400" />
+                  </div>
+                  <div>
+                    <Label htmlFor="dob" className="dark:text-gray-200">Date of Birth</Label>
+                    <Input name="dob" placeholder="Date of Birth" type="date" value={form.dob} onChange={handleChange} className="bg-background dark:bg-gray-800 text-foreground dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-400 dark:placeholder-gray-400" />
+                  </div>
+                  <div>
+                    <Label htmlFor="aadhar" className="dark:text-gray-200">Aadhar Number</Label>
+                    <Input
+                      name="aadhar"
+                      placeholder="Aadhar Number"
+                      value={form.aadhar}
+                      onChange={handleChange}
+                      required
+                      minLength={12}
+                      maxLength={12}
+                      pattern="\d{12}"
+                      className="bg-background dark:bg-gray-800 text-foreground dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-400 dark:placeholder-gray-400"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="address" className="dark:text-gray-200">Address</Label>
+                    <Input name="address" placeholder="Address" value={form.address} onChange={handleChange} className="bg-background dark:bg-gray-800 text-foreground dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-400 dark:placeholder-gray-400" />
+                  </div>
+                  <div>
+                    <Label htmlFor="city" className="dark:text-gray-200">City</Label>
+                    <Input name="city" placeholder="City" value={form.city} onChange={handleChange} className="bg-background dark:bg-gray-800 text-foreground dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-400 dark:placeholder-gray-400" />
+                  </div>
+                  <div>
+                    <Label htmlFor="state" className="dark:text-gray-200">State</Label>
+                    <Input name="state" placeholder="State" value={form.state} onChange={handleChange} className="bg-background dark:bg-gray-800 text-foreground dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-400 dark:placeholder-gray-400" />
+                  </div>
+                  <div>
+                    <Label htmlFor="zipcode" className="dark:text-gray-200">Zip Code</Label>
+                    <Input name="zipcode" placeholder="Zip Code" value={form.zipcode} onChange={handleChange} className="bg-background dark:bg-gray-800 text-foreground dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-400 dark:placeholder-gray-400" />
+                  </div>
+                  <div>
+                    <Label htmlFor="country" className="dark:text-gray-200">Country</Label>
+                    <Input name="country" placeholder="Country" value={form.country} onChange={handleChange} className="bg-background dark:bg-gray-800 text-foreground dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-400 dark:placeholder-gray-400" />
+                  </div>
+                  <div>
+                    <Label htmlFor="emergencyContact" className="dark:text-gray-200">Emergency Contact Number</Label>
+                    <Input name="emergencyContact" placeholder="Emergency Contact Number" value={form.emergencyContact} onChange={handleChange} className="bg-background dark:bg-gray-800 text-foreground dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-400 dark:placeholder-gray-400" />
+                  </div>
+                </div>
               </div>
               <div>
-                <Label htmlFor="lastname" className="dark:text-gray-200">Last Name</Label>
-                <Input name="lastname" placeholder="Last Name" value={form.lastname} onChange={handleChange} className="bg-background dark:bg-gray-800 text-foreground dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-400 dark:placeholder-gray-400" />
+                <h2 className="text-lg font-bold mb-2 text-blue-700 dark:text-blue-300">Bank Details</h2>
+                <div className="grid grid-cols-2 gap-4 mb-2">
+                  <div>
+                    <Label htmlFor="upi" className="dark:text-gray-200">UPI ID/Bank Account Number</Label>
+                    <Input name="upi" placeholder="UPI ID/Bank Account Number" value={form.upi} onChange={handleChange} className="bg-background dark:bg-gray-800 text-foreground dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-400 dark:placeholder-gray-400" />
+                  </div>
+                  <div>
+                    <Label htmlFor="ifsc" className="dark:text-gray-200">IFSC Code</Label>
+                    <Input name="ifsc" placeholder="IFSC Code" value={form.ifsc} onChange={handleChange} className="bg-background dark:bg-gray-800 text-foreground dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-400 dark:placeholder-gray-400" />
+                  </div>
+                </div>
               </div>
               <div>
-                <Label htmlFor="email" className="dark:text-gray-200">Email</Label>
-                <Input name="email" placeholder="Email" value={form.email} onChange={handleChange} className="bg-background dark:bg-gray-800 text-foreground dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-400 dark:placeholder-gray-400" />
+                <h2 className="text-lg font-bold mb-2 text-blue-700 dark:text-blue-300">Professional Details</h2>
+                <div className="grid grid-cols-3 gap-4 mb-2">
+                  <div>
+                    <Label htmlFor="experience" className="dark:text-gray-200">Experience (years)</Label>
+                    <Input name="experience" placeholder="Experience (years)" value={form.experience} onChange={handleChange} className="bg-background dark:bg-gray-800 text-foreground dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-400 dark:placeholder-gray-400" />
+                  </div>
+                  <div>
+                    <Label htmlFor="currentCompany" className="dark:text-gray-200">Current Company</Label>
+                    <Input name="currentCompany" placeholder="Current Company" value={form.currentCompany} onChange={handleChange} className="bg-background dark:bg-gray-800 text-foreground dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-400 dark:placeholder-gray-400" />
+                  </div>
+                  <div>
+                    <Label htmlFor="previousCompany" className="dark:text-gray-200">Previous Company</Label>
+                    <Input name="previousCompany" placeholder="Previous Company" value={form.previousCompany} onChange={handleChange} className="bg-background dark:bg-gray-800 text-foreground dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-400 dark:placeholder-gray-400" />
+                  </div>
+                </div>
+                <textarea name="skills" placeholder="Write your skills!" value={form.skills} onChange={handleChange} className="w-full rounded-md border px-3 py-2 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm bg-white dark:bg-gray-800 text-foreground dark:text-gray-100 border-input dark:border-gray-700" rows={2} />
+                <div className="grid grid-cols-2 gap-4 mt-2">
+                  <div>
+                    <Label htmlFor="linkedin" className="dark:text-gray-200">LinkedIn</Label>
+                    <Input name="linkedin" placeholder="LinkedIn" value={form.linkedin} onChange={handleChange} className="bg-background dark:bg-gray-800 text-foreground dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-400 dark:placeholder-gray-400" />
+                  </div>
+                  <div>
+                    <Label htmlFor="github" className="dark:text-gray-200">GitHub/Behance</Label>
+                    <Input name="github" placeholder="GitHub/Behance" value={form.github} onChange={handleChange} className="bg-background dark:bg-gray-800 text-foreground dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-400 dark:placeholder-gray-400" />
+                  </div>
+                </div>
               </div>
               <div>
-                <Label htmlFor="phone" className="dark:text-gray-200">Phone</Label>
-                <Input name="phone" placeholder="Phone Number" value={form.phone} onChange={handleChange} className="bg-background dark:bg-gray-800 text-foreground dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-400 dark:placeholder-gray-400" />
+                <Label htmlFor="status" className="font-bold dark:text-gray-200">Current Status</Label>
+                <select name="status" value={form.status} onChange={handleChange} className="w-full mt-1 mb-2 border rounded-md px-3 py-2 bg-background dark:bg-gray-800 text-foreground dark:text-gray-100 focus:ring-2 focus:ring-blue-400 dark:placeholder-gray-400">
+                  <option value="">Select status</option>
+                  <option value="active">Active</option>
+                  <option value="on_leave">On Leave</option>
+                  <option value="resigned">Resigned</option>
+                </select>
               </div>
               <div>
-                <Label htmlFor="dob" className="dark:text-gray-200">Date of Birth</Label>
-                <Input name="dob" placeholder="Date of Birth" type="date" value={form.dob} onChange={handleChange} className="bg-background dark:bg-gray-800 text-foreground dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-400 dark:placeholder-gray-400" />
+                <Label htmlFor="picture" className="font-bold dark:text-gray-200">Professional Picture</Label>
+                <input name="picture" type="file" accept="image/*" onChange={handleChange} className="w-full border-dashed border-2 rounded-md p-4 text-center cursor-pointer bg-background dark:bg-gray-800 text-foreground dark:text-gray-100 focus:ring-2 focus:ring-blue-400 dark:placeholder-gray-400" />
+                <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">Size limit: 10 MB</div>
               </div>
-              <div>
-                <Label htmlFor="aadhar" className="dark:text-gray-200">Aadhar Number</Label>
-                <Input
-                  name="aadhar"
-                  placeholder="Aadhar Number"
-                  value={form.aadhar}
-                  onChange={handleChange}
-                  required
-                  minLength={12}
-                  maxLength={12}
-                  pattern="\d{12}"
-                  className="bg-background dark:bg-gray-800 text-foreground dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-400 dark:placeholder-gray-400"
-                />
+              <div className="flex space-x-2 mt-4">
+                <Button type="submit" disabled={saving} className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-6 py-2 rounded-lg font-semibold shadow-lg transition">{saving ? 'Saving...' : 'Save'}</Button>
+                <Button type="button" variant="outline" onClick={handleCancel} disabled={saving}>Cancel</Button>
               </div>
-              <div>
-                <Label htmlFor="address" className="dark:text-gray-200">Address</Label>
-                <Input name="address" placeholder="Address" value={form.address} onChange={handleChange} className="bg-background dark:bg-gray-800 text-foreground dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-400 dark:placeholder-gray-400" />
-              </div>
-              <div>
-                <Label htmlFor="city" className="dark:text-gray-200">City</Label>
-                <Input name="city" placeholder="City" value={form.city} onChange={handleChange} className="bg-background dark:bg-gray-800 text-foreground dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-400 dark:placeholder-gray-400" />
-              </div>
-              <div>
-                <Label htmlFor="state" className="dark:text-gray-200">State</Label>
-                <Input name="state" placeholder="State" value={form.state} onChange={handleChange} className="bg-background dark:bg-gray-800 text-foreground dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-400 dark:placeholder-gray-400" />
-              </div>
-              <div>
-                <Label htmlFor="zipcode" className="dark:text-gray-200">Zip Code</Label>
-                <Input name="zipcode" placeholder="Zip Code" value={form.zipcode} onChange={handleChange} className="bg-background dark:bg-gray-800 text-foreground dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-400 dark:placeholder-gray-400" />
-              </div>
-              <div>
-                <Label htmlFor="country" className="dark:text-gray-200">Country</Label>
-                <Input name="country" placeholder="Country" value={form.country} onChange={handleChange} className="bg-background dark:bg-gray-800 text-foreground dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-400 dark:placeholder-gray-400" />
-              </div>
-              <div>
-                <Label htmlFor="emergencyContact" className="dark:text-gray-200">Emergency Contact Number</Label>
-                <Input name="emergencyContact" placeholder="Emergency Contact Number" value={form.emergencyContact} onChange={handleChange} className="bg-background dark:bg-gray-800 text-foreground dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-400 dark:placeholder-gray-400" />
-              </div>
-            </div>
-          </div>
-          <div>
-            <h2 className="text-lg font-bold mb-2 text-blue-700 dark:text-blue-300">Bank Details</h2>
-            <div className="grid grid-cols-2 gap-4 mb-2">
-              <div>
-                <Label htmlFor="upi" className="dark:text-gray-200">UPI ID/Bank Account Number</Label>
-                <Input name="upi" placeholder="UPI ID/Bank Account Number" value={form.upi} onChange={handleChange} className="bg-background dark:bg-gray-800 text-foreground dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-400 dark:placeholder-gray-400" />
-              </div>
-              <div>
-                <Label htmlFor="ifsc" className="dark:text-gray-200">IFSC Code</Label>
-                <Input name="ifsc" placeholder="IFSC Code" value={form.ifsc} onChange={handleChange} className="bg-background dark:bg-gray-800 text-foreground dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-400 dark:placeholder-gray-400" />
-              </div>
-            </div>
-          </div>
-          <div>
-            <h2 className="text-lg font-bold mb-2 text-blue-700 dark:text-blue-300">Professional Details</h2>
-            <div className="grid grid-cols-3 gap-4 mb-2">
-              <div>
-                <Label htmlFor="experience" className="dark:text-gray-200">Experience (years)</Label>
-                <Input name="experience" placeholder="Experience (years)" value={form.experience} onChange={handleChange} className="bg-background dark:bg-gray-800 text-foreground dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-400 dark:placeholder-gray-400" />
-              </div>
-              <div>
-                <Label htmlFor="currentCompany" className="dark:text-gray-200">Current Company</Label>
-                <Input name="currentCompany" placeholder="Current Company" value={form.currentCompany} onChange={handleChange} className="bg-background dark:bg-gray-800 text-foreground dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-400 dark:placeholder-gray-400" />
-              </div>
-              <div>
-                <Label htmlFor="previousCompany" className="dark:text-gray-200">Previous Company</Label>
-                <Input name="previousCompany" placeholder="Previous Company" value={form.previousCompany} onChange={handleChange} className="bg-background dark:bg-gray-800 text-foreground dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-400 dark:placeholder-gray-400" />
-              </div>
-            </div>
-            <textarea name="skills" placeholder="Write your skills!" value={form.skills} onChange={handleChange} className="w-full rounded-md border px-3 py-2 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm bg-white dark:bg-gray-800 text-foreground dark:text-gray-100 border-input dark:border-gray-700" rows={2} />
-            <div className="grid grid-cols-2 gap-4 mt-2">
-              <div>
-                <Label htmlFor="linkedin" className="dark:text-gray-200">LinkedIn</Label>
-                <Input name="linkedin" placeholder="LinkedIn" value={form.linkedin} onChange={handleChange} className="bg-background dark:bg-gray-800 text-foreground dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-400 dark:placeholder-gray-400" />
-              </div>
-              <div>
-                <Label htmlFor="github" className="dark:text-gray-200">GitHub/Behance</Label>
-                <Input name="github" placeholder="GitHub/Behance" value={form.github} onChange={handleChange} className="bg-background dark:bg-gray-800 text-foreground dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-400 dark:placeholder-gray-400" />
-              </div>
-            </div>
-          </div>
-          <div>
-            <Label htmlFor="status" className="font-bold dark:text-gray-200">Current Status</Label>
-            <select name="status" value={form.status} onChange={handleChange} className="w-full mt-1 mb-2 border rounded-md px-3 py-2 bg-background dark:bg-gray-800 text-foreground dark:text-gray-100 focus:ring-2 focus:ring-blue-400 dark:placeholder-gray-400">
-              <option value="">Select status</option>
-              <option value="active">Active</option>
-              <option value="on_leave">On Leave</option>
-              <option value="resigned">Resigned</option>
-            </select>
-          </div>
-          <div>
-            <Label htmlFor="picture" className="font-bold dark:text-gray-200">Professional Picture</Label>
-            <input name="picture" type="file" accept="image/*" onChange={handleChange} className="w-full border-dashed border-2 rounded-md p-4 text-center cursor-pointer bg-background dark:bg-gray-800 text-foreground dark:text-gray-100 focus:ring-2 focus:ring-blue-400 dark:placeholder-gray-400" />
-            <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">Size limit: 10 MB</div>
-          </div>
-          <div className="flex space-x-2 mt-4">
-            <Button type="submit" disabled={saving} className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-6 py-2 rounded-lg font-semibold shadow-lg transition">{saving ? 'Saving...' : 'Save'}</Button>
-            <Button type="button" variant="outline" onClick={handleCancel} disabled={saving}>Cancel</Button>
-          </div>
-        </form>
-      </CardContent>
-    </Card>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
   );
 };
 

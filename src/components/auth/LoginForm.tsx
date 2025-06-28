@@ -32,7 +32,7 @@ type DemoUser = {
 };
 
 const LoginForm = ({ onLogin }: LoginFormProps) => {
-  const [email, setEmail] = useState('');
+  const [employeeId, setEmployeeId] = useState('');
   const [password, setPassword] = useState('');
   const [selectedRole, setSelectedRole] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -47,7 +47,7 @@ const LoginForm = ({ onLogin }: LoginFormProps) => {
       const response = await fetch('http://localhost:5050/api/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ employeeId, password }),
       });
       const data = await response.json();
 
@@ -111,16 +111,16 @@ const LoginForm = ({ onLogin }: LoginFormProps) => {
         <CardContent className="grid gap-6">
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <Label htmlFor="email" className="text-sm text-zinc-700 dark:text-zinc-300">
-                Email
+              <Label htmlFor="employeeId" className="text-sm text-zinc-700 dark:text-zinc-300">
+                Employee ID
               </Label>
               <Input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                id="employeeId"
+                type="text"
+                value={employeeId}
+                onChange={(e) => setEmployeeId(e.target.value)}
                 required
-                placeholder="Enter your email id"
+                placeholder="Enter your employee ID"
                 className="mt-1 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-400"
               />
             </div>

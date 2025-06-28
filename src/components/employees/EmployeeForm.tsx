@@ -13,8 +13,8 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
-    email: '',
-    countryCode: '+91', // Optionally remove if only used for phone
+    employeeId: '',
+    countryCode: '+91',
     department: '',
     position: '',
     role: '',
@@ -24,9 +24,46 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
 
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false); // Add this state
+  const [showPassword, setShowPassword] = useState(false);
   const [reportingManager, setReportingManager] = useState('');
   const [managerOptions, setManagerOptions] = useState<{ value: string; label: string }[]>([]);
+
+  // Helper to get prefix based on role
+  const getIdPrefix = (role: string) => {
+    if (role === 'intern') return 'TD2025int';
+    return 'TD2025em';
+  };
+
+  // Generate next employeeId based on role and existing employees
+  const generateNextEmployeeId = async (role: string) => {
+    try {
+      const res = await fetch('http://localhost:5050/api/employees');
+      const employees = await res.json();
+      const prefix = getIdPrefix(role);
+      let maxNum = 0;
+      employees.forEach((emp: any) => {
+        if (
+          emp.employeeId &&
+          emp.employeeId.startsWith(prefix) &&
+          /^TD2025(em|int)\d{3}$/.test(emp.employeeId)
+        ) {
+          const num = parseInt(emp.employeeId.replace(prefix, ''), 10);
+          if (num > maxNum) maxNum = num;
+        }
+      });
+      const nextId = `${prefix}${String(maxNum + 1).padStart(3, '0')}`;
+      setFormData(f => ({ ...f, employeeId: nextId }));
+    } catch {
+      setFormData(f => ({ ...f, employeeId: getIdPrefix(role) + '001' }));
+    }
+  };
+
+  // On mount and when role changes, generate employeeId
+  useEffect(() => {
+    if (formData.role) {
+      generateNextEmployeeId(formData.role);
+    }
+  }, [formData.role]);
 
   useEffect(() => {
     if (message) {
@@ -36,11 +73,9 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
   }, [message]);
 
   useEffect(() => {
-    // Fetch admins and superadmins for reporting manager options
     fetch('http://localhost:5050/api/employees')
       .then(res => res.json())
       .then(data => {
-        // Filter for both admins and superadmins
         const managers = data.filter(
           (emp: any) => emp.role === 'admin' || emp.role === 'superadmin'
         );
@@ -57,15 +92,16 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     if (name === 'salary') {
-      // Remove all non-digit except dot, then format with commas for display
       const numericValue = value.replace(/[^0-9.]/g, '');
       setFormData({ ...formData, [name]: numericValue });
+    } else if (name === 'role') {
+      setFormData({ ...formData, [name]: value });
+      // employeeId will be set by useEffect
     } else {
       setFormData({ ...formData, [name]: value });
     }
   };
 
-  // Helper to format salary for input display
   const formatSalaryInput = (salary: string) => {
     if (!salary) return '';
     const num = Number(salary.replace(/,/g, ''));
@@ -76,7 +112,6 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    console.log('Submitting employee form', formData); // Debug: check if called
 
     try {
       const response = await fetch('http://localhost:5050/api/employees', {
@@ -85,15 +120,15 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          firstname: formData.firstName, // <-- correct field name
-          lastname: formData.lastName,   // <-- correct field name
-          email: formData.email,
+          employeeId: formData.employeeId,
+          firstname: formData.firstName,
+          lastname: formData.lastName,
           department: formData.department,
           position: formData.position,
           role: formData.role,
-          salary: formData.salary ? parseFloat(formData.salary.replace(/,/g, '')) : undefined, // ensure number
-          password: formData.password, // ensure this is present
-          reportingManager: reportingManager || undefined // Optional field
+          salary: formData.salary ? parseFloat(formData.salary.replace(/,/g, '')) : undefined,
+          password: formData.password,
+          reportingManager: reportingManager || undefined
         })
       });
 
@@ -102,8 +137,8 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
         setFormData({
           firstName: '',
           lastName: '',
-          email: '',
-          countryCode: '+91', // Reset to default value
+          employeeId: '', // Will be set by useEffect after role is set
+          countryCode: '+91',
           department: '',
           position: '',
           role: '',
@@ -111,8 +146,11 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
           password: '',
         });
         setReportingManager('');
-
         if (onEmployeeAdded) onEmployeeAdded();
+        // Regenerate employeeId for the same role
+        if (formData.role) {
+          generateNextEmployeeId(formData.role);
+        }
       } else {
         const err = await response.json();
         setMessage('Error: ' + err.error);
@@ -144,7 +182,6 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
           </div>
         )}
         <form onSubmit={handleSubmit} className="space-y-8">
-          {/* Personal Info Section */}
           <div>
             <h3 className="text-lg font-semibold text-blue-700 dark:text-blue-300 mb-2">Personal Information</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -157,10 +194,9 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
                 <Input name="lastName" value={formData.lastName} onChange={handleChange} required className="bg-background dark:bg-gray-800 text-foreground dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-400 dark:placeholder-gray-400" />
               </div>
               <div>
-                <Label htmlFor="email" className="dark:text-gray-200">Email</Label>
-                <Input type="email" name="email" value={formData.email} onChange={handleChange} required className="bg-background dark:bg-gray-800 text-foreground dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-400 dark:placeholder-gray-400" />
+                <Label htmlFor="employeeId" className="dark:text-gray-200">Employee ID</Label>
+                <Input name="employeeId" value={formData.employeeId} readOnly className="bg-background dark:bg-gray-800 text-foreground dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-400 dark:placeholder-gray-400" />
               </div>
-              {/* Reporting Manager (optional) */}
               <div>
                 <Label htmlFor="reportingManager" className="dark:text-gray-200">Reporting Manager (optional)</Label>
                 <select
@@ -178,7 +214,6 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
             </div>
           </div>
           <hr className="my-4 border-blue-200 dark:border-blue-900" />
-          {/* Job Info Section */}
           <div>
             <h3 className="text-lg font-semibold text-blue-700 dark:text-blue-300 mb-2">Job Information</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -220,7 +255,7 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
                   <option value="admin">Admin</option>
                   <option value="superadmin">Superadmin</option>
                   <option value="intern">Intern</option>
-                  <option value="manager">Manager</option> {/* Added manager role */}
+                  <option value="manager">Manager</option>
                 </select>
               </div>
               <div>
@@ -239,7 +274,6 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
             </div>
           </div>
           <hr className="my-4 border-blue-200 dark:border-blue-900" />
-          {/* Security Section */}
           <div>
             <h3 className="text-lg font-semibold text-blue-700 dark:text-blue-300 mb-2">Security</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

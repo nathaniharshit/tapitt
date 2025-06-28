@@ -70,6 +70,7 @@ mongoose.connect(MONGODB_URI, { useNewUrlParser: true, useUnifiedTopology: true 
   .catch((err) => console.error('MongoDB connection error:', err));
 
 const employeeSchema = new mongoose.Schema({
+  employeeId: { type: String, required: true, unique: true }, // <-- Ensure this line exists
   firstname: String,
   lastname: String,
   email: String,
@@ -261,6 +262,7 @@ app.get('/', (req, res) => {
 });
 
 const allowedFields = [
+  'employeeId', // <-- Add this line at the top
   'firstname', 'lastname', 'email', 'phone', 'dob', 'city', 'state', 'zipcode', 'country',
   'emergencyContact', 'upi', 'ifsc', 'experience', 'currentCompany', 'previousCompany', 'skills',
   'linkedin', 'github', 'status', 'picture', 'role',
