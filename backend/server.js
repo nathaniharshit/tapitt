@@ -1348,39 +1348,44 @@ app.get('/api/employees/:id/salary', async (req, res) => {
     const emp = await Employee.findById(req.params.id);
     if (!emp) return res.status(404).json({ error: 'Employee not found' });
     
-    // Get base salary (annual)
-    const baseSalary = emp.salary ?? 0;
+    // Get current payroll standards
+    const settings = await Settings.findOne({ key: 'payroll_standards' });
+    if (!settings) {
+      return res.status(500).json({ error: 'Payroll standards not configured' });
+    }
     
-    // Calculate total allowances
-    const totalAllowances = emp.allowances 
-      ? emp.allowances.reduce((sum, allowance) => sum + (allowance.amount || 0), 0)
-      : 0;
+    // Calculate payroll using current standards
+    const payroll = calculateEmployeePayroll(emp, settings.value);
     
-    // Calculate total deductions
-    const totalDeductions = emp.deductions 
-      ? emp.deductions.reduce((sum, deduction) => sum + (deduction.amount || 0), 0)
-      : 0;
-    
-    // Calculate gross monthly salary (base + allowances, divided by 12 for monthly)
-    const grossMonthlySalary = (baseSalary + totalAllowances) / 12;
-    
-    // Calculate net monthly salary (gross - deductions)
-    const netMonthlySalary = grossMonthlySalary - (totalDeductions / 12);
-    
-    console.log(`Salary calculation for employee ${emp.employeeId}:`, {
-      baseSalary,
-      totalAllowances,
-      totalDeductions,
-      grossMonthlySalary,
-      netMonthlySalary
+    console.log(`Dynamic salary calculation for employee ${emp.employeeId}:`, {
+      basicSalary: payroll.basicSalary,
+      totalAllowances: payroll.totalAllowances,
+      totalDeductions: payroll.totalDeductions,
+      grossSalary: payroll.grossSalary,
+      netSalary: payroll.netSalary
     });
     
+    // Calculate monthly values
+    const grossMonthlySalary = payroll.grossSalary / 12;
+    const netMonthlySalary = payroll.netSalary / 12;
+    
+    // Convert allowances and deductions to monthly amounts for frontend display
+    const monthlyAllowances = payroll.allowances.map(a => ({
+      ...a,
+      amount: Math.round((a.amount / 12) * 100) / 100 // Convert to monthly and round to 2 decimal places
+    }));
+    
+    const monthlyDeductions = payroll.deductions.map(d => ({
+      ...d,
+      amount: Math.round((d.amount / 12) * 100) / 100 // Convert to monthly and round to 2 decimal places
+    }));
+    
     res.json({ 
-      salary: baseSalary,
-      allowances: emp.allowances || [],
-      deductions: emp.deductions || [],
-      totalAllowances,
-      totalDeductions,
+      salary: payroll.basicSalary,
+      allowances: monthlyAllowances || [],
+      deductions: monthlyDeductions || [],
+      totalAllowances: payroll.totalAllowances,
+      totalDeductions: payroll.totalDeductions,
       grossMonthlySalary: Math.round(grossMonthlySalary * 100) / 100, // Round to 2 decimal places
       netMonthlySalary: Math.round(netMonthlySalary * 100) / 100 // Round to 2 decimal places
     });
@@ -1612,8 +1617,15 @@ const Settings = mongoose.model('Settings', settingsSchema);
 // --- Payroll Management Endpoints (Settings-based) ---
 app.get('/api/payroll/standards', async (req, res) => {
   try {
+    console.log('GET /api/payroll/standards - Fetching standards...');
     const settings = await Settings.findOne({ key: 'payroll_standards' });
-    res.json(settings ? settings.value : { allowances: [], deductions: [] });
+    console.log('Found settings:', settings ? 'YES' : 'NO');
+    if (settings) {
+      console.log('Settings value:', JSON.stringify(settings.value, null, 2));
+    }
+    const response = settings ? settings.value : { allowances: [], deductions: [] };
+    console.log('Returning response:', JSON.stringify(response, null, 2));
+    res.json(response);
   } catch (error) {
     console.error('Error fetching payroll standards:', error);
     res.status(500).json({ error: 'Failed to fetch payroll standards' });
@@ -1622,17 +1634,37 @@ app.get('/api/payroll/standards', async (req, res) => {
 
 app.post('/api/payroll/standards', async (req, res) => {
   try {
+    console.log('POST /api/payroll/standards - Request body:', JSON.stringify(req.body, null, 2));
+    
     const { allowances, deductions } = req.body;
     let settings = await Settings.findOne({ key: 'payroll_standards' });
+    
+    console.log('Found existing settings:', settings ? 'YES' : 'NO');
+    
     if (!settings) {
       settings = new Settings({ key: 'payroll_standards', value: { allowances: [], deductions: [] } });
+      console.log('Created new settings document');
     }
+    
+    console.log('Before update - settings.value:', JSON.stringify(settings.value, null, 2));
+    
     settings.value.allowances = Array.isArray(allowances) ? allowances : [];
     settings.value.deductions = Array.isArray(deductions) ? deductions : [];
-    await settings.save();
+    
+    // Mark the value field as modified so Mongoose knows to save it
+    settings.markModified('value');
+    
+    console.log('After update - settings.value:', JSON.stringify(settings.value, null, 2));
+    console.log('Settings modified:', settings.isModified());
+    
+    const saveResult = await settings.save();
+    console.log('Save result:', saveResult ? 'SUCCESS' : 'FAILED');
+    console.log('Saved document ID:', saveResult._id);
+    
     res.json({ success: true, value: settings.value });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to update payroll standards' });
+    console.error('Error in POST /api/payroll/standards:', error);
+    res.status(500).json({ error: 'Failed to update payroll standards', details: error.message });
   }
 });
 

@@ -42,12 +42,12 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
   const [payrollLoading, setPayrollLoading] = useState(false);
   const [payrollMsg, setPayrollMsg] = useState('');
   const [standardAllowances, setStandardAllowances] = useState([
-    { name: 'HRA', amount: 5000 },
-    { name: 'Transport', amount: 2000 },
+    { name: 'HRA', amount: 40, calculationType: 'percentage' },
+    { name: 'Transport', amount: 2000, calculationType: 'fixed' },
   ]);
   const [standardDeductions, setStandardDeductions] = useState([
-    { name: 'PF', amount: 1800 },
-    { name: 'Professional Tax', amount: 200 },
+    { name: 'PF', amount: 12, calculationType: 'percentage' },
+    { name: 'Professional Tax', amount: 200, calculationType: 'fixed' },
   ]);
   const [showEmployeePayroll, setShowEmployeePayroll] = useState(false);
 
@@ -291,39 +291,36 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
     setPayrollLoading(true);
     setPayrollMsg('');
     try {
-      // Update each allowance and deduction
-      for (const allowance of standardAllowances) {
-        await fetch('http://localhost:5050/api/payroll/standards', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            type: 'allowance',
-            name: allowance.name,
-            amount: allowance.amount
-          })
-        });
-      }
+      // Send complete allowances and deductions arrays with calculationType
+      const response = await fetch('http://localhost:5050/api/payroll/standards', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          allowances: standardAllowances,
+          deductions: standardDeductions
+        })
+      });
       
-      for (const deduction of standardDeductions) {
-        await fetch('http://localhost:5050/api/payroll/standards', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            type: 'deduction',
-            name: deduction.name,
-            amount: deduction.amount
-          })
-        });
+      if (response.ok) {
+        const result = await response.json();
+        console.log('Standards saved:', result);
+        setPayrollMsg('✅ Standards saved successfully! Note: Users may need to refresh their payroll section to see updated calculations.');
+        
+        // Optional: Trigger a custom event that the Dashboard can listen to
+        window.dispatchEvent(new CustomEvent('payrollStandardsUpdated', {
+          detail: { allowances: standardAllowances, deductions: standardDeductions }
+        }));
+      } else {
+        setPayrollMsg('❌ Failed to save standards.');
       }
-      
-      setPayrollMsg('Standards saved successfully!');
     } catch (error) {
+      console.error('Error saving standards:', error);
       setPayrollMsg('Error saving standards: ' + error.message);
     }
     setPayrollLoading(false);
   };
 
-  const handleAllowanceChange = (index: number, field: 'name' | 'amount', value: string | number) => {
+  const handleAllowanceChange = (index: number, field: 'name' | 'amount' | 'calculationType', value: string | number) => {
     setStandardAllowances(prev => 
       prev.map((item, idx) => 
         idx === index ? { ...item, [field]: value } : item
@@ -331,7 +328,7 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
     );
   };
 
-  const handleDeductionChange = (index: number, field: 'name' | 'amount', value: string | number) => {
+  const handleDeductionChange = (index: number, field: 'name' | 'amount' | 'calculationType', value: string | number) => {
     setStandardDeductions(prev => 
       prev.map((item, idx) => 
         idx === index ? { ...item, [field]: value } : item
@@ -340,7 +337,7 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
   };
 
   const handleAddAllowance = () => {
-    setStandardAllowances(prev => [...prev, { name: '', amount: 0 }]);
+    setStandardAllowances(prev => [...prev, { name: '', amount: 0, calculationType: 'fixed' }]);
   };
 
   const handleRemoveAllowance = (index: number) => {
@@ -348,7 +345,7 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
   };
 
   const handleAddDeduction = () => {
-    setStandardDeductions(prev => [...prev, { name: '', amount: 0 }]);
+    setStandardDeductions(prev => [...prev, { name: '', amount: 0, calculationType: 'fixed' }]);
   };
 
   const handleRemoveDeduction = (index: number) => {
@@ -366,7 +363,7 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
       });
       if (res.ok) {
         const data = await res.json();
-        setPayrollMsg(`Standards applied to ${data.updated} employee(s)!`);
+        setPayrollMsg(`Standards applied to ${data.updated} employee(s)! Navigate to the Dashboard > Payroll tab to see the updated values.`);
         // Refresh employee data to show updated payroll information
         await fetchCounts();
       } else {
@@ -626,11 +623,19 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
                 <Button size="sm" variant="outline" className="dark:bg-gray-900 dark:text-gray-100 dark:border-gray-700" onClick={handleAddAllowance}>Add Allowance</Button>
               </div>
               <div className="overflow-x-auto">
-                <table className="min-w-[600px] w-full text-sm mb-2 bg-background dark:bg-gray-900 border dark:border-gray-700">
+                <table className="min-w-[800px] w-full text-sm mb-2 bg-background dark:bg-gray-900 border dark:border-gray-700">
+                  <thead>
+                    <tr className="bg-gray-50 dark:bg-gray-800">
+                      <th className="px-3 py-2 text-left border-b dark:border-gray-700">Name</th>
+                      <th className="px-3 py-2 text-left border-b dark:border-gray-700">Amount/Percentage</th>
+                      <th className="px-3 py-2 text-left border-b dark:border-gray-700">Type</th>
+                      <th className="px-3 py-2 text-center border-b dark:border-gray-700">Actions</th>
+                    </tr>
+                  </thead>
                   <tbody>
                     {standardAllowances.map((a, idx) => (
                       <tr key={idx} className="border-b border-gray-200 dark:border-gray-700">
-                        <td>
+                        <td className="px-3 py-2">
                           <input
                             className="border rounded px-2 py-1 w-32 bg-background text-foreground dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700"
                             value={a.name}
@@ -638,16 +643,31 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
                             placeholder="Name"
                           />
                         </td>
-                        <td>
-                          <input
-                            className="border rounded px-2 py-1 w-24 text-right bg-background text-foreground dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700"
-                            type="number"
-                            value={a.amount}
-                            onChange={e => handleAllowanceChange(idx, 'amount', Number(e.target.value))}
-                            placeholder="Amount"
-                          />
+                        <td className="px-3 py-2">
+                          <div className="flex items-center gap-2">
+                            <input
+                              className="border rounded px-2 py-1 w-24 text-right bg-background text-foreground dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700"
+                              type="number"
+                              value={a.amount}
+                              onChange={e => handleAllowanceChange(idx, 'amount', Number(e.target.value))}
+                              placeholder="Amount"
+                            />
+                            <span className="text-sm text-gray-500">
+                              {a.calculationType === 'percentage' ? '%' : '₹'}
+                            </span>
+                          </div>
                         </td>
-                        <td>
+                        <td className="px-3 py-2">
+                          <select
+                            className="border rounded px-2 py-1 w-28 bg-background text-foreground dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700"
+                            value={a.calculationType || 'fixed'}
+                            onChange={e => handleAllowanceChange(idx, 'calculationType', e.target.value)}
+                          >
+                            <option value="fixed">Fixed (₹)</option>
+                            <option value="percentage">Percentage (%)</option>
+                          </select>
+                        </td>
+                        <td className="px-3 py-2 text-center">
                           <Button size="icon" variant="ghost" className="dark:text-gray-400" onClick={() => handleRemoveAllowance(idx)}><X className="w-4 h-4" /></Button>
                         </td>
                       </tr>
@@ -662,11 +682,19 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
                 <Button size="sm" variant="outline" className="dark:bg-gray-900 dark:text-gray-100 dark:border-gray-700" onClick={handleAddDeduction}>Add Deduction</Button>
               </div>
               <div className="overflow-x-auto">
-                <table className="min-w-[600px] w-full text-sm mb-2 bg-background dark:bg-gray-900 border dark:border-gray-700">
+                <table className="min-w-[800px] w-full text-sm mb-2 bg-background dark:bg-gray-900 border dark:border-gray-700">
+                  <thead>
+                    <tr className="bg-gray-50 dark:bg-gray-800">
+                      <th className="px-3 py-2 text-left border-b dark:border-gray-700">Name</th>
+                      <th className="px-3 py-2 text-left border-b dark:border-gray-700">Amount/Percentage</th>
+                      <th className="px-3 py-2 text-left border-b dark:border-gray-700">Type</th>
+                      <th className="px-3 py-2 text-center border-b dark:border-gray-700">Actions</th>
+                    </tr>
+                  </thead>
                   <tbody>
                     {standardDeductions.map((d, idx) => (
                       <tr key={idx} className="border-b border-gray-200 dark:border-gray-700">
-                        <td>
+                        <td className="px-3 py-2">
                           <input
                             className="border rounded px-2 py-1 w-32 bg-background text-foreground dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700"
                             value={d.name}
@@ -674,16 +702,31 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
                             placeholder="Name"
                           />
                         </td>
-                        <td>
-                          <input
-                            className="border rounded px-2 py-1 w-24 text-right bg-background text-foreground dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700"
-                            type="number"
-                            value={d.amount}
-                            onChange={e => handleDeductionChange(idx, 'amount', Number(e.target.value))}
-                            placeholder="Amount"
-                          />
+                        <td className="px-3 py-2">
+                          <div className="flex items-center gap-2">
+                            <input
+                              className="border rounded px-2 py-1 w-24 text-right bg-background text-foreground dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700"
+                              type="number"
+                              value={d.amount}
+                              onChange={e => handleDeductionChange(idx, 'amount', Number(e.target.value))}
+                              placeholder="Amount"
+                            />
+                            <span className="text-sm text-gray-500">
+                              {d.calculationType === 'percentage' ? '%' : '₹'}
+                            </span>
+                          </div>
                         </td>
-                        <td>
+                        <td className="px-3 py-2">
+                          <select
+                            className="border rounded px-2 py-1 w-28 bg-background text-foreground dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700"
+                            value={d.calculationType || 'fixed'}
+                            onChange={e => handleDeductionChange(idx, 'calculationType', e.target.value)}
+                          >
+                            <option value="fixed">Fixed (₹)</option>
+                            <option value="percentage">Percentage (%)</option>
+                          </select>
+                        </td>
+                        <td className="px-3 py-2 text-center">
                           <Button size="icon" variant="ghost" className="dark:text-gray-400" onClick={() => handleRemoveDeduction(idx)}><X className="w-4 h-4" /></Button>
                         </td>
                       </tr>
