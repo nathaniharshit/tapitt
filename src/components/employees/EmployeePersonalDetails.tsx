@@ -290,7 +290,7 @@ const EmployeePersonalDetails = ({ user }: EmployeePersonalDetailsProps) => {
     <div className="max-w-2xl mx-auto">
       <div
         className="overflow-y-auto"
-        style={{ maxHeight: '70vh', minHeight: '300px', paddingRight: '2px' }}
+        style={{ maxHeight: '100vh', minHeight: '300px', paddingRight: '2px' }}
       >
         <Card className="mt-8 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 shadow-2xl rounded-2xl">
           <CardHeader className="flex flex-col items-center justify-center bg-blue-600 dark:bg-blue-900 rounded-t-2xl pb-6">
