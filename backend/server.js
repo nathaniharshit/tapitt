@@ -67,7 +67,11 @@ app.post('/api/session/end', async (req, res) => {
 });
 
 mongoose.connect(MONGODB_URI, { useNewUrlParser: true, useUnifiedTopology: true })
-  .then(() => console.log('Connected to MongoDB Atlas'))
+  .then(async () => {
+    console.log('Connected to MongoDB Atlas');
+    // Initialize default standard payroll items
+    await initializeStandardPayroll();
+  })
   .catch((err) => console.error('MongoDB connection error:', err));
 
 const employeeSchema = new mongoose.Schema({
@@ -268,6 +272,7 @@ const allowedFields = [
   'emergencyContact', 'upi', 'ifsc', 'experience', 'currentCompany', 'previousCompany', 'skills',
   'linkedin', 'github', 'status', 'picture', 'role',
   'department', 'position', 'salary', 'startDate', 'address', 'aadhar',
+  'allowances', 'deductions', // <-- Add allowances and deductions
   'reportingManager' // <-- Add this line
   // DO NOT include 'password' here
 ];
@@ -284,13 +289,27 @@ app.post('/api/employees', async (req, res) => {
     });
     employeeData.password = hashedPassword;
     employeeData.mustChangePassword = true;
+    
+    // Get standard allowances and deductions and assign to new employee
+    const standardPayroll = await getStandardPayrollItems();
+    employeeData.allowances = standardPayroll.allowances;
+    employeeData.deductions = standardPayroll.deductions;
+    
+    console.log('Assigning standard payroll to new employee:', {
+      allowances: standardPayroll.allowances,
+      deductions: standardPayroll.deductions
+    });
+    
     const employee = new Employee(employeeData);
     await employee.save();
+    
     // Debug: log the employee with password field
     const saved = await Employee.findById(employee._id).select('+password');
-    console.log('Saved employee with password:', saved);
+    console.log('Saved employee with password and payroll:', saved);
+    
     res.status(201).json(employee);
   } catch (err) {
+    console.error('Error creating employee:', err);
     res.status(400).json({ error: err.message });
   }
 });
@@ -1320,8 +1339,45 @@ app.get('/api/employees/:id/salary', async (req, res) => {
   try {
     const emp = await Employee.findById(req.params.id);
     if (!emp) return res.status(404).json({ error: 'Employee not found' });
-    res.json({ salary: emp.salary ?? null });
+    
+    // Get base salary (annual)
+    const baseSalary = emp.salary ?? 0;
+    
+    // Calculate total allowances
+    const totalAllowances = emp.allowances 
+      ? emp.allowances.reduce((sum, allowance) => sum + (allowance.amount || 0), 0)
+      : 0;
+    
+    // Calculate total deductions
+    const totalDeductions = emp.deductions 
+      ? emp.deductions.reduce((sum, deduction) => sum + (deduction.amount || 0), 0)
+      : 0;
+    
+    // Calculate gross monthly salary (base + allowances, divided by 12 for monthly)
+    const grossMonthlySalary = (baseSalary + totalAllowances) / 12;
+    
+    // Calculate net monthly salary (gross - deductions)
+    const netMonthlySalary = grossMonthlySalary - (totalDeductions / 12);
+    
+    console.log(`Salary calculation for employee ${emp.employeeId}:`, {
+      baseSalary,
+      totalAllowances,
+      totalDeductions,
+      grossMonthlySalary,
+      netMonthlySalary
+    });
+    
+    res.json({ 
+      salary: baseSalary,
+      allowances: emp.allowances || [],
+      deductions: emp.deductions || [],
+      totalAllowances,
+      totalDeductions,
+      grossMonthlySalary: Math.round(grossMonthlySalary * 100) / 100, // Round to 2 decimal places
+      netMonthlySalary: Math.round(netMonthlySalary * 100) / 100 // Round to 2 decimal places
+    });
   } catch (err) {
+    console.error('Error fetching salary:', err);
     res.status(500).json({ error: 'Failed to fetch salary' });
   }
 });
@@ -1874,4 +1930,218 @@ app.get('/api/manager/attendance', async (req, res) => {
   }
 });
 // --- End Manager API Endpoints ---
+
+// --- Standard Payroll Configuration Model ---
+const standardPayrollSchema = new mongoose.Schema({
+  type: { type: String, enum: ['allowance', 'deduction'], required: true },
+  name: { type: String, required: true },
+  amount: { type: Number, required: true },
+  description: { type: String, default: '' },
+  isActive: { type: Boolean, default: true }
+}, { timestamps: true });
+const StandardPayroll = mongoose.model('StandardPayroll', standardPayrollSchema);
+
+// Function to get current standard allowances and deductions
+async function getStandardPayrollItems() {
+  try {
+    const allowances = await StandardPayroll.find({ type: 'allowance', isActive: true });
+    const deductions = await StandardPayroll.find({ type: 'deduction', isActive: true });
+    return {
+      allowances: allowances.map(a => ({ name: a.name, amount: a.amount })),
+      deductions: deductions.map(d => ({ name: d.name, amount: d.amount }))
+    };
+  } catch (error) {
+    console.error('Error fetching standard payroll items:', error);
+    return { allowances: [], deductions: [] };
+  }
+}
+
+// Function to initialize default standard payroll items
+async function initializeStandardPayroll() {
+  try {
+    const existingCount = await StandardPayroll.countDocuments();
+    if (existingCount === 0) {
+      console.log('Initializing default standard payroll items...');
+      
+      // Default allowances
+      const defaultAllowances = [
+        { type: 'allowance', name: 'HRA', amount: 5000, description: 'House Rent Allowance' },
+        { type: 'allowance', name: 'Transport', amount: 2000, description: 'Transportation Allowance' },
+        { type: 'allowance', name: 'Medical', amount: 1500, description: 'Medical Allowance' }
+      ];
+      
+      // Default deductions
+      const defaultDeductions = [
+        { type: 'deduction', name: 'PF', amount: 1800, description: 'Provident Fund' },
+        { type: 'deduction', name: 'Professional Tax', amount: 200, description: 'Professional Tax' },
+        { type: 'deduction', name: 'Insurance', amount: 500, description: 'Employee Insurance' }
+      ];
+      
+      await StandardPayroll.insertMany([...defaultAllowances, ...defaultDeductions]);
+      console.log('Default standard payroll items initialized successfully');
+    }
+  } catch (error) {
+    console.error('Error initializing standard payroll:', error);
+  }
+}
+// --- End Standard Payroll Configuration Model ---
+
+// --- Standard Payroll API Endpoints ---
+
+// Get standard allowances and deductions
+app.get('/api/payroll/standards', async (req, res) => {
+  try {
+    const standards = await getStandardPayrollItems();
+    res.json(standards);
+  } catch (error) {
+    console.error('Error fetching standard payroll:', error);
+    res.status(500).json({ error: 'Failed to fetch standard payroll items' });
+  }
+});
+
+// Get all standard payroll items (for admin management)
+app.get('/api/payroll/standards/all', async (req, res) => {
+  try {
+    const items = await StandardPayroll.find().sort({ type: 1, name: 1 });
+    res.json(items);
+  } catch (error) {
+    console.error('Error fetching all standard payroll items:', error);
+    res.status(500).json({ error: 'Failed to fetch standard payroll items' });
+  }
+});
+
+// Add new standard allowance or deduction
+app.post('/api/payroll/standards', async (req, res) => {
+  try {
+    const { type, name, amount, description } = req.body;
+    
+    if (!type || !name || amount === undefined) {
+      return res.status(400).json({ error: 'Type, name, and amount are required' });
+    }
+    
+    if (!['allowance', 'deduction'].includes(type)) {
+      return res.status(400).json({ error: 'Type must be either "allowance" or "deduction"' });
+    }
+    
+    // Check if already exists
+    const existing = await StandardPayroll.findOne({ type, name, isActive: true });
+    if (existing) {
+      return res.status(400).json({ error: `${type} with name "${name}" already exists` });
+    }
+    
+    const newItem = new StandardPayroll({
+      type,
+      name,
+      amount: Number(amount),
+      description: description || '',
+      isActive: true
+    });
+    
+    await newItem.save();
+    console.log(`New standard ${type} added: ${name} - ₹${amount}`);
+    
+    res.json({ message: `Standard ${type} added successfully`, item: newItem });
+  } catch (error) {
+    console.error('Error adding standard payroll item:', error);
+    res.status(500).json({ error: 'Failed to add standard payroll item' });
+  }
+});
+
+// Update standard allowance or deduction
+app.put('/api/payroll/standards/:id', async (req, res) => {
+  try {
+    const { name, amount, description, isActive } = req.body;
+    
+    const item = await StandardPayroll.findById(req.params.id);
+    if (!item) {
+      return res.status(404).json({ error: 'Standard payroll item not found' });
+    }
+    
+    if (name !== undefined) item.name = name;
+    if (amount !== undefined) item.amount = Number(amount);
+    if (description !== undefined) item.description = description;
+    if (isActive !== undefined) item.isActive = Boolean(isActive);
+    
+    await item.save();
+    console.log(`Standard ${item.type} updated: ${item.name} - ₹${item.amount}`);
+    
+    res.json({ message: `Standard ${item.type} updated successfully`, item });
+  } catch (error) {
+    console.error('Error updating standard payroll item:', error);
+    res.status(500).json({ error: 'Failed to update standard payroll item' });
+  }
+});
+
+// Delete standard allowance or deduction
+app.delete('/api/payroll/standards/:id', async (req, res) => {
+  try {
+    const item = await StandardPayroll.findById(req.params.id);
+    if (!item) {
+      return res.status(404).json({ error: 'Standard payroll item not found' });
+    }
+    
+    await StandardPayroll.findByIdAndDelete(req.params.id);
+    console.log(`Standard ${item.type} deleted: ${item.name}`);
+    
+    res.json({ message: `Standard ${item.type} deleted successfully` });
+  } catch (error) {
+    console.error('Error deleting standard payroll item:', error);
+    res.status(500).json({ error: 'Failed to delete standard payroll item' });
+  }
+});
+// --- End Standard Payroll API Endpoints ---
+
+// Apply standard allowances and deductions to all employees who don't have them
+app.post('/api/payroll/apply-standards', async (req, res) => {
+  try {
+    const standardPayroll = await getStandardPayrollItems();
+    const { force = false } = req.body; // Force update even if employee already has allowances/deductions
+    
+    // Find employees who need standard payroll items
+    let query = {};
+    if (!force) {
+      query = {
+        $or: [
+          { allowances: { $exists: false } },
+          { allowances: { $size: 0 } },
+          { deductions: { $exists: false } },
+          { deductions: { $size: 0 } }
+        ]
+      };
+    }
+    
+    const employees = await Employee.find(query);
+    let updatedCount = 0;
+    
+    for (const employee of employees) {
+      let shouldUpdate = false;
+      
+      if (force || !employee.allowances || employee.allowances.length === 0) {
+        employee.allowances = standardPayroll.allowances;
+        shouldUpdate = true;
+      }
+      
+      if (force || !employee.deductions || employee.deductions.length === 0) {
+        employee.deductions = standardPayroll.deductions;
+        shouldUpdate = true;
+      }
+      
+      if (shouldUpdate) {
+        await employee.save();
+        updatedCount++;
+        console.log(`Applied standard payroll to employee: ${employee.firstname} ${employee.lastname} (${employee.employeeId})`);
+      }
+    }
+    
+    res.json({
+      message: `Standard payroll applied to ${updatedCount} employee(s)`,
+      updated: updatedCount,
+      standardPayroll
+    });
+    
+  } catch (error) {
+    console.error('Error applying standard payroll:', error);
+    res.status(500).json({ error: 'Failed to apply standard payroll to employees' });
+  }
+});
 

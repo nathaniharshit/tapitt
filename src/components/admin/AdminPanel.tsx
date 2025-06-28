@@ -38,6 +38,17 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
   });
   const [roles, setRoles] = useState([]);
   const [roleAssignMsg, setRoleAssignMsg] = useState('');
+  const [editPayroll, setEditPayroll] = useState(false);
+  const [payrollLoading, setPayrollLoading] = useState(false);
+  const [payrollMsg, setPayrollMsg] = useState('');
+  const [standardAllowances, setStandardAllowances] = useState([
+    { name: 'HRA', amount: 5000 },
+    { name: 'Transport', amount: 2000 },
+  ]);
+  const [standardDeductions, setStandardDeductions] = useState([
+    { name: 'PF', amount: 1800 },
+    { name: 'Professional Tax', amount: 200 },
+  ]);
 
   const fetchCounts = async () => {
     setLoading(true);
@@ -83,6 +94,23 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
     fetchRoles();
   }, []);
 
+  // Fetch standard payroll items
+  useEffect(() => {
+    const fetchStandardPayroll = async () => {
+      try {
+        const res = await fetch('http://localhost:5050/api/payroll/standards');
+        if (res.ok) {
+          const data = await res.json();
+          setStandardAllowances(data.allowances || []);
+          setStandardDeductions(data.deductions || []);
+        }
+      } catch (error) {
+        console.error('Error fetching standard payroll:', error);
+      }
+    };
+    fetchStandardPayroll();
+  }, []);
+
   if (userRole !== 'admin' && userRole !== 'superadmin') {
     return (
       <div className="text-center py-12">
@@ -102,6 +130,15 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
         { label: 'View Users', onClick: () => navigate('/admin/users') },
         { label: 'Edit Roles', onClick: () => setShowEditRolesDialog(true) },
         { label: 'Deactivate Users', onClick: () => setShowDeactivateDialog(true) }
+      ]
+    },
+    {
+      title: 'Payroll Management',
+      description: 'Manage standard allowances and deductions',
+      icon: Database,
+      actions: [
+        { label: 'Edit Standards', onClick: () => setEditPayroll(true) },
+        { label: 'Apply to All', onClick: () => handleApplyStandards() }
       ]
     },
   ];
@@ -248,75 +285,86 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
     return { totalPresent, totalPossible };
   };
 
-  // --- Standard Payroll Values ---
-  const [standardAllowances, setStandardAllowances] = useState([
-    { name: 'HRA', amount: 5000 },
-    { name: 'Transport', amount: 2000 },
-  ]);
-  const [standardDeductions, setStandardDeductions] = useState([
-    { name: 'PF', amount: 1800 },
-    { name: 'Professional Tax', amount: 200 },
-  ]);
-  const [editPayroll, setEditPayroll] = useState(false);
-  const [payrollLoading, setPayrollLoading] = useState(false);
-  const [payrollMsg, setPayrollMsg] = useState('');
-
-  // Handlers for editing standard values
-  const handleAllowanceChange = (idx: number, field: 'name' | 'amount', value: string | number) => {
-    setStandardAllowances(prev => prev.map((a, i) => i === idx ? { ...a, [field]: value } : a));
-  };
-  const handleDeductionChange = (idx: number, field: 'name' | 'amount', value: string | number) => {
-    setStandardDeductions(prev => prev.map((d, i) => i === idx ? { ...d, [field]: value } : d));
-  };
-  const handleAddAllowance = () => setStandardAllowances(prev => [...prev, { name: '', amount: 0 }]);
-  const handleAddDeduction = () => setStandardDeductions(prev => [...prev, { name: '', amount: 0 }]);
-  const handleRemoveAllowance = (idx: number) => setStandardAllowances(prev => prev.filter((_, i) => i !== idx));
-  const handleRemoveDeduction = (idx: number) => setStandardDeductions(prev => prev.filter((_, i) => i !== idx));
-
-  // Fetch standards from backend on mount
-  useEffect(() => {
-    const fetchStandards = async () => {
-      try {
-        const res = await fetch('http://localhost:5050/api/payroll/standards');
-        if (res.ok) {
-          const data = await res.json();
-          if (data.allowances) setStandardAllowances(data.allowances);
-          if (data.deductions) setStandardDeductions(data.deductions);
-        }
-      } catch {}
-    };
-    fetchStandards();
-  }, []);
-
   const handleSaveStandards = async () => {
     setPayrollLoading(true);
     setPayrollMsg('');
     try {
-      const res = await fetch('http://localhost:5050/api/payroll/standards', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ allowances: standardAllowances, deductions: standardDeductions })
-      });
-      if (res.ok) {
-        setPayrollMsg('Standards saved!');
-      } else {
-        setPayrollMsg('Failed to save standards.');
+      // Update each allowance and deduction
+      for (const allowance of standardAllowances) {
+        await fetch('http://localhost:5050/api/payroll/standards', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: 'allowance',
+            name: allowance.name,
+            amount: allowance.amount
+          })
+        });
       }
-    } catch {
-      setPayrollMsg('Network error.');
+      
+      for (const deduction of standardDeductions) {
+        await fetch('http://localhost:5050/api/payroll/standards', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: 'deduction',
+            name: deduction.name,
+            amount: deduction.amount
+          })
+        });
+      }
+      
+      setPayrollMsg('Standards saved successfully!');
+    } catch (error) {
+      setPayrollMsg('Error saving standards: ' + error.message);
     }
     setPayrollLoading(false);
+  };
+
+  const handleAllowanceChange = (index: number, field: 'name' | 'amount', value: string | number) => {
+    setStandardAllowances(prev => 
+      prev.map((item, idx) => 
+        idx === index ? { ...item, [field]: value } : item
+      )
+    );
+  };
+
+  const handleDeductionChange = (index: number, field: 'name' | 'amount', value: string | number) => {
+    setStandardDeductions(prev => 
+      prev.map((item, idx) => 
+        idx === index ? { ...item, [field]: value } : item
+      )
+    );
+  };
+
+  const handleAddAllowance = () => {
+    setStandardAllowances(prev => [...prev, { name: '', amount: 0 }]);
+  };
+
+  const handleRemoveAllowance = (index: number) => {
+    setStandardAllowances(prev => prev.filter((_, idx) => idx !== index));
+  };
+
+  const handleAddDeduction = () => {
+    setStandardDeductions(prev => [...prev, { name: '', amount: 0 }]);
+  };
+
+  const handleRemoveDeduction = (index: number) => {
+    setStandardDeductions(prev => prev.filter((_, idx) => idx !== index));
   };
 
   const handleApplyStandards = async () => {
     setPayrollLoading(true);
     setPayrollMsg('');
     try {
-      const res = await fetch('http://localhost:5050/api/payroll/apply-standards-to-all', {
-        method: 'POST'
+      const res = await fetch('http://localhost:5050/api/payroll/apply-standards', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ force: false })
       });
       if (res.ok) {
-        setPayrollMsg('Standards applied to all employees!');
+        const data = await res.json();
+        setPayrollMsg(`Standards applied to ${data.updated} employee(s)!`);
       } else {
         setPayrollMsg('Failed to apply standards.');
       }
@@ -835,6 +883,140 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
               >
                 {deactivateLoading ? 'Deactivating...' : 'Deactivate'}
               </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Payroll Standards Edit Dialog */}
+      {editPayroll && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg max-w-4xl w-full p-6 relative max-h-[90vh] overflow-y-auto">
+            <button
+              className="absolute top-2 right-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+              onClick={() => setEditPayroll(false)}
+            >
+              <X className="h-6 w-6" />
+            </button>
+            <h2 className="text-2xl font-bold mb-6 text-gray-900 dark:text-gray-100">Manage Standard Payroll</h2>
+            
+            {payrollMsg && (
+              <div className={`mb-4 p-3 rounded text-sm ${
+                payrollMsg.startsWith('Error') || payrollMsg.includes('failed')
+                  ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+                  : 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+              }`}>
+                {payrollMsg}
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              {/* Allowances Section */}
+              <div>
+                <h3 className="text-lg font-semibold mb-4 text-green-700 dark:text-green-300">Standard Allowances</h3>
+                <div className="space-y-3">
+                  {standardAllowances.map((allowance, idx) => (
+                    <div key={idx} className="flex items-center gap-2 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                      <input
+                        type="text"
+                        value={allowance.name}
+                        onChange={(e) => handleAllowanceChange(idx, 'name', e.target.value)}
+                        placeholder="Allowance name"
+                        className="flex-1 px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-green-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                      />
+                      <span className="text-gray-600 dark:text-gray-400">₹</span>
+                      <input
+                        type="number"
+                        value={allowance.amount}
+                        onChange={(e) => handleAllowanceChange(idx, 'amount', Number(e.target.value))}
+                        placeholder="Amount"
+                        className="w-24 px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-green-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                      />
+                      <button
+                        onClick={() => handleRemoveAllowance(idx)}
+                        className="p-2 text-red-600 hover:bg-red-100 dark:hover:bg-red-900/20 rounded"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <button
+                  onClick={handleAddAllowance}
+                  className="mt-3 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-600"
+                >
+                  Add Allowance
+                </button>
+              </div>
+
+              {/* Deductions Section */}
+              <div>
+                <h3 className="text-lg font-semibold mb-4 text-red-700 dark:text-red-300">Standard Deductions</h3>
+                <div className="space-y-3">
+                  {standardDeductions.map((deduction, idx) => (
+                    <div key={idx} className="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg">
+                      <input
+                        type="text"
+                        value={deduction.name}
+                        onChange={(e) => handleDeductionChange(idx, 'name', e.target.value)}
+                        placeholder="Deduction name"
+                        className="flex-1 px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-red-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                      />
+                      <span className="text-gray-600 dark:text-gray-400">₹</span>
+                      <input
+                        type="number"
+                        value={deduction.amount}
+                        onChange={(e) => handleDeductionChange(idx, 'amount', Number(e.target.value))}
+                        placeholder="Amount"
+                        className="w-24 px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-red-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                      />
+                      <button
+                        onClick={() => handleRemoveDeduction(idx)}
+                        className="p-2 text-red-600 hover:bg-red-100 dark:hover:bg-red-900/20 rounded"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <button
+                  onClick={handleAddDeduction}
+                  className="mt-3 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-600"
+                >
+                  Add Deduction
+                </button>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex justify-between items-center mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
+              <div>
+                <button
+                  onClick={handleApplyStandards}
+                  disabled={payrollLoading}
+                  className="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 dark:bg-blue-700 dark:hover:bg-blue-600"
+                >
+                  {payrollLoading ? 'Applying...' : 'Apply to Employees'}
+                </button>
+                <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                  Apply current standards to employees who don't have payroll data
+                </p>
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setEditPayroll(false)}
+                  className="px-6 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 dark:bg-gray-600 dark:hover:bg-gray-500"
+                >
+                  Close
+                </button>
+                <button
+                  onClick={handleSaveStandards}
+                  disabled={payrollLoading}
+                  className="px-6 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50 dark:bg-green-700 dark:hover:bg-green-600"
+                >
+                  {payrollLoading ? 'Saving...' : 'Save Standards'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
