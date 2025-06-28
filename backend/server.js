@@ -760,22 +760,38 @@ app.delete('/api/employees/:id', async (req, res) => {
 });
 
 app.post('/api/login', async (req, res) => {
-  const { email, password } = req.body;
+  const { email, employeeId, password } = req.body;
+  
+  // Accept either email or employeeId for login, but prioritize employeeId
+  const loginField = employeeId || email;
+  if (!loginField || !password) {
+    return res.status(400).json({ error: 'Employee ID and password are required' });
+  }
+  
   try {
-    const employee = await Employee.findOne({ email }).select('+password +mustChangePassword +firstname +lastname +role +lastLogin');
-    console.log('Employee object:', employee); // Debug: log the full employee object
+    // Try to find employee by employeeId first (since that's what employees/interns use)
+    let employee = await Employee.findOne({ employeeId: loginField }).select('+password +mustChangePassword +firstname +lastname +role +lastLogin');
+    
+    // If not found by employeeId and an email was provided, try by email (for backwards compatibility)
+    if (!employee && email) {
+      employee = await Employee.findOne({ email: loginField }).select('+password +mustChangePassword +firstname +lastname +role +lastLogin');
+    }
+    
+    console.log('Login attempt with:', loginField);
+    console.log('Employee found:', employee ? `${employee.firstname} ${employee.lastname} (${employee.employeeId})` : 'None');
     if (employee) {
-      console.log('Employee password hash in DB:', employee.password);
+      console.log('Employee has password set:', !!employee.password);
     }
     if (!employee) {
-      return res.status(401).json({ error: 'Invalid email or password' });
+      return res.status(401).json({ error: 'Invalid employee ID or password' });
     }
     if (!employee.password) {
       return res.status(403).json({ error: 'Password not set', employeeId: employee._id });
     }
     const isMatch = await bcrypt.compare(password, employee.password);
     if (!isMatch) {
-      return res.status(401).json({ error: 'Invalid email or password' });
+      console.log('Password comparison failed for employee:', employee.employeeId);
+      return res.status(401).json({ error: 'Invalid employee ID or password' });
     }
     // Update lastLogin timestamp
     employee.lastLogin = new Date();
@@ -959,9 +975,15 @@ app.use(async (req, res, next) => {
   // Add this to mark attendance on login
   if (req.path === '/api/login' && req.method === 'POST') {
     // After successful login, mark today's attendance
-    const { email } = req.body;
+    const { email, employeeId } = req.body;
+    const loginField = employeeId || email; // Prioritize employeeId
     try {
-      const employee = await Employee.findOne({ email });
+      // Find employee by employeeId first, then by email if provided
+      let employee = await Employee.findOne({ employeeId: loginField });
+      if (!employee && email) {
+        employee = await Employee.findOne({ email: loginField });
+      }
+      
       if (employee) {
         const today = new Date();
         const dateStr = today.toISOString().substring(0, 10); // YYYY-MM-DD

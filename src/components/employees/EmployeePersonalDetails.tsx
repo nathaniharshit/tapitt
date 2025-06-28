@@ -16,7 +16,8 @@ interface EmployeePersonalDetailsProps {
 }
 
 const EmployeePersonalDetails = ({ user }: EmployeePersonalDetailsProps) => {
-  const [details, setDetails] = useState<any>(null);
+  const [details, setDetails] = useState<any>(undefined); // undefined = loading, null = not found, object = found
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [viewMode, setViewMode] = useState(true);
   const [form, setForm] = useState<{
@@ -98,13 +99,35 @@ const EmployeePersonalDetails = ({ user }: EmployeePersonalDetailsProps) => {
 
   useEffect(() => {
     // Fetch employee details from backend
+    console.log('Fetching employee details for user:', user);
+    setLoading(true);
     fetch(`http://localhost:5050/api/employees`)
-      .then(res => res.json())
+      .then(res => {
+        console.log('API response status:', res.status);
+        return res.json();
+      })
       .then(data => {
+        console.log('All employees from API:', data);
+        console.log('Looking for email:', user.email);
         const emp = data.find((e: any) => e.email === user.email);
-        setDetails(emp);
-        // Only reset form if not editing
-        resetForm(emp);
+        console.log('Found employee:', emp);
+        
+        if (emp) {
+          setDetails(emp);
+          // Only reset form if not editing
+          resetForm(emp);
+        } else {
+          // No matching employee found
+          setDetails(null);
+          setMessage(`No employee record found for email: ${user.email}`);
+        }
+        setLoading(false);
+      })
+      .catch(error => {
+        console.error('Error fetching employees:', error);
+        setDetails(null);
+        setMessage('Error loading employee data. Please try again.');
+        setLoading(false);
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user.email]);
@@ -194,7 +217,61 @@ const EmployeePersonalDetails = ({ user }: EmployeePersonalDetailsProps) => {
     setViewMode(false);
   };
 
-  if (!details) return <div className="p-8">Loading...</div>;
+  if (loading) {
+    return <div className="p-8">Loading employee details...</div>;
+  }
+
+  if (details === null) {
+    return (
+      <Card className="max-w-2xl mx-auto mt-8 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 shadow-2xl rounded-2xl">
+        <CardHeader className="flex flex-col items-center justify-center bg-red-600 dark:bg-red-900 rounded-t-2xl pb-6">
+          <CardTitle className="text-white text-2xl">Employee Not Found</CardTitle>
+        </CardHeader>
+        <CardContent className="pt-8 pb-6 px-6">
+          <div className="text-center">
+            <p className="text-red-600 dark:text-red-400 mb-4">{message}</p>
+            <p className="text-gray-600 dark:text-gray-400 mb-4">
+              This could happen if:
+            </p>
+            <ul className="text-left text-gray-600 dark:text-gray-400 mb-6">
+              <li>• Your account hasn't been added to the employee database yet</li>
+              <li>• There's a mismatch between your login email and employee record</li>
+              <li>• The employee record was removed or archived</li>
+            </ul>
+            <Button 
+              onClick={() => {
+                setLoading(true);
+                setMessage('');
+                // Retry the fetch
+                fetch(`http://localhost:5050/api/employees`)
+                  .then(res => res.json())
+                  .then(data => {
+                    const emp = data.find((e: any) => e.email === user.email);
+                    if (emp) {
+                      setDetails(emp);
+                      resetForm(emp);
+                    } else {
+                      setDetails(null);
+                      setMessage(`No employee record found for email: ${user.email}`);
+                    }
+                    setLoading(false);
+                  })
+                  .catch(error => {
+                    console.error('Error fetching employees:', error);
+                    setDetails(null);
+                    setMessage('Error loading employee data. Please try again.');
+                    setLoading(false);
+                  });
+              }}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              Retry Loading
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   if (viewMode) {
     // Read-only summary view
