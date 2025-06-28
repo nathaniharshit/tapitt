@@ -69,8 +69,8 @@ app.post('/api/session/end', async (req, res) => {
 mongoose.connect(MONGODB_URI, { useNewUrlParser: true, useUnifiedTopology: true })
   .then(async () => {
     console.log('Connected to MongoDB Atlas');
-    // Initialize default standard payroll items
-    await initializeStandardPayroll();
+    // Initialize default payroll standards in Settings if not exists
+    await initializePayrollStandards();
   })
   .catch((err) => console.error('MongoDB connection error:', err));
 
@@ -292,12 +292,20 @@ app.post('/api/employees', async (req, res) => {
     
     // Get standard allowances and deductions and assign to new employee
     const standardPayroll = await getStandardPayrollItems();
-    employeeData.allowances = standardPayroll.allowances;
-    employeeData.deductions = standardPayroll.deductions;
     
-    console.log('Assigning standard payroll to new employee:', {
-      allowances: standardPayroll.allowances,
-      deductions: standardPayroll.deductions
+    // Calculate payroll amounts based on employee's salary (create temporary employee object for calculation)
+    const tempEmployee = { salary: employeeData.salary || 0 };
+    const payrollData = calculateEmployeePayroll(tempEmployee, standardPayroll);
+    
+    employeeData.allowances = payrollData.allowances;
+    employeeData.deductions = payrollData.deductions;
+    
+    console.log('Assigning calculated payroll to new employee:', {
+      basicSalary: payrollData.basicSalary,
+      allowances: payrollData.allowances,
+      deductions: payrollData.deductions,
+      grossSalary: payrollData.grossSalary,
+      netSalary: payrollData.netSalary
     });
     
     const employee = new Employee(employeeData);
@@ -1297,7 +1305,7 @@ app.get('/api/employees/roles-count', async (req, res) => {
     // Convert to { superadmin: X, admin: Y, employee: Z }
     const result = { superadmin: 0, admin: 0, employee: 0 };
     counts.forEach(item => {
-      if (item._id === 'superadmin' || item._id === 'superadmin') result.superadmin = item.count;
+      if (item._id === 'superadmin') result.superadmin = item.count;
       else if (item._id === 'admin') result.admin = item.count;
       else if (item._id === 'employee') result.employee = item.count;
     });
@@ -1506,6 +1514,94 @@ app.get('/api/holidays', async (req, res) => {
   }
 });
 // --- End Holiday Schema and Endpoints ---
+
+// --- Payroll Calculation Functions (Settings-based) ---
+async function getStandardPayrollItems() {
+  try {
+    const settings = await Settings.findOne({ key: 'payroll_standards' });
+    if (!settings) return { allowances: [], deductions: [] };
+    return settings.value || { allowances: [], deductions: [] };
+  } catch (error) {
+    console.error('Error fetching standard payroll items:', error);
+    return { allowances: [], deductions: [] };
+  }
+}
+
+function calculatePayrollAmount(item, basicSalary, grossSalary = null) {
+  if (item.calculationType === 'percentage') {
+    if (item.type === 'allowance') {
+      return Math.round((item.amount / 100) * basicSalary);
+    } else {
+      const baseAmount = grossSalary || basicSalary;
+      return Math.round((item.amount / 100) * baseAmount);
+    }
+  } else {
+    return item.amount;
+  }
+}
+
+function calculateEmployeePayroll(employee, standardPayroll) {
+  const basicSalary = employee.salary || 0;
+  let totalAllowances = 0;
+  const calculatedAllowances = (standardPayroll.allowances || []).map(allowance => {
+    const calculatedAmount = calculatePayrollAmount({ ...allowance, type: 'allowance' }, basicSalary);
+    totalAllowances += calculatedAmount;
+    return {
+      name: allowance.name,
+      amount: calculatedAmount,
+      calculationType: allowance.calculationType || 'fixed',
+      originalAmount: allowance.amount
+    };
+  });
+  const grossSalary = basicSalary + totalAllowances;
+  let totalDeductions = 0;
+  const calculatedDeductions = (standardPayroll.deductions || []).map(deduction => {
+    const calculatedAmount = calculatePayrollAmount({ ...deduction, type: 'deduction' }, basicSalary, grossSalary);
+    totalDeductions += calculatedAmount;
+    return {
+      name: deduction.name,
+      amount: calculatedAmount,
+      calculationType: deduction.calculationType || 'fixed',
+      originalAmount: deduction.amount
+    };
+  });
+  const netSalary = grossSalary - totalDeductions;
+  return {
+    basicSalary,
+    allowances: calculatedAllowances,
+    deductions: calculatedDeductions,
+    totalAllowances,
+    totalDeductions,
+    grossSalary,
+    netSalary
+  };
+}
+
+async function initializePayrollStandards() {
+  try {
+    const exists = await Settings.findOne({ key: 'payroll_standards' });
+    if (!exists) {
+      await Settings.create({
+        key: 'payroll_standards',
+        value: {
+          allowances: [
+            { name: 'HRA', amount: 40, calculationType: 'percentage' },
+            { name: 'Transport', amount: 2000, calculationType: 'fixed' }
+          ],
+          deductions: [
+            { name: 'PF', amount: 12, calculationType: 'percentage' },
+            { name: 'Professional Tax', amount: 200, calculationType: 'fixed' }
+          ]
+        }
+      });
+      console.log('Initialized default payroll standards in Settings.');
+    }
+  } catch (error) {
+    console.error('Error initializing payroll standards:', error);
+  }
+}
+// --- End Payroll Calculation Functions ---
+
 // --- Settings Model for Payroll Standards ---
 const settingsSchema = new mongoose.Schema({
   key: { type: String, required: true, unique: true },
@@ -1513,51 +1609,65 @@ const settingsSchema = new mongoose.Schema({
 });
 const Settings = mongoose.model('Settings', settingsSchema);
 
-// --- Apply Payroll Standards to All Employees ---
-app.post('/api/payroll/apply-standards-to-all', async (req, res) => {
+// --- Payroll Management Endpoints (Settings-based) ---
+app.get('/api/payroll/standards', async (req, res) => {
   try {
-    // Fetch standards from settings
     const settings = await Settings.findOne({ key: 'payroll_standards' });
-    if (!settings) return res.status(404).json({ error: 'Payroll standards not found' });
-    const { allowances, deductions } = settings.value || {};
-    // Update all employees
-    await Employee.updateMany({}, {
-      $set: {
-        allowances: allowances || [],
-        deductions: deductions || []
-      }
-    });
-    res.json({ success: true, message: 'Standards applied to all employees.' });
+    res.json(settings ? settings.value : { allowances: [], deductions: [] });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to apply standards', details: error.message });
+    console.error('Error fetching payroll standards:', error);
+    res.status(500).json({ error: 'Failed to fetch payroll standards' });
   }
 });
 
-// --- Create Initial Payroll Standards (one-time endpoint) ---
-app.post('/api/payroll/create-initial-standards', async (req, res) => {
+app.post('/api/payroll/standards', async (req, res) => {
   try {
-    const exists = await Settings.findOne({ key: 'payroll_standards' });
-    if (exists) return res.status(400).json({ error: 'payroll_standards already exists' });
-    const { allowances, deductions } = req.body || {};
-    const doc = new Settings({
-      key: 'payroll_standards',
-      value: {
-        allowances: Array.isArray(allowances) ? allowances : [
-          { name: 'HRA', amount: 5000 },
-          { name: 'Transport', amount: 2000 }
-        ],
-        deductions: Array.isArray(deductions) ? deductions : [
-          { name: 'PF', amount: 1800 },
-          { name: 'Professional Tax', amount: 200 }
-        ]
-      }
-    });
-    await doc.save();
-    res.json({ success: true, message: 'Initial payroll standards created.' });
+    const { allowances, deductions } = req.body;
+    let settings = await Settings.findOne({ key: 'payroll_standards' });
+    if (!settings) {
+      settings = new Settings({ key: 'payroll_standards', value: { allowances: [], deductions: [] } });
+    }
+    settings.value.allowances = Array.isArray(allowances) ? allowances : [];
+    settings.value.deductions = Array.isArray(deductions) ? deductions : [];
+    await settings.save();
+    res.json({ success: true, value: settings.value });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'Failed to update payroll standards' });
   }
 });
+
+app.post('/api/payroll/apply-standards-to-all', async (req, res) => {
+  try {
+    const settings = await Settings.findOne({ key: 'payroll_standards' });
+    if (!settings) return res.status(400).json({ error: 'Payroll standards not set' });
+    
+    console.log('Applying payroll standards:', JSON.stringify(settings.value, null, 2));
+    
+    const employees = await Employee.find({});
+    let updated = 0;
+    for (const emp of employees) {
+      console.log(`\nProcessing employee: ${emp.firstname} ${emp.lastname} (Salary: ₹${emp.salary})`);
+      const payroll = calculateEmployeePayroll(emp, settings.value);
+      
+      console.log('Calculated payroll:', {
+        allowances: payroll.allowances,
+        deductions: payroll.deductions,
+        grossSalary: payroll.grossSalary,
+        netSalary: payroll.netSalary
+      });
+      
+      emp.allowances = payroll.allowances;
+      emp.deductions = payroll.deductions;
+      await emp.save();
+      updated++;
+    }
+    res.json({ success: true, updated });
+  } catch (error) {
+    console.error('Error applying standards:', error);
+    res.status(500).json({ error: 'Failed to apply standards to all employees' });
+  }
+});
+// --- End Payroll Management Endpoints ---
 
 // --- SOCKET.IO SETUP ---
 const server = http.createServer(app);
@@ -1589,99 +1699,77 @@ const PolicyDoc = Document;
 // Get all policies
 app.get('/api/policies', async (req, res) => {
   try {
-    const policies = await PolicyDoc.find({}).populate('uploadedBy', 'firstname lastname email').sort({ uploadedAt: -1 });
-    // Transform to match frontend expectations
-    const transformedPolicies = policies.map(policy => ({
+    const policies = await PolicyDoc.find({})
+      .populate({ path: 'uploadedBy', select: 'firstname lastname' })
+      .sort({ uploadedAt: -1 });
+    
+    res.json(policies.map(policy => ({
       _id: policy._id,
       title: policy.title,
       description: policy.description,
+      uploadedBy: policy.uploadedBy ? `${policy.uploadedBy.firstname} ${policy.uploadedBy.lastname}` : 'Admin',
+      uploadedAt: policy.uploadedAt,
       fileUrl: `http://localhost:5050${policy.filePath}`, // Full URL for file access
-      uploadedBy: policy.uploadedBy,
-      uploadedAt: policy.uploadedAt
-    }));
-    res.json(transformedPolicies);
+    })));
   } catch (err) {
-    console.error('Error fetching policies:', err);
-    res.status(500).json({ error: 'Failed to fetch policies', details: err.message });
+    res.status(500).json({ error: 'Failed to fetch policies' });
   }
 });
 
-// Upload a new policy document
 app.post('/api/policies', upload.single('file'), async (req, res) => {
   try {
-    // Check if file is uploaded
-    if (!req.file) {
-      return res.status(400).json({ error: 'No file uploaded' });
+    const { title, description, uploadedBy } = req.body;
+    
+    if (!title || !req.file) {
+      return res.status(400).json({ error: 'Title and file are required' });
     }
     
-    // Only allow PDF files
-    if (req.file.mimetype !== 'application/pdf') {
-      return res.status(400).json({ error: 'Only PDF files are allowed' });
-    }
-    
-    const { title, description } = req.body;
-    if (!title) {
-      return res.status(400).json({ error: 'Title is required' });
-    }
-    
-    // Create new policy document
     const policy = new PolicyDoc({
       title,
       description: description || '',
       filePath: `/uploads/${req.file.filename}`,
-      uploadedBy: new mongoose.Types.ObjectId() // You might want to get this from auth middleware
+      uploadedBy: uploadedBy || null
     });
     
     await policy.save();
     
-    // Return the created policy with populated data
-    const populatedPolicy = await PolicyDoc.findById(policy._id).populate('uploadedBy', 'firstname lastname email');
+    // Populate uploadedBy for response
+    const populatedPolicy = await PolicyDoc.findById(policy._id)
+      .populate({ path: 'uploadedBy', select: 'firstname lastname' });
     
     res.status(201).json({
-      message: 'Policy document uploaded successfully',
-      policy: {
-        _id: populatedPolicy._id,
-        title: populatedPolicy.title,
-        description: populatedPolicy.description,
-        fileUrl: `http://localhost:5050${populatedPolicy.filePath}`,
-        uploadedBy: populatedPolicy.uploadedBy,
-        uploadedAt: populatedPolicy.uploadedAt
-      }
+      _id: populatedPolicy._id,
+      title: populatedPolicy.title,
+      description: populatedPolicy.description,
+      uploadedBy: populatedPolicy.uploadedBy ? `${populatedPolicy.uploadedBy.firstname} ${populatedPolicy.uploadedBy.lastname}` : 'Admin',
+      uploadedAt: populatedPolicy.uploadedAt,
+      fileUrl: `http://localhost:5050${populatedPolicy.filePath}`,
     });
   } catch (err) {
-    console.error('Error uploading policy:', err);
-    res.status(500).json({ error: 'Failed to upload policy document', details: err.message });
+    res.status(400).json({ error: 'Failed to upload policy' });
   }
 });
 
-// Delete a policy document
 app.delete('/api/policies/:id', async (req, res) => {
   try {
     const policy = await PolicyDoc.findById(req.params.id);
     if (!policy) {
-      return res.status(404).json({ error: 'Policy document not found' });
+      return res.status(404).json({ error: 'Policy not found' });
     }
     
-    // Delete the file from filesystem
-    const filePath = path.join(__dirname, policy.filePath.replace('/uploads', 'uploads'));
+    // Delete the physical file
+    const filePath = path.join(__dirname, policy.filePath);
     if (fs.existsSync(filePath)) {
       fs.unlinkSync(filePath);
     }
     
-    // Delete from database
     await PolicyDoc.findByIdAndDelete(req.params.id);
-    
-    res.json({ message: 'Policy document deleted successfully' });
+    res.json({ message: 'Policy deleted successfully' });
   } catch (err) {
-    console.error('Error deleting policy:', err);
-    res.status(500).json({ error: 'Failed to delete policy document', details: err.message });
+    res.status(500).json({ error: 'Failed to delete policy' });
   }
 });
 // --- End Policy Endpoints ---
-
-server.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-});
 
 // GET endpoint to fetch all sessions for an employee
 app.get('/api/sessions', async (req, res) => {
@@ -1696,452 +1784,81 @@ app.get('/api/sessions', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-app.get('/api/sessions', async (req, res) => {
-  try {
-    const { employeeId } = req.query;
-    console.log('Fetching sessions for employeeId:', employeeId);
-    if (!employeeId) return res.status(400).json({ error: 'employeeId is required' });
-    const sessions = await Session.find({ employeeId }).sort({ startTime: -1 });
-    console.log('Sessions found:', sessions);
-    res.json({ sessions });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Auto-delete holidays whose date has passed (runs every day at 1:00 AM)
-cron.schedule('0 1 * * *', async () => {
-  const today = new Date();
-  const todayStr = today.toISOString().slice(0, 10); // YYYY-MM-DD
-  try {
-    const result = await Holiday.deleteMany({ date: { $lt: todayStr } });
-    if (result.deletedCount > 0) {
-      console.log(`Auto-deleted ${result.deletedCount} past holidays.`);
-    }
-  } catch (err) {
-    console.error('Error auto-deleting past holidays:', err);
-  }
-});
-
-// Log all incoming requests and their bodies, except for /socket.io
-app.use((req, res, next) => {
-  if (!req.url.startsWith('/socket.io')) {
-    console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
-    if (req.body && Object.keys(req.body).length > 0) {
-      console.log('Request body:', req.body);
-    }
-  }
-  next();
-});
-
-// Assign or change team lead (admin/HR only)
-app.put('/api/teams/:teamId/team-lead', authorizeRoles(['admin', 'hr', 'superadmin']), async (req, res) => {
-  try {
-    const { teamLeadId } = req.body;
-    if (!teamLeadId) return res.status(400).json({ error: 'teamLeadId is required' });
-    const team = await Team.findById(req.params.teamId);
-    if (!team) return res.status(404).json({ error: 'Team not found' });
-    team.teamLead = teamLeadId;
-    await team.save();
-    res.json({ message: 'Team lead assigned', team });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// --- Role Management Endpoints ---
-// Create a new role
-app.post('/api/roles', async (req, res) => {
-  try {
-    const { name, permissions } = req.body;
-    if (!name || !Array.isArray(permissions)) return res.status(400).json({ error: 'Name and permissions required' });
-    const role = new Role({ name, permissions });
-    await role.save();
-    res.json(role);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-// List all roles
-app.get('/api/roles', async (req, res) => {
-  try {
-    const roles = await Role.find();
-    res.json(roles);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-// Update a role
-app.put('/api/roles/:id', async (req, res) => {
-  try {
-    const { name, permissions } = req.body;
-    const role = await Role.findByIdAndUpdate(req.params.id, { name, permissions }, { new: true });
-    if (!role) return res.status(404).json({ error: 'Role not found' });
-    res.json(role);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-// Delete a role
-app.delete('/api/roles/:id', async (req, res) => {
-  try {
-    const role = await Role.findByIdAndDelete(req.params.id);
-    if (!role) return res.status(404).json({ error: 'Role not found' });
-    res.json({ success: true });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-// --- End Role Management Endpoints ---
-
-// Assign a custom role to an employee
-app.put('/api/employees/:id/role', authorizePermission('assign_roles'), async (req, res) => {
-  try {
-    let { roleId } = req.body;
-    // Allow demotion: if roleId is null, undefined, or empty string, clear roleRef
-    if (roleId === null || roleId === undefined || roleId === '') {
-      roleId = null;
-    }
-    const emp = await Employee.findByIdAndUpdate(
-      req.params.id,
-      { roleRef: roleId },
-      { new: true }
-    );
-    if (!emp) return res.status(404).json({ error: 'Employee not found' });
-    res.json(emp);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// --- Manager API Endpoints ---
-// Get team members for a manager
-app.get('/api/manager/team', async (req, res) => {
-  try {
-    const { managerId } = req.query;
-    if (!managerId) return res.status(400).json({ error: 'managerId is required' });
-    // Find teams where this manager is the teamLead
-    const teams = await Team.find({ teamLead: managerId }).populate({ path: 'members', select: 'firstname lastname email department position role' });
-    // Flatten all members (if manager leads multiple teams)
-    let members = [];
-    teams.forEach(team => {
-      if (Array.isArray(team.members)) {
-        members = members.concat(team.members);
-      }
-    });
-    // Remove duplicates by _id
-    const uniqueMembers = Array.from(new Map(members.map(m => [m._id.toString(), m])).values());
-    res.json({ teamMembers: uniqueMembers });
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch team members', details: err.message });
-  }
-});
-
-// Get leave requests for a manager's team
-app.get('/api/manager/leaves', async (req, res) => {
-  try {
-    const { managerId } = req.query;
-    if (!managerId) return res.status(400).json({ error: 'managerId is required' });
-    // Find teams managed by this manager
-    const teams = await Team.find({ teamLead: managerId });
-    const memberIds = teams.flatMap(team => team.members.map(m => m.toString()));
-    // Find leaves for these members
-    const leaves = await Leave.find({ employee: { $in: memberIds } })
-      .populate({ path: 'employee', select: 'firstname lastname email department' })
-      .sort({ createdAt: -1 });
-    res.json({ leaves });
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch team leaves', details: err.message });
-  }
-});
-
-// Approve/reject leave (manager action)
-app.post('/api/manager/leaves/:leaveId/:action', async (req, res) => {
-  try {
-    const { leaveId, action } = req.params;
-    const { managerId } = req.body;
-    if (!managerId) return res.status(400).json({ error: 'managerId is required' });
-    if (!['approve', 'reject'].includes(action)) return res.status(400).json({ error: 'Invalid action' });
-    // Find the leave
-    const leave = await Leave.findById(leaveId);
-    if (!leave) return res.status(404).json({ error: 'Leave not found' });
-    // Check if the employee is in a team managed by this manager
-    const teams = await Team.find({ teamLead: managerId });
-    const memberIds = teams.flatMap(team => team.members.map(m => m.toString()));
-    if (!memberIds.includes(leave.employee.toString())) {
-      return res.status(403).json({ error: 'Not authorized to approve/reject this leave' });
-    }
-    if (leave.status !== 'Pending') {
-      return res.status(400).json({ error: 'Leave already processed' });
-    }
-    leave.status = action === 'approve' ? 'Approved' : 'Rejected';
-    await leave.save();
-    // If approved, mark attendance as present for each date in the leave range
-    if (leave.status === 'Approved') {
-      const employee = await Employee.findById(leave.employee);
-      if (employee) {
-        const fromDate = new Date(leave.from);
-        const toDate = new Date(leave.to);
-        let current = new Date(fromDate);
-        while (current <= toDate) {
-          const dateStr = current.toISOString().slice(0, 10);
-          if (!Array.isArray(employee.attendance)) employee.attendance = [];
-          if (!employee.attendance.some(a => a.date === dateStr)) {
-            employee.attendance.push({ date: dateStr, status: 'present' });
-          }
-          current.setDate(current.getDate() + 1);
-        }
-        await employee.save();
-      }
-    }
-    res.json({ message: `Leave ${leave.status.toLowerCase()}`, leave });
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to process leave', details: err.message });
-  }
-});
-
-// Team attendance summary for a manager
-app.get('/api/manager/attendance', async (req, res) => {
-  try {
-    const { managerId, month } = req.query;
-    if (!managerId) return res.status(400).json({ error: 'managerId is required' });
-    // Find teams managed by this manager
-    const teams = await Team.find({ teamLead: managerId });
-    const memberIds = teams.flatMap(team => team.members.map(m => m.toString()));
-    // Get attendance for each member for the given month
-    const employees = await Employee.find({ _id: { $in: memberIds } }, 'firstname lastname email attendance');
-    const summary = employees.map(emp => {
-      const attendance = (emp.attendance || []).filter(a => {
-        if (!a.date) return false;
-        if (!month) return true;
-        return a.date.startsWith(month); // month = 'YYYY-MM'
-      });
-      return {
-        _id: emp._id,
-        firstname: emp.firstname,
-        lastname: emp.lastname,
-        email: emp.email,
-        attendance
-      };
-    });
-    res.json({ summary });
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch attendance summary', details: err.message });
-  }
-});
-// --- End Manager API Endpoints ---
-
-// --- Standard Payroll Configuration Model ---
-const standardPayrollSchema = new mongoose.Schema({
-  type: { type: String, enum: ['allowance', 'deduction'], required: true },
-  name: { type: String, required: true },
-  amount: { type: Number, required: true },
-  description: { type: String, default: '' },
-  isActive: { type: Boolean, default: true }
-}, { timestamps: true });
-const StandardPayroll = mongoose.model('StandardPayroll', standardPayrollSchema);
-
-// Function to get current standard allowances and deductions
-async function getStandardPayrollItems() {
-  try {
-    const allowances = await StandardPayroll.find({ type: 'allowance', isActive: true });
-    const deductions = await StandardPayroll.find({ type: 'deduction', isActive: true });
-    return {
-      allowances: allowances.map(a => ({ name: a.name, amount: a.amount })),
-      deductions: deductions.map(d => ({ name: d.name, amount: d.amount }))
-    };
-  } catch (error) {
-    console.error('Error fetching standard payroll items:', error);
-    return { allowances: [], deductions: [] };
-  }
-}
-
-// Function to initialize default standard payroll items
-async function initializeStandardPayroll() {
-  try {
-    const existingCount = await StandardPayroll.countDocuments();
-    if (existingCount === 0) {
-      console.log('Initializing default standard payroll items...');
-      
-      // Default allowances
-      const defaultAllowances = [
-        { type: 'allowance', name: 'HRA', amount: 5000, description: 'House Rent Allowance' },
-        { type: 'allowance', name: 'Transport', amount: 2000, description: 'Transportation Allowance' },
-        { type: 'allowance', name: 'Medical', amount: 1500, description: 'Medical Allowance' }
-      ];
-      
-      // Default deductions
-      const defaultDeductions = [
-        { type: 'deduction', name: 'PF', amount: 1800, description: 'Provident Fund' },
-        { type: 'deduction', name: 'Professional Tax', amount: 200, description: 'Professional Tax' },
-        { type: 'deduction', name: 'Insurance', amount: 500, description: 'Employee Insurance' }
-      ];
-      
-      await StandardPayroll.insertMany([...defaultAllowances, ...defaultDeductions]);
-      console.log('Default standard payroll items initialized successfully');
-    }
-  } catch (error) {
-    console.error('Error initializing standard payroll:', error);
-  }
-}
-// --- End Standard Payroll Configuration Model ---
 
 // --- Standard Payroll API Endpoints ---
 
-// Get standard allowances and deductions
-app.get('/api/payroll/standards', async (req, res) => {
-  try {
-    const standards = await getStandardPayrollItems();
-    res.json(standards);
-  } catch (error) {
-    console.error('Error fetching standard payroll:', error);
-    res.status(500).json({ error: 'Failed to fetch standard payroll items' });
-  }
-});
-
-// Get all standard payroll items (for admin management)
-app.get('/api/payroll/standards/all', async (req, res) => {
-  try {
-    const items = await StandardPayroll.find().sort({ type: 1, name: 1 });
-    res.json(items);
-  } catch (error) {
-    console.error('Error fetching all standard payroll items:', error);
-    res.status(500).json({ error: 'Failed to fetch standard payroll items' });
-  }
-});
-
-// Add new standard allowance or deduction
-app.post('/api/payroll/standards', async (req, res) => {
-  try {
-    const { type, name, amount, description } = req.body;
-    
-    if (!type || !name || amount === undefined) {
-      return res.status(400).json({ error: 'Type, name, and amount are required' });
-    }
-    
-    if (!['allowance', 'deduction'].includes(type)) {
-      return res.status(400).json({ error: 'Type must be either "allowance" or "deduction"' });
-    }
-    
-    // Check if already exists
-    const existing = await StandardPayroll.findOne({ type, name, isActive: true });
-    if (existing) {
-      return res.status(400).json({ error: `${type} with name "${name}" already exists` });
-    }
-    
-    const newItem = new StandardPayroll({
-      type,
-      name,
-      amount: Number(amount),
-      description: description || '',
-      isActive: true
-    });
-    
-    await newItem.save();
-    console.log(`New standard ${type} added: ${name} - ₹${amount}`);
-    
-    res.json({ message: `Standard ${type} added successfully`, item: newItem });
-  } catch (error) {
-    console.error('Error adding standard payroll item:', error);
-    res.status(500).json({ error: 'Failed to add standard payroll item' });
-  }
-});
-
-// Update standard allowance or deduction
-app.put('/api/payroll/standards/:id', async (req, res) => {
-  try {
-    const { name, amount, description, isActive } = req.body;
-    
-    const item = await StandardPayroll.findById(req.params.id);
-    if (!item) {
-      return res.status(404).json({ error: 'Standard payroll item not found' });
-    }
-    
-    if (name !== undefined) item.name = name;
-    if (amount !== undefined) item.amount = Number(amount);
-    if (description !== undefined) item.description = description;
-    if (isActive !== undefined) item.isActive = Boolean(isActive);
-    
-    await item.save();
-    console.log(`Standard ${item.type} updated: ${item.name} - ₹${item.amount}`);
-    
-    res.json({ message: `Standard ${item.type} updated successfully`, item });
-  } catch (error) {
-    console.error('Error updating standard payroll item:', error);
-    res.status(500).json({ error: 'Failed to update standard payroll item' });
-  }
-});
-
-// Delete standard allowance or deduction
-app.delete('/api/payroll/standards/:id', async (req, res) => {
-  try {
-    const item = await StandardPayroll.findById(req.params.id);
-    if (!item) {
-      return res.status(404).json({ error: 'Standard payroll item not found' });
-    }
-    
-    await StandardPayroll.findByIdAndDelete(req.params.id);
-    console.log(`Standard ${item.type} deleted: ${item.name}`);
-    
-    res.json({ message: `Standard ${item.type} deleted successfully` });
-  } catch (error) {
-    console.error('Error deleting standard payroll item:', error);
-    res.status(500).json({ error: 'Failed to delete standard payroll item' });
-  }
-});
-// --- End Standard Payroll API Endpoints ---
-
-// Apply standard allowances and deductions to all employees who don't have them
-app.post('/api/payroll/apply-standards', async (req, res) => {
+// Clean up duplicate payroll items and reapply standards
+app.post('/api/payroll/cleanup-and-reapply', async (req, res) => {
   try {
     const standardPayroll = await getStandardPayrollItems();
-    const { force = false } = req.body; // Force update even if employee already has allowances/deductions
     
-    // Find employees who need standard payroll items
-    let query = {};
-    if (!force) {
-      query = {
-        $or: [
-          { allowances: { $exists: false } },
-          { allowances: { $size: 0 } },
-          { deductions: { $exists: false } },
-          { deductions: { $size: 0 } }
-        ]
-      };
-    }
-    
-    const employees = await Employee.find(query);
+    const employees = await Employee.find({});
     let updatedCount = 0;
     
     for (const employee of employees) {
-      let shouldUpdate = false;
+      // Calculate fresh payroll amounts based on employee's salary
+      const payrollData = calculateEmployeePayroll(employee, standardPayroll);
       
-      if (force || !employee.allowances || employee.allowances.length === 0) {
-        employee.allowances = standardPayroll.allowances;
-        shouldUpdate = true;
-      }
+      // Clear existing payroll items and set new calculated ones
+      employee.allowances = payrollData.allowances;
+      employee.deductions = payrollData.deductions;
       
-      if (force || !employee.deductions || employee.deductions.length === 0) {
-        employee.deductions = standardPayroll.deductions;
-        shouldUpdate = true;
-      }
+      await employee.save();
+      updatedCount++;
       
-      if (shouldUpdate) {
-        await employee.save();
-        updatedCount++;
-        console.log(`Applied standard payroll to employee: ${employee.firstname} ${employee.lastname} (${employee.employeeId})`);
-      }
+      console.log(`Cleaned up and reapplied payroll for: ${employee.firstname} ${employee.lastname} (Salary: ₹${employee.salary})`);
+      console.log(`  HRA: ₹${payrollData.allowances.find(a => a.name === 'HRA')?.amount || 0}`);
+      console.log(`  PF: ₹${payrollData.deductions.find(d => d.name === 'PF')?.amount || 0}`);
     }
     
     res.json({
-      message: `Standard payroll applied to ${updatedCount} employee(s)`,
+      message: `Cleaned up and reapplied payroll for ${updatedCount} employee(s)`,
       updated: updatedCount,
       standardPayroll
     });
     
   } catch (error) {
-    console.error('Error applying standard payroll:', error);
-    res.status(500).json({ error: 'Failed to apply standard payroll to employees' });
+    console.error('Error cleaning up payroll:', error);
+    res.status(500).json({ error: 'Failed to clean up and reapply payroll' });
   }
+});
+
+// Get calculated payroll for a specific employee
+app.get('/api/employees/:id/payroll', async (req, res) => {
+  try {
+    const employee = await Employee.findById(req.params.id);
+    if (!employee) {
+      return res.status(404).json({ error: 'Employee not found' });
+    }
+
+    const basicSalary = employee.salary || 0;
+    
+    // Calculate totals from employee's allowances and deductions
+    const totalAllowances = (employee.allowances || []).reduce((sum, a) => sum + (a.amount || 0), 0);
+    const totalDeductions = (employee.deductions || []).reduce((sum, d) => sum + (d.amount || 0), 0);
+    const grossSalary = basicSalary + totalAllowances;
+    const netSalary = grossSalary - totalDeductions;
+
+    res.json({
+      employeeId: employee.employeeId,
+      name: `${employee.firstname} ${employee.lastname}`,
+      basicSalary,
+      allowances: employee.allowances || [],
+      deductions: employee.deductions || [],
+      totalAllowances,
+      totalDeductions,
+      grossSalary,
+      netSalary
+    });
+  } catch (error) {
+    console.error('Error calculating employee payroll:', error);
+    res.status(500).json({ error: 'Failed to calculate payroll' });
+  }
+});
+
+// --- End Standard Payroll API Endpoints ---
+
+server.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
 });
 

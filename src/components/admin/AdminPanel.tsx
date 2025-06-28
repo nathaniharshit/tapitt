@@ -49,6 +49,7 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
     { name: 'PF', amount: 1800 },
     { name: 'Professional Tax', amount: 200 },
   ]);
+  const [showEmployeePayroll, setShowEmployeePayroll] = useState(false);
 
   const fetchCounts = async () => {
     setLoading(true);
@@ -138,7 +139,8 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
       icon: Database,
       actions: [
         { label: 'Edit Standards', onClick: () => setEditPayroll(true) },
-        { label: 'Apply to All', onClick: () => handleApplyStandards() }
+        { label: 'Apply to All', onClick: () => handleApplyStandards() },
+        { label: 'View Employee Payroll', onClick: () => setShowEmployeePayroll(true) }
       ]
     },
   ];
@@ -357,7 +359,7 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
     setPayrollLoading(true);
     setPayrollMsg('');
     try {
-      const res = await fetch('http://localhost:5050/api/payroll/apply-standards', {
+      const res = await fetch('http://localhost:5050/api/payroll/apply-standards-to-all', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ force: false })
@@ -365,6 +367,8 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
       if (res.ok) {
         const data = await res.json();
         setPayrollMsg(`Standards applied to ${data.updated} employee(s)!`);
+        // Refresh employee data to show updated payroll information
+        await fetchCounts();
       } else {
         setPayrollMsg('Failed to apply standards.');
       }
@@ -1017,6 +1021,117 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
                   {payrollLoading ? 'Saving...' : 'Save Standards'}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Employee Payroll Details Dialog */}
+      {showEmployeePayroll && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg max-w-6xl w-full p-6 relative max-h-[90vh] overflow-y-auto">
+            <button
+              className="absolute top-2 right-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+              onClick={() => setShowEmployeePayroll(false)}
+            >
+              <X className="h-6 w-6" />
+            </button>
+            <h2 className="text-2xl font-bold mb-6 text-gray-900 dark:text-gray-100">Employee Payroll Details</h2>
+            
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-sm bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg">
+                <thead className="bg-gray-100 dark:bg-gray-800">
+                  <tr>
+                    <th className="px-4 py-2 text-left font-semibold text-gray-900 dark:text-gray-100">Employee</th>
+                    <th className="px-4 py-2 text-left font-semibold text-gray-900 dark:text-gray-100">Base Salary</th>
+                    <th className="px-4 py-2 text-left font-semibold text-gray-900 dark:text-gray-100">Allowances</th>
+                    <th className="px-4 py-2 text-left font-semibold text-gray-900 dark:text-gray-100">Deductions</th>
+                    <th className="px-4 py-2 text-left font-semibold text-gray-900 dark:text-gray-100">Total Allowances</th>
+                    <th className="px-4 py-2 text-left font-semibold text-gray-900 dark:text-gray-100">Total Deductions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {allEmployees.map((emp, idx) => {
+                    const totalAllowances = Array.isArray(emp.allowances) 
+                      ? emp.allowances.reduce((sum: number, a: any) => sum + (a.amount || 0), 0)
+                      : 0;
+                    const totalDeductions = Array.isArray(emp.deductions) 
+                      ? emp.deductions.reduce((sum: number, d: any) => sum + (d.amount || 0), 0)
+                      : 0;
+                    
+                    return (
+                      <tr
+                        key={emp._id}
+                        className={`border-b border-gray-200 dark:border-gray-700 ${
+                          idx % 2 === 0 ? 'bg-gray-50 dark:bg-gray-800/50' : 'bg-white dark:bg-gray-900'
+                        }`}
+                      >
+                        <td className="px-4 py-3">
+                          <div className="font-medium text-gray-900 dark:text-gray-100">
+                            {emp.firstname} {emp.lastname}
+                          </div>
+                          <div className="text-xs text-gray-500 dark:text-gray-400">{emp.email}</div>
+                          <div className="text-xs text-gray-500 dark:text-gray-400">{emp.role} • {emp.department}</div>
+                        </td>
+                        <td className="px-4 py-3 text-gray-900 dark:text-gray-100 font-semibold">
+                          ₹{(emp.salary || 0).toLocaleString('en-IN')}
+                        </td>
+                        <td className="px-4 py-3">
+                          {Array.isArray(emp.allowances) && emp.allowances.length > 0 ? (
+                            <div className="space-y-1">
+                              {emp.allowances.map((allowance: any, idx: number) => (
+                                <div key={idx} className="text-xs">
+                                  <span className="font-medium text-green-700 dark:text-green-300">
+                                    {allowance.name}:
+                                  </span>
+                                  <span className="ml-1 text-gray-700 dark:text-gray-300">
+                                    ₹{allowance.amount}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-gray-500 dark:text-gray-400 text-xs">No allowances</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          {Array.isArray(emp.deductions) && emp.deductions.length > 0 ? (
+                            <div className="space-y-1">
+                              {emp.deductions.map((deduction: any, idx: number) => (
+                                <div key={idx} className="text-xs">
+                                  <span className="font-medium text-red-700 dark:text-red-300">
+                                    {deduction.name}:
+                                  </span>
+                                  <span className="ml-1 text-gray-700 dark:text-gray-300">
+                                    ₹{deduction.amount}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-gray-500 dark:text-gray-400 text-xs">No deductions</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-green-700 dark:text-green-300 font-semibold">
+                          ₹{totalAllowances.toLocaleString('en-IN')}
+                        </td>
+                        <td className="px-4 py-3 text-red-700 dark:text-red-300 font-semibold">
+                          ₹{totalDeductions.toLocaleString('en-IN')}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            
+            <div className="flex justify-end mt-6">
+              <button
+                onClick={() => setShowEmployeePayroll(false)}
+                className="px-6 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 dark:bg-gray-600 dark:hover:bg-gray-500"
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>
