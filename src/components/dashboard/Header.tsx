@@ -8,7 +8,7 @@ interface HeaderUser {
   name: string;
   email: string;
   role: 'superadmin' | 'admin' | 'employee' | 'manager';
-  picture?: string; // Add this line
+  picture?: string;
 }
 
 interface HeaderProps {

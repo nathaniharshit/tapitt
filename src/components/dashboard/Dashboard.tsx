@@ -793,9 +793,23 @@ function getQuarterRange(date = new Date()) {
   };
 }
 
+// Helper to get leave counts for the current quarter
+function getLeaveTypeCounts(leaves: any[]) {
+  const { start: quarterStart, end: quarterEnd } = getQuarterRange();
+  const leavesThisQuarter = leaves.filter(l =>
+    l.status === 'Approved' &&
+    l.from >= quarterStart &&
+    l.from <= quarterEnd
+  );
+  return LEAVE_TYPES.reduce((acc, lt) => {
+    acc[lt.type] = leavesThisQuarter.filter(l => l.type === lt.type).length;
+    return acc;
+  }, {} as Record<string, number>);
+}
+
 const [leaves, setLeaves] = useState<any[]>([]);
 const [leaveForm, setLeaveForm] = useState({
-  type: 'Annual',
+  type: 'Sick', // Fix: default to a valid leave type
   from: '',
   to: '',
   reason: ''
@@ -846,7 +860,7 @@ const handleLeaveSubmit = async (e: React.FormEvent) => {
     });
     if (resp.ok) {
       setLeaveMsg('Leave requested!');
-      setLeaveForm({ type: 'Annual', from: '', to: '', reason: '' });
+      setLeaveForm({ type: 'Sick', from: '', to: '', reason: '' });
       fetchLeaves();
     } else {
       const err = await resp.json();
@@ -869,7 +883,10 @@ const handleLeaveStatus = async (leaveId: string, status: 'Approved' | 'Rejected
     });
     if (resp.ok) {
       setLeaveMsg(`Leave ${status.toLowerCase()}!`);
-      fetchLeaves();
+      // Update leaves state immediately for dynamic UI
+      setLeaves(prev =>
+        prev.map(l => l._id === leaveId ? { ...l, status } : l)
+      );
     } else {
       const err = await resp.json();
       setLeaveMsg('Error: ' + (err.error || `Could not ${status.toLowerCase()} leave`));
@@ -894,7 +911,7 @@ const handleEditLeave = (leave: any) => {
 // Cancel edit
 const handleCancelEditLeave = () => {
   setEditingLeaveId(null);
-  setLeaveForm({ type: 'Annual', from: '', to: '', reason: '' });
+  setLeaveForm({ type: 'Sick', from: '', to: '', reason: '' });
   setLeaveMsg('');
 };
 
@@ -915,7 +932,7 @@ const handleUpdateLeave = async (e: React.FormEvent) => {
     if (resp.ok) {
       setLeaveMsg('Leave updated!');
       setEditingLeaveId(null);
-      setLeaveForm({ type: 'Annual', from: '', to: '', reason: '' });
+      setLeaveForm({ type: 'Sick', from: '', to: '', reason: '' });
       fetchLeaves();
     } else {
       const err = await resp.json();
@@ -1067,10 +1084,6 @@ const handleDeleteLeave = async (leaveId: string) => {
   const handleDownloadPayslip = async () => {
     await handleDownloadPayslipForMonth(payslipMonth);
   };
-
-  useEffect(() => {
-    if (activeTab === 'payroll') fetchSalary();
-  }, [activeTab, fetchSalary]);
 
   // --- Remote Work state and logic ---
   const [isRemoteToday, setIsRemoteToday] = useState(false);
@@ -1892,16 +1905,9 @@ const handleDeleteLeave = async (leaveId: string) => {
         );
       case 'leaves':
         // Leaves feature: show leave balance, request leave, and leave history
-        const { start: quarterStart, end: quarterEnd } = getQuarterRange();
-        const leavesThisQuarter = leaves.filter(l =>
-          l.status === 'Approved' &&
-          l.from >= quarterStart &&
-          l.from <= quarterEnd
-        );
-        const leaveTypeCounts = LEAVE_TYPES.reduce((acc, lt) => {
-          acc[lt.type] = leavesThisQuarter.filter(l => l.type === lt.type).length;
-          return acc;
-        }, {} as Record<string, number>);
+        const leaveTypeCounts = getLeaveTypeCounts(leaves);
+        const maxedOut = leaveTypeCounts[leaveForm.type] >= 2;
+
         return (
           <div className="p-8">
             {/* Only show leave request form for employees */}
@@ -1913,29 +1919,34 @@ const handleDeleteLeave = async (leaveId: string) => {
                 <CardContent>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
                     {LEAVE_TYPES.map(lt => (
-                      <div
+                      <Card
                         key={lt.type}
-                        className="rounded-lg p-4 text-center"
-                        style={{
-                          backgroundColor:
+                        className={
+                          `rounded-lg p-4 text-center shadow border-2 transition-colors
+                          ${
                             lt.type === 'Sick'
-                              ? 'var(--green-100, #dcfce7)'
+                              ? 'border-green-300 dark:border-green-700 bg-green-50 dark:bg-green-900'
                               : lt.type === 'Casual'
-                              ? 'var(--yellow-100, #fef9c3)'
-                              : 'var(--blue-100, #dbeafe)'
-                        }}
+                              ? 'border-yellow-300 dark:border-yellow-700 bg-yellow-50 dark:bg-yellow-900'
+                              : 'border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-900'
+                          }`
+                        }
                       >
-                        <div className={`text-2xl font-bold ${
-                          lt.type === 'Sick'
-                            ? 'text-green-700 dark:text-green-200'
-                            : lt.type === 'Casual'
-                            ? 'text-yellow-700 dark:text-yellow-200'
-                            : 'text-blue-700 dark:text-blue-200'
-                        }`}>
+                        <div
+                          className={
+                            `text-2xl font-bold ${
+                              lt.type === 'Sick'
+                                ? 'text-green-700 dark:text-green-200'
+                                : lt.type === 'Casual'
+                                ? 'text-yellow-700 dark:text-yellow-200'
+                                : 'text-blue-700 dark:text-blue-200'
+                            }`
+                          }
+                        >
                           {lt.limit - (leaveTypeCounts[lt.type] || 0)}
                         </div>
                         <div className="text-muted-foreground text-sm">{lt.label} Leaves Left</div>
-                      </div>
+                      </Card>
                     ))}
                   </div>
                   <form className="space-y-4" onSubmit={editingLeaveId ? handleUpdateLeave : handleLeaveSubmit}>
@@ -1995,7 +2006,7 @@ const handleDeleteLeave = async (leaveId: string) => {
                       <button
                         type="submit"
                         className="px-4 py-2 bg-blue-600 text-white rounded font-semibold"
-                        disabled={leaveLoading}
+                        disabled={leaveLoading || maxedOut}
                       >
                         {leaveLoading
                           ? (editingLeaveId ? 'Updating...' : 'Requesting...')
@@ -2012,8 +2023,17 @@ const handleDeleteLeave = async (leaveId: string) => {
                         </button>
                       )}
                     </div>
+                    {maxedOut && (
+                      <div className="text-xs mt-1 text-red-600 dark:text-red-400">
+                        You have reached the maximum of 2 {leaveForm.type} leaves for this quarter.
+                      </div>
+                    )}
                     {leaveMsg && (
-                      <div className={`mt-2 text-sm ${leaveMsg.startsWith('Error') ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
+                      <div className={`mt-2 text-sm ${
+                        leaveMsg.startsWith('Error')
+                          ? 'text-red-600 dark:text-red-400'
+                          : 'text-green-600 dark:text-green-400'
+                      }`}>
                         {leaveMsg}
                       </div>
                     )}
@@ -2023,14 +2043,24 @@ const handleDeleteLeave = async (leaveId: string) => {
             )}
             <Card className="max-w-2xl mx-auto bg-card text-foreground">
               <CardHeader>
-                <CardTitle>Leave History</CardTitle></CardHeader>
+                <CardTitle>Leave History</CardTitle>
+              </CardHeader>
               <CardContent>
                 <ul className="divide-y divide-border">
                   {leaves.length === 0 && (
                     <li className="py-2 text-muted-foreground">No leave requests yet.</li>
                   )}
                   {leaves.map(l => (
-                    <li key={l._id} className="py-2 flex justify-between items-center">
+                    <li
+                      key={l._id}
+                      className={`py-2 flex justify-between items-center ${
+                        l.status === 'Approved'
+                          ? 'bg-green-50 dark:bg-green-900'
+                          : l.status === 'Rejected'
+                          ? 'bg-red-50 dark:bg-red-900'
+                          : 'bg-yellow-50 dark:bg-yellow-900'
+                      } rounded mb-2 px-2`}
+                    >
                       <span>
                         {/* Show employee name for admin/superadmin */}
                         {(user.role === 'admin' || user.role === 'superadmin') && l.employee && (
@@ -2094,7 +2124,11 @@ const handleDeleteLeave = async (leaveId: string) => {
                   ))}
                 </ul>
                 {leaveMsg && (
-                  <div className={`mt-2 text-sm ${leaveMsg.startsWith('Error') ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
+                  <div className={`mt-2 text-sm ${
+                    leaveMsg.startsWith('Error')
+                      ? 'text-red-600 dark:text-red-400'
+                      : 'text-green-600 dark:text-green-400'
+                  }`}>
                     {leaveMsg}
                   </div>
                 )}
@@ -2102,7 +2136,6 @@ const handleDeleteLeave = async (leaveId: string) => {
             </Card>
             {/* Confirmation dialog */}
             {confirmDeleteLeaveId && (
-
               <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
                 <div className="bg-card rounded-lg shadow-lg max-w-xs w-full p-6 relative">
                   <div className="mb-4 text-center">
@@ -2738,11 +2771,10 @@ const handleDeleteLeave = async (leaveId: string) => {
                                     );
                                   })
                                 : <li>N/A</li>}
-                          </ul>
+                            </ul>
                           </div>
                         </div>
                       ))}
-
                     </div>
                   )}
                 </CardContent>
