@@ -213,15 +213,46 @@ const Award = mongoose.model('Award', awardSchema);
 // --- Leave Model ---
 const leaveSchema = new mongoose.Schema({
   employee: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', required: true },
-  type: { type: String, enum: ['Annual', 'Sick', 'Unpaid'], required: true },
+  type: { type: String, enum: ['Sick', 'Casual', 'Paid'], required: true },
   from: { type: String, required: true }, // YYYY-MM-DD
   to: { type: String, required: true },   // YYYY-MM-DD
   reason: { type: String },
   status: { type: String, enum: ['Pending', 'Approved', 'Rejected'], default: 'Pending' },
+  quarter: { type: String, required: true }, // Q1, Q2, Q3, Q4
+  year: { type: Number, required: true }, // Financial year
+  days: { type: Number, required: true }, // Number of days
   createdAt: { type: Date, default: Date.now }
 });
 const Leave = mongoose.model('Leave', leaveSchema);
 // --- End Leave Model ---
+
+// --- Quarterly Leave Model ---
+const quarterlyLeaveSchema = new mongoose.Schema({
+  employee: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', required: true },
+  year: { type: Number, required: true }, // Financial year
+  quarter: { type: String, required: true }, // Q1, Q2, Q3, Q4
+  allocated: {
+    sick: { type: Number, default: 2 },
+    casual: { type: Number, default: 2 },
+    paid: { type: Number, default: 2 }
+  },
+  used: {
+    sick: { type: Number, default: 0 },
+    casual: { type: Number, default: 0 },
+    paid: { type: Number, default: 0 }
+  },
+  carriedForward: {
+    sick: { type: Number, default: 0 },
+    casual: { type: Number, default: 0 },
+    paid: { type: Number, default: 0 }
+  }
+}, { timestamps: true });
+
+// Compound index for efficient queries
+quarterlyLeaveSchema.index({ employee: 1, year: 1, quarter: 1 }, { unique: true });
+
+const QuarterlyLeave = mongoose.model('QuarterlyLeave', quarterlyLeaveSchema);
+// --- End Quarterly Leave Model ---
 
 // --- Scheduled Report Model ---
 const scheduledReportSchema = new mongoose.Schema({
@@ -571,6 +602,105 @@ app.post('/api/awards/announce', async (req, res) => {
 
 // --- End Awards API ---
 
+// --- Quarterly Leave Utility Functions ---
+
+// Get current financial quarter (April-based year)
+function getCurrentFinancialQuarter(date = new Date()) {
+  const month = date.getMonth() + 1; // 1-12
+  const year = date.getFullYear();
+  
+  let quarter, financialYear;
+  if (month >= 4 && month <= 6) {
+    quarter = 'Q1'; financialYear = year;
+  } else if (month >= 7 && month <= 9) {
+    quarter = 'Q2'; financialYear = year;
+  } else if (month >= 10 && month <= 12) {
+    quarter = 'Q3'; financialYear = year;
+  } else {
+    quarter = 'Q4'; financialYear = year - 1;
+  }
+  
+  return { quarter, year: financialYear };
+}
+
+// Calculate number of days between two dates
+function calculateLeaveDays(fromDate, toDate) {
+  const from = new Date(fromDate);
+  const to = new Date(toDate);
+  const diffTime = Math.abs(to - from);
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; // +1 to include both start and end dates
+  return diffDays;
+}
+
+// Get or create quarterly leave record
+async function getOrCreateQuarterlyLeave(employeeId, year, quarter) {
+  let quarterlyLeave = await QuarterlyLeave.findOne({ employee: employeeId, year, quarter });
+  
+  if (!quarterlyLeave) {
+    // Create new quarterly leave record with default allocations
+    quarterlyLeave = new QuarterlyLeave({
+      employee: employeeId,
+      year,
+      quarter,
+      allocated: { sick: 2, casual: 2, paid: 2 },
+      used: { sick: 0, casual: 0, paid: 0 },
+      carriedForward: { sick: 0, casual: 0, paid: 0 }
+    });
+    await quarterlyLeave.save();
+  }
+  
+  return quarterlyLeave;
+}
+
+// Calculate available leave balance for each type
+function calculateAvailableLeaves(quarterlyLeave) {
+  const available = {};
+  ['sick', 'casual', 'paid'].forEach(type => {
+    const allocated = quarterlyLeave.allocated[type] || 0;
+    const carriedForward = quarterlyLeave.carriedForward[type] || 0;
+    const used = quarterlyLeave.used[type] || 0;
+    available[type] = allocated + carriedForward - used;
+  });
+  return available;
+}
+
+// Carry forward unused leaves to next quarter
+async function carryForwardLeaves(employeeId, fromYear, fromQuarter) {
+  const quarterOrder = ['Q1', 'Q2', 'Q3', 'Q4'];
+  const currentIndex = quarterOrder.indexOf(fromQuarter);
+  
+  let toYear = fromYear;
+  let toQuarter;
+  
+  if (currentIndex === 3) { // Q4 -> Q1 of next year
+    toYear = fromYear + 1;
+    toQuarter = 'Q1';
+  } else {
+    toQuarter = quarterOrder[currentIndex + 1];
+  }
+  
+  const fromQuarterlyLeave = await QuarterlyLeave.findOne({ 
+    employee: employeeId, 
+    year: fromYear, 
+    quarter: fromQuarter 
+  });
+  
+  if (!fromQuarterlyLeave) return;
+  
+  const available = calculateAvailableLeaves(fromQuarterlyLeave);
+  const toQuarterlyLeave = await getOrCreateQuarterlyLeave(employeeId, toYear, toQuarter);
+  
+  // Carry forward ALL unused leaves to next quarter
+  ['sick', 'casual', 'paid'].forEach(type => {
+    const carryForward = available[type]; // Carry forward all available leaves
+    toQuarterlyLeave.carriedForward[type] = carryForward;
+  });
+  
+  await toQuarterlyLeave.save();
+}
+
+// --- End Quarterly Leave Utility Functions ---
+
 // --- Leaves API ---
 
 // Create leave request (employee)
@@ -580,17 +710,48 @@ app.post('/api/leaves', async (req, res) => {
     if (!employeeId || !type || !from || !to) {
       return res.status(400).json({ error: 'All fields are required.' });
     }
+    
     // Validate employee exists
     const emp = await Employee.findById(employeeId);
     if (!emp) return res.status(404).json({ error: 'Employee not found.' });
-    const leave = new Leave({ employee: employeeId, type, from, to, reason });
+    
+    // Calculate leave days and quarter
+    const days = calculateLeaveDays(from, to);
+    const { quarter, year } = getCurrentFinancialQuarter(new Date(from));
+    
+    // Get or create quarterly leave record
+    const quarterlyLeave = await getOrCreateQuarterlyLeave(employeeId, year, quarter);
+    
+    // Check if employee has enough leave balance
+    const available = calculateAvailableLeaves(quarterlyLeave);
+    const leaveType = type.toLowerCase();
+    
+    if (available[leaveType] < days) {
+      return res.status(400).json({ 
+        error: `Insufficient ${type} leave balance. Available: ${available[leaveType]}, Requested: ${days}` 
+      });
+    }
+    
+    // Create leave request
+    const leave = new Leave({ 
+      employee: employeeId, 
+      type, 
+      from, 
+      to, 
+      reason, 
+      quarter, 
+      year, 
+      days 
+    });
     await leave.save();
+    
     // Return leave with employeeId for frontend
     res.status(201).json({
       ...leave.toObject(),
       employeeId: leave.employee.toString()
     });
   } catch (err) {
+    console.error('Leave creation error:', err);
     res.status(400).json({ error: 'Failed to request leave' });
   }
 });
@@ -635,21 +796,58 @@ app.put('/api/leaves/:id', async (req, res) => {
     if (employeeId) {
       if (leave.status !== 'Pending') return res.status(400).json({ error: 'Cannot edit leave after approval/rejection.' });
       if (leave.employee.toString() !== employeeId) return res.status(403).json({ error: 'Not authorized.' });
+      
+      // Calculate new leave days and quarter
+      const newDays = calculateLeaveDays(from, to);
+      const { quarter, year } = getCurrentFinancialQuarter(new Date(from));
+      
+      // Get quarterly leave record
+      const quarterlyLeave = await getOrCreateQuarterlyLeave(employeeId, year, quarter);
+      
+      // Check if employee has enough leave balance (considering the current leave being edited)
+      const available = calculateAvailableLeaves(quarterlyLeave);
+      const leaveType = type.toLowerCase();
+      const currentLeaveType = leave.type.toLowerCase();
+      
+      // Add back the current leave days to available balance if same type
+      let adjustedAvailable = available[leaveType];
+      if (currentLeaveType === leaveType) {
+        adjustedAvailable += leave.days;
+      }
+      
+      if (adjustedAvailable < newDays) {
+        return res.status(400).json({ 
+          error: `Insufficient ${type} leave balance. Available: ${adjustedAvailable}, Requested: ${newDays}` 
+        });
+      }
+      
       leave.type = type;
       leave.from = from;
       leave.to = to;
       leave.reason = reason;
+      leave.quarter = quarter;
+      leave.year = year;
+      leave.days = newDays;
       await leave.save();
       return res.json(leave);
     }
 
     // Admin/superadmin updating status
     if (status && ['Pending', 'Approved', 'Rejected'].includes(status)) {
+      const oldStatus = leave.status;
       leave.status = status;
       await leave.save();
 
-      // If approved, mark attendance as present for each date in the leave range
-      if (status === 'Approved') {
+      // Update quarterly leave balance based on status change
+      const quarterlyLeave = await getOrCreateQuarterlyLeave(leave.employee, leave.year, leave.quarter);
+      const leaveType = leave.type.toLowerCase();
+      
+      if (status === 'Approved' && oldStatus !== 'Approved') {
+        // Deduct from available balance
+        quarterlyLeave.used[leaveType] = (quarterlyLeave.used[leaveType] || 0) + leave.days;
+        await quarterlyLeave.save();
+        
+        // Mark attendance as present for each date in the leave range
         const employee = await Employee.findById(leave.employee);
         if (employee) {
           const fromDate = new Date(leave.from);
@@ -665,12 +863,18 @@ app.put('/api/leaves/:id', async (req, res) => {
           }
           await employee.save();
         }
+      } else if (status === 'Rejected' && oldStatus === 'Approved') {
+        // Add back to available balance
+        quarterlyLeave.used[leaveType] = Math.max(0, (quarterlyLeave.used[leaveType] || 0) - leave.days);
+        await quarterlyLeave.save();
       }
+      
       return res.json(leave);
     }
 
     return res.status(400).json({ error: 'Invalid request.' });
   } catch (err) {
+    console.error('Leave update error:', err);
     res.status(400).json({ error: 'Failed to update leave' });
   }
 });
@@ -689,6 +893,100 @@ app.delete('/api/leaves/:id', async (req, res) => {
     res.status(400).json({ error: 'Failed to delete leave' });
   }
 });
+
+// Get quarterly leave balance for an employee
+app.get('/api/leaves/:employeeId/quarterly-balance', async (req, res) => {
+  try {
+    const { employeeId } = req.params;
+    const { quarter, year } = getCurrentFinancialQuarter();
+    
+    // Get or create quarterly leave record for current quarter
+    const quarterlyLeave = await getOrCreateQuarterlyLeave(employeeId, year, quarter);
+    
+    // Calculate available leaves
+    const available = calculateAvailableLeaves(quarterlyLeave);
+    
+    // Calculate total for each type (allocated + carried forward)
+    const breakdown = {};
+    ['sick', 'casual', 'paid'].forEach(type => {
+      const allocated = quarterlyLeave.allocated[type] || 0;
+      const carriedForward = quarterlyLeave.carriedForward[type] || 0;
+      const used = quarterlyLeave.used[type] || 0;
+      const total = allocated + carriedForward;
+      
+      breakdown[type] = {
+        allocated,
+        carriedForward,
+        used,
+        total,
+        available: available[type]
+      };
+    });
+    
+    res.json({
+      currentQuarter: `${year}-${quarter}`,
+      available,
+      breakdown,
+      quarterlyLeave: {
+        year,
+        quarter,
+        allocated: quarterlyLeave.allocated,
+        used: quarterlyLeave.used,
+        carriedForward: quarterlyLeave.carriedForward
+      }
+    });
+  } catch (err) {
+    console.error('Quarterly balance error:', err);
+    res.status(500).json({ error: 'Failed to fetch quarterly balance' });
+  }
+});
+
+// Test endpoint to manually trigger carry-forward (for testing purposes)
+app.post('/api/leaves/test-carry-forward', async (req, res) => {
+  try {
+    const { employeeId, fromYear, fromQuarter } = req.body;
+    
+    if (!employeeId || !fromYear || !fromQuarter) {
+      return res.status(400).json({ error: 'employeeId, fromYear, and fromQuarter are required' });
+    }
+    
+    // Execute carry-forward
+    await carryForwardLeaves(employeeId, fromYear, fromQuarter);
+    
+    // Get the next quarter details
+    const quarterOrder = ['Q1', 'Q2', 'Q3', 'Q4'];
+    const currentIndex = quarterOrder.indexOf(fromQuarter);
+    
+    let toYear = fromYear;
+    let toQuarter;
+    
+    if (currentIndex === 3) { // Q4 -> Q1 of next year
+      toYear = fromYear + 1;
+      toQuarter = 'Q1';
+    } else {
+      toQuarter = quarterOrder[currentIndex + 1];
+    }
+    
+    // Get the updated quarterly leave for next quarter
+    const nextQuarterLeave = await QuarterlyLeave.findOne({ 
+      employee: employeeId, 
+      year: toYear, 
+      quarter: toQuarter 
+    });
+    
+    res.json({
+      message: 'Carry-forward completed',
+      fromQuarter: `${fromYear}-${fromQuarter}`,
+      toQuarter: `${toYear}-${toQuarter}`,
+      carriedForward: nextQuarterLeave?.carriedForward || {},
+      nextQuarterRecord: nextQuarterLeave
+    });
+  } catch (err) {
+    console.error('Carry-forward test error:', err);
+    res.status(500).json({ error: 'Failed to test carry-forward' });
+  }
+});
+// --- End Leaves API ---
 
 // --- Employees API: filter by role for team selection ---
 app.get('/api/employees', async (req, res) => {
@@ -1300,91 +1598,6 @@ app.get('/api/employees/:id/payslip', async (req, res) => {
 });
 // --- End Reports API ---
 
-// Add this endpoint before app.listen
-app.get('/api/employees/roles-count', async (req, res) => {
-  try {
-    const counts = await Employee.aggregate([
-      {
-        $group: {
-          _id: '$role',
-          count: { $sum: 1 }
-        }
-      }
-    ]);
-    // Convert to { superadmin: X, admin: Y, employee: Z }
-    const result = { superadmin: 0, admin: 0, employee: 0 };
-    counts.forEach(item => {
-      if (item._id === 'superadmin') result.superadmin = item.count;
-      else if (item._id === 'admin') result.admin = item.count;
-      else if (item._id === 'employee') result.employee = item.count;
-    });
-    res.json(result);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// Add this endpoint before app.listen
-app.post('/api/fix-attendance-format', async (req, res) => {
-  try {
-    const employees = await Employee.find({});
-    let fixedCount = 0;
-    for (const emp of employees) {
-      let changed = false;
-      if (Array.isArray(emp.attendance)) {
-        emp.attendance = emp.attendance.map(a => {
-          if (typeof a === 'string') {
-            changed = true;
-            return { date: a, status: 'present' };
-          }
-          return a;
-        });
-        if (changed) {
-          await emp.save();
-          fixedCount++;
-        }
-      }
-    }
-    res.json({ message: `Fixed attendance format for ${fixedCount} employees.` });
-  } catch (err) {
-    res.status(500).json({ error: 'Migration failed' });
-  }
-});
-
-// Get salary details for a specific employee (using percentage-based calculation)
-app.get('/api/employees/:id/salary', async (req, res) => {
-  try {
-    const employee = await Employee.findById(req.params.id);
-    if (!employee) {
-      return res.status(404).json({ error: 'Employee not found' });
-    }
-    
-    // Get the current payroll standards
-    const standards = await getStandardPayrollItems();
-    
-    // Calculate payroll using the standardized function
-    const payrollDetails = calculateEmployeePayroll(employee, standards);
-
-    // Ensure the response has the expected structure
-    const response = {
-      employeeId: employee.employeeId,
-      name: `${employee.firstname} ${employee.lastname}`,
-      basicSalary: payrollDetails.basicSalary,
-      grossSalary: payrollDetails.grossSalary,
-      netSalary: payrollDetails.netSalary,
-      allowances: payrollDetails.allowances,
-      deductions: payrollDetails.deductions,
-      totalAllowances: payrollDetails.totalAllowances,
-      totalDeductions: payrollDetails.totalDeductions
-    };
-    
-    res.json(response);
-  } catch (error) {
-    console.error('Error fetching employee salary:', error);
-    res.status(500).json({ error: 'Failed to fetch salary' });
-  }
-});
-
 // --- Schedule Report Endpoint ---
 app.post('/api/reports/schedule', async (req, res) => {
   try {
@@ -1680,11 +1893,11 @@ app.post('/api/payroll/apply-standards-to-all', async (req, res) => {
       await employee.save();
       updated++;
       
-      console.log(`Applied percentage-based payroll for: ${employee.firstname} ${employee.lastname} (Salary: ₹${employee.salary})`);
+      console.log('Applied percentage-based payroll for: ' + employee.firstname + ' ' + employee.lastname + ' (Salary: Rs.' + employee.salary + ')');
     }
     
     res.json({
-      message: `Applied percentage-based payroll for ${updated} employee(s)`,
+      message: 'Applied percentage-based payroll for ' + updated + ' employee(s)',
       updated,
       standardPayroll
     });
@@ -1694,7 +1907,6 @@ app.post('/api/payroll/apply-standards-to-all', async (req, res) => {
     res.status(500).json({ error: 'Failed to apply standards to all employees' });
   }
 });
-// --- End Payroll Management Endpoints ---
 
 // --- SOCKET.IO SETUP ---
 const server = http.createServer(app);
@@ -1713,7 +1925,7 @@ const documentSchema = new mongoose.Schema({
   title: { type: String, required: true },
   description: { type: String }, // Add description field
   filePath: { type: String, required: true },
-  uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', required: true },
+  uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', required: false },
   uploadedAt: { type: Date, default: Date.now }
 });
 const Document = mongoose.model('Document', documentSchema);
@@ -1734,9 +1946,9 @@ app.get('/api/policies', async (req, res) => {
       _id: policy._id,
       title: policy.title,
       description: policy.description,
-      uploadedBy: policy.uploadedBy ? `${policy.uploadedBy.firstname} ${policy.uploadedBy.lastname}` : 'Admin',
+      uploadedBy: policy.uploadedBy ? (policy.uploadedBy.firstname + ' ' + policy.uploadedBy.lastname) : 'Admin',
       uploadedAt: policy.uploadedAt,
-      fileUrl: `http://localhost:5050${policy.filePath}`, // Full URL for file access
+      fileUrl: 'http://localhost:5050' + policy.filePath, // Full URL for file access
     })));
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch policies' });
@@ -1747,18 +1959,22 @@ app.post('/api/policies', upload.single('file'), async (req, res) => {
   try {
     const { title, description, uploadedBy } = req.body;
     
+    console.log('Policy upload request:', { title, description, uploadedBy, hasFile: !!req.file });
+    
     if (!title || !req.file) {
+      console.log('Missing title or file:', { title: !!title, file: !!req.file });
       return res.status(400).json({ error: 'Title and file are required' });
     }
     
     const policy = new PolicyDoc({
       title,
       description: description || '',
-      filePath: `/uploads/${req.file.filename}`,
-      uploadedBy: uploadedBy || null
+      filePath: '/uploads/' + req.file.filename,
+      uploadedBy: uploadedBy || undefined // Use undefined instead of null for optional ObjectId
     });
     
     await policy.save();
+    console.log('Policy saved successfully:', policy._id);
     
     // Populate uploadedBy for response
     const populatedPolicy = await PolicyDoc.findById(policy._id)
@@ -1768,12 +1984,13 @@ app.post('/api/policies', upload.single('file'), async (req, res) => {
       _id: populatedPolicy._id,
       title: populatedPolicy.title,
       description: populatedPolicy.description,
-      uploadedBy: populatedPolicy.uploadedBy ? `${populatedPolicy.uploadedBy.firstname} ${populatedPolicy.uploadedBy.lastname}` : 'Admin',
+      uploadedBy: populatedPolicy.uploadedBy ? (populatedPolicy.uploadedBy.firstname + ' ' + populatedPolicy.uploadedBy.lastname) : 'Admin',
       uploadedAt: populatedPolicy.uploadedAt,
-      fileUrl: `http://localhost:5050${populatedPolicy.filePath}`,
+      fileUrl: 'http://localhost:5050' + populatedPolicy.filePath,
     });
   } catch (err) {
-    res.status(400).json({ error: 'Failed to upload policy' });
+    console.error('Policy upload error:', err);
+    res.status(400).json({ error: 'Failed to upload policy', details: err.message });
   }
 });
 
@@ -1828,7 +2045,7 @@ app.get('/api/employees/:id/payroll', async (req, res) => {
 
     res.json({
       employeeId: employee.employeeId,
-      name: `${employee.firstname} ${employee.lastname}`,
+      name: employee.firstname + ' ' + employee.lastname,
       ...payrollDetails
     });
   } catch (error) {
@@ -1840,7 +2057,7 @@ app.get('/api/employees/:id/payroll', async (req, res) => {
 // --- End Standard Payroll API Endpoints ---
 
 server.listen(PORT, async () => {
-  console.log(`Server is running on port ${PORT}`);
+  console.log('Server is running on port ' + PORT);
   
   // Initialize payroll standards if not already present
   await initializePayrollStandards();

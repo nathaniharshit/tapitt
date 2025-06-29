@@ -776,18 +776,48 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
 
 // --- Leaves state and logic ---
 const LEAVE_TYPES = [
-  { type: 'Sick', label: 'Sick', limit: 2 },
-  { type: 'Casual', label: 'Casual', limit: 2 },
-  { type: 'Paid', label: 'Paid', limit: 2 }
+  { type: 'Sick', label: 'Sick Leave', limit: 2 },
+  { type: 'Casual', label: 'Casual Leave', limit: 2 },
+  { type: 'Paid', label: 'Paid Leave', limit: 2 }
 ];
 
-// Helper to get current quarter start/end
-function getQuarterRange(date = new Date()) {
+// Helper to get current financial quarter (April-based year)
+function getCurrentFinancialQuarter(date = new Date()) {
+  const month = date.getMonth() + 1; // 1-12
   const year = date.getFullYear();
-  const month = date.getMonth();
-  const quarter = Math.floor(month / 3);
-  const start = new Date(year, quarter * 3, 1);
-  const end = new Date(year, quarter * 3 + 3, 0);
+  
+  let quarter, financialYear;
+  if (month >= 4 && month <= 6) {
+    quarter = 'Q1'; financialYear = year;
+  } else if (month >= 7 && month <= 9) {
+    quarter = 'Q2'; financialYear = year;
+  } else if (month >= 10 && month <= 12) {
+    quarter = 'Q3'; financialYear = year;
+  } else {
+    quarter = 'Q4'; financialYear = year - 1;
+  }
+  
+  return { quarter, year: financialYear, quarterString: `${financialYear}-${quarter}` };
+}
+
+// Helper to get quarter range dates
+function getQuarterRange(date = new Date()) {
+  const month = date.getMonth() + 1;
+  const year = date.getFullYear();
+  
+  let startMonth, endMonth, quarterYear;
+  if (month >= 4 && month <= 6) {
+    startMonth = 4; endMonth = 6; quarterYear = year;
+  } else if (month >= 7 && month <= 9) {
+    startMonth = 7; endMonth = 9; quarterYear = year;
+  } else if (month >= 10 && month <= 12) {
+    startMonth = 10; endMonth = 12; quarterYear = year;
+  } else {
+    startMonth = 1; endMonth = 3; quarterYear = year;
+  }
+  
+  const start = new Date(quarterYear, startMonth - 1, 1);
+  const end = new Date(quarterYear, endMonth, 0);
   return {
     start: start.toISOString().slice(0, 10),
     end: end.toISOString().slice(0, 10)
@@ -809,6 +839,7 @@ function getLeaveTypeCounts(leaves: any[]) {
 }
 
 const [leaves, setLeaves] = useState<any[]>([]);
+const [quarterlyBalance, setQuarterlyBalance] = useState<any>(null);
 const [leaveForm, setLeaveForm] = useState({
   type: 'Sick', // Fix: default to a valid leave type
   from: '',
@@ -837,9 +868,27 @@ const fetchLeaves = useCallback(async () => {
   }
 }, [user?.id, user.role]);
 
+// Fetch quarterly leave balance
+const fetchQuarterlyBalance = useCallback(async () => {
+  try {
+    const res = await fetch(`http://localhost:5050/api/leaves/${user.id}/quarterly-balance`);
+    if (res.ok) {
+      const data = await res.json();
+      setQuarterlyBalance(data);
+    } else {
+      setQuarterlyBalance(null);
+    }
+  } catch {
+    setQuarterlyBalance(null);
+  }
+}, [user?.id]);
+
 useEffect(() => {
-  if (activeTab === 'leaves') fetchLeaves();
-}, [activeTab, fetchLeaves]);
+  if (activeTab === 'leaves') {
+    fetchLeaves();
+    fetchQuarterlyBalance();
+  }
+}, [activeTab, fetchLeaves, fetchQuarterlyBalance]);
 
 // Submit leave request
 const handleLeaveFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
@@ -863,6 +912,7 @@ const handleLeaveSubmit = async (e: React.FormEvent) => {
       setLeaveMsg('Leave requested!');
       setLeaveForm({ type: 'Sick', from: '', to: '', reason: '' });
       fetchLeaves();
+      fetchQuarterlyBalance(); // Refresh balance after request
     } else {
       const err = await resp.json();
       setLeaveMsg('Error: ' + (err.error || 'Could not request leave'));
@@ -888,6 +938,7 @@ const handleLeaveStatus = async (leaveId: string, status: 'Approved' | 'Rejected
       setLeaves(prev =>
         prev.map(l => l._id === leaveId ? { ...l, status } : l)
       );
+      fetchQuarterlyBalance(); // Refresh balance after approval/rejection
     } else {
       const err = await resp.json();
       setLeaveMsg('Error: ' + (err.error || `Could not ${status.toLowerCase()} leave`));
@@ -935,6 +986,7 @@ const handleUpdateLeave = async (e: React.FormEvent) => {
       setEditingLeaveId(null);
       setLeaveForm({ type: 'Sick', from: '', to: '', reason: '' });
       fetchLeaves();
+      fetchQuarterlyBalance(); // Refresh balance after update
     } else {
       const err = await resp.json();
       setLeaveMsg('Error: ' + (err.error || 'Could not update leave'));
@@ -955,6 +1007,7 @@ const handleDeleteLeave = async (leaveId: string) => {
     if (resp.ok) {
       setLeaveMsg('Leave deleted!');
       fetchLeaves();
+      fetchQuarterlyBalance(); // Refresh balance after deletion
     } else {
       const err = await resp.json();
       setLeaveMsg('Error: ' + (err.error || 'Could not delete leave'));
@@ -1985,50 +2038,71 @@ const handleDeleteLeave = async (leaveId: string) => {
           </div>
         );
       case 'leaves':
+        // Calculate if the selected leave type is maxed out for the current quarter
+        const selectedLeaveType = leaveForm.type.toLowerCase();
+        const maxedOut = quarterlyBalance?.available?.[selectedLeaveType] <= 0;
+        
         // Leaves feature: show leave balance, request leave, and leave history
-        const leaveTypeCounts = getLeaveTypeCounts(leaves);
-        const maxedOut = leaveTypeCounts[leaveForm.type] >= 2;
-
         return (
           <div className="p-8">
             {/* Only show leave request form for employees */}
             {user.role === 'employee' && (
               <Card className="max-w-2xl mx-auto mb-8">
                 <CardHeader>
-                  <CardTitle>My Leave Balance (This Quarter)</CardTitle>
+                  <CardTitle>My Leave Balance ({quarterlyBalance?.currentQuarter || 'Current Quarter'})</CardTitle>
+                  <p className="text-sm text-muted-foreground">
+                    Financial Year: April to March | Quarter resets every 3 months
+                  </p>
                 </CardHeader>
                 <CardContent>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
-                    {LEAVE_TYPES.map(lt => (
-                      <Card
-                        key={lt.type}
-                        className={
-                          `rounded-lg p-4 text-center shadow border-2 transition-colors
-                          ${
-                            lt.type === 'Sick'
-                              ? 'border-green-300 dark:border-green-700 bg-green-50 dark:bg-green-900'
-                              : lt.type === 'Casual'
-                              ? 'border-yellow-300 dark:border-yellow-700 bg-yellow-50 dark:bg-yellow-900'
-                              : 'border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-900'
-                          }`
-                        }
-                      >
-                        <div
+                    {LEAVE_TYPES.map(lt => {
+                      const leaveType = lt.type.toLowerCase();
+                      const available = quarterlyBalance?.available?.[leaveType] || 0;
+                      const breakdown = quarterlyBalance?.breakdown?.[leaveType];
+                      
+                      return (
+                        <Card
+                          key={lt.type}
                           className={
-                            `text-2xl font-bold ${
+                            `rounded-lg p-4 text-center shadow border-2 transition-colors
+                            ${
                               lt.type === 'Sick'
-                                ? 'text-green-700 dark:text-green-200'
+                                ? 'border-green-300 dark:border-green-700 bg-green-50 dark:bg-green-900'
                                 : lt.type === 'Casual'
-                                ? 'text-yellow-700 dark:text-yellow-200'
-                                : 'text-blue-700 dark:text-blue-200'
+                                ? 'border-yellow-300 dark:border-yellow-700 bg-yellow-50 dark:bg-yellow-900'
+                                : 'border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-900'
                             }`
                           }
                         >
-                          {lt.limit - (leaveTypeCounts[lt.type] || 0)}
-                        </div>
-                        <div className="text-muted-foreground text-sm">{lt.label} Leaves Left</div>
-                      </Card>
-                    ))}
+                          <div
+                            className={
+                              `text-2xl font-bold ${
+                                lt.type === 'Sick'
+                                  ? 'text-green-700 dark:text-green-200'
+                                  : lt.type === 'Casual'
+                                  ? 'text-yellow-700 dark:text-yellow-200'
+                                  : 'text-blue-700 dark:text-blue-200'
+                              }`
+                            }
+                          >
+                            {available}
+                          </div>
+                          <div className="text-muted-foreground text-sm font-medium">{lt.label} Available</div>
+                          {breakdown && (
+                            <div className="text-xs text-muted-foreground mt-2 space-y-1">
+                              <div>Allocated: {breakdown.allocated}</div>
+                              {breakdown.carriedForward > 0 && (
+                                <div className="text-blue-600 dark:text-blue-400">
+                                  Carried: +{breakdown.carriedForward}
+                                </div>
+                              )}
+                              <div>Used: {breakdown.used}/{breakdown.total}</div>
+                            </div>
+                          )}
+                        </Card>
+                      );
+                    })}
                   </div>
                   <form className="space-y-4" onSubmit={editingLeaveId ? handleUpdateLeave : handleLeaveSubmit}>
                     <div>
