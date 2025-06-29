@@ -2288,7 +2288,12 @@ const handleDeleteLeave = async (leaveId: string) => {
                     <div className="grid grid-cols-2 gap-4">
                       <div className="bg-blue-50 dark:bg-blue-900 rounded p-3 flex flex-col">
                         <span className="font-semibold text-blue-700 dark:text-blue-200">Annual CTC</span>
-                        <span className="text-lg font-bold">{salary !== null && salary !== undefined ? `₹${salary.toLocaleString("en-IN")}` : <span className="text-red-600">Not available</span>}</span>
+                        <span className="text-lg font-bold">
+                          {payrollDetails?.grossMonthlySalary !== undefined 
+                            ? `₹${(payrollDetails.grossMonthlySalary * 12).toLocaleString("en-IN")}` 
+                            : (salary !== null && salary !== undefined ? `₹${salary.toLocaleString("en-IN")}` : <span className="text-red-600">Not available</span>)
+                          }
+                        </span>
                       </div>
                       <div className="bg-purple-50 dark:bg-purple-900 rounded p-3 flex flex-col">
                         <span className="font-semibold text-purple-700 dark:text-purple-200">Monthly Gross Salary</span>

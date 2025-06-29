@@ -1218,6 +1218,10 @@ app.get('/api/employees/:id/payslip', async (req, res) => {
     const emp = await Employee.findById(id);
     if (!emp) return res.status(404).json({ error: 'Employee not found' });
 
+    // Get payroll details
+    const standards = await getStandardPayrollItems();
+    const payrollDetails = calculateEmployeePayroll(emp, standards);
+
     const doc = new PDFDocument();
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename=payslip_${emp.firstname}_${emp.lastname}_${month}.pdf`);
@@ -1240,14 +1244,49 @@ app.get('/api/employees/:id/payslip', async (req, res) => {
     doc.text(`Email: ${emp.email}`);
     doc.text(`Department: ${emp.department || '-'}`);
     doc.text(`Position: ${emp.position || '-'}`);
-    doc.text(`Employee ID: ${emp._id}`);
+    doc.text(`Employee ID: ${emp.employeeId || emp._id}`);
     doc.moveDown();
 
     // Salary Details
     doc.fontSize(14).text('Salary Details', { underline: true });
     doc.moveDown(0.5);
-    doc.fontSize(12).text(`Base Salary: ₹${(emp.salary || 0).toLocaleString('en-IN')}`);
-    // Add more breakdown if needed (e.g., allowances, deductions)
+    
+    // Basic Salary
+    doc.fontSize(12).text(`Basic Salary: ₹${payrollDetails.basicSalary.toLocaleString('en-IN')}`);
+    doc.moveDown(0.5);
+    
+    // Allowances
+    if (payrollDetails.allowances && payrollDetails.allowances.length > 0) {
+      doc.fontSize(13).text('Allowances:', { underline: true });
+      doc.moveDown(0.3);
+      payrollDetails.allowances.forEach(allowance => {
+        doc.fontSize(11).text(`  ${allowance.name} (${allowance.percentage}%): ₹${allowance.amount.toLocaleString('en-IN')}`);
+      });
+      doc.fontSize(12).text(`Total Allowances: ₹${payrollDetails.totalAllowances.toLocaleString('en-IN')}`, { indent: 20 });
+      doc.moveDown(0.5);
+    }
+    
+    // Gross Salary
+    doc.fontSize(12).text(`Gross Salary: ₹${payrollDetails.grossSalary.toLocaleString('en-IN')}`, { underline: true });
+    doc.moveDown(0.5);
+    
+    // Deductions
+    if (payrollDetails.deductions && payrollDetails.deductions.length > 0) {
+      doc.fontSize(13).text('Deductions:', { underline: true });
+      doc.moveDown(0.3);
+      payrollDetails.deductions.forEach(deduction => {
+        doc.fontSize(11).text(`  ${deduction.name} (${deduction.percentage}%): ₹${deduction.amount.toLocaleString('en-IN')}`);
+      });
+      doc.fontSize(12).text(`Total Deductions: ₹${payrollDetails.totalDeductions.toLocaleString('en-IN')}`, { indent: 20 });
+      doc.moveDown(0.5);
+    }
+    
+    // Net Salary
+    doc.fontSize(14).text(`Net Salary: ₹${payrollDetails.netSalary.toLocaleString('en-IN')}`, { underline: true });
+    doc.moveDown();
+    
+    // Annual CTC
+    doc.fontSize(12).text(`Annual CTC: ₹${(payrollDetails.grossSalary * 12).toLocaleString('en-IN')}`);
     doc.moveDown();
 
     // Footer
