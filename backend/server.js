@@ -213,7 +213,7 @@ const Award = mongoose.model('Award', awardSchema);
 // --- Leave Model ---
 const leaveSchema = new mongoose.Schema({
   employee: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', required: true },
-  type: { type: String, enum: ['Sick', 'Casual', 'Paid'], required: true },
+  type: { type: String, enum: ['Sick', 'Casual', 'Paid', 'Unpaid'], required: true },
   from: { type: String, required: true }, // YYYY-MM-DD
   to: { type: String, required: true },   // YYYY-MM-DD
   reason: { type: String },
@@ -253,6 +253,33 @@ quarterlyLeaveSchema.index({ employee: 1, year: 1, quarter: 1 }, { unique: true 
 
 const QuarterlyLeave = mongoose.model('QuarterlyLeave', quarterlyLeaveSchema);
 // --- End Quarterly Leave Model ---
+
+// --- Yearly Leave Model (Financial Year Based) ---
+const yearlyLeaveSchema = new mongoose.Schema({
+  employee: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', required: true },
+  year: { type: Number, required: true }, // Financial year (April to March)
+  allocated: {
+    sick: { type: Number, default: 2 },
+    casual: { type: Number, default: 2 },
+    paid: { type: Number, default: 2 }
+  },
+  used: {
+    sick: { type: Number, default: 0 },
+    casual: { type: Number, default: 0 },
+    paid: { type: Number, default: 0 }
+  },
+  carriedForward: {
+    sick: { type: Number, default: 0 }, // Always 0 - sick leaves don't carry forward
+    casual: { type: Number, default: 0 }, // Always 0 - casual leaves don't carry forward
+    paid: { type: Number, default: 0 } // Can carry forward for 1 year max
+  }
+}, { timestamps: true });
+
+// Compound index for efficient queries
+yearlyLeaveSchema.index({ employee: 1, year: 1 }, { unique: true });
+
+const YearlyLeave = mongoose.model('YearlyLeave', yearlyLeaveSchema);
+// --- End Yearly Leave Model ---
 
 // --- Scheduled Report Model ---
 const scheduledReportSchema = new mongoose.Schema({
@@ -701,6 +728,85 @@ async function carryForwardLeaves(employeeId, fromYear, fromQuarter) {
 
 // --- End Quarterly Leave Utility Functions ---
 
+// --- Financial Year Leave Utility Functions ---
+
+// Get current financial year (April to March)
+function getCurrentFinancialYear(date = new Date()) {
+  const month = date.getMonth() + 1; // 1-12
+  const year = date.getFullYear();
+  
+  let quarter, financialYear;
+  if (month >= 4 && month <= 6) {
+    quarter = 'Q1'; financialYear = year;
+  } else if (month >= 7 && month <= 9) {
+    quarter = 'Q2'; financialYear = year;
+  } else if (month >= 10 && month <= 12) {
+    quarter = 'Q3'; financialYear = year;
+  } else {
+    quarter = 'Q4'; financialYear = year - 1;
+  }
+  
+  return { quarter, year: financialYear };
+}
+
+// Get or create yearly leave record
+async function getOrCreateYearlyLeave(employeeId, year) {
+  let yearlyLeave = await YearlyLeave.findOne({ employee: employeeId, year });
+  
+  if (!yearlyLeave) {
+    // Create new yearly leave record with default allocations (2 each per year)
+    yearlyLeave = new YearlyLeave({
+      employee: employeeId,
+      year,
+      allocated: { sick: 2, casual: 2, paid: 2 },
+      used: { sick: 0, casual: 0, paid: 0 },
+      carriedForward: { sick: 0, casual: 0, paid: 0 }
+    });
+    await yearlyLeave.save();
+  }
+  
+  return yearlyLeave;
+}
+
+// Calculate available leave balance for each type in financial year
+function calculateAvailableYearlyLeaves(yearlyLeave) {
+  const available = {};
+  ['sick', 'casual', 'paid'].forEach(type => {
+    const allocated = yearlyLeave.allocated[type] || 0;
+    const carriedForward = yearlyLeave.carriedForward[type] || 0;
+    const used = yearlyLeave.used[type] || 0;
+    available[type] = allocated + carriedForward - used;
+  });
+  return available;
+}
+
+// Process yearly carry forward for paid leave only (one year max)
+async function processYearlyCarryForward(employeeId, fromYear) {
+  const toYear = fromYear + 1;
+  
+  const fromYearlyLeave = await YearlyLeave.findOne({ 
+    employee: employeeId, 
+    year: fromYear 
+  });
+  
+  if (!fromYearlyLeave) return;
+  
+  const available = calculateAvailableYearlyLeaves(fromYearlyLeave);
+  const toYearlyLeave = await getOrCreateYearlyLeave(employeeId, toYear);
+  
+  // Only carry forward unused PAID leaves (sick and casual reset each year)
+  const paidCarryForward = available.paid > 0 ? available.paid : 0;
+  toYearlyLeave.carriedForward.paid = paidCarryForward;
+  toYearlyLeave.carriedForward.sick = 0; // Reset sick leaves
+  toYearlyLeave.carriedForward.casual = 0; // Reset casual leaves
+  
+  await toYearlyLeave.save();
+  
+  console.log(`Carried forward ${paidCarryForward} paid leaves from ${fromYear} to ${toYear} for employee ${employeeId}`);
+}
+
+// --- End Financial Year Leave Utility Functions ---
+
 // --- Leaves API ---
 
 // Create leave request (employee)
@@ -715,21 +821,24 @@ app.post('/api/leaves', async (req, res) => {
     const emp = await Employee.findById(employeeId);
     if (!emp) return res.status(404).json({ error: 'Employee not found.' });
     
-    // Calculate leave days and quarter
+    // Calculate leave days and financial quarter
     const days = calculateLeaveDays(from, to);
     const { quarter, year } = getCurrentFinancialQuarter(new Date(from));
     
-    // Get or create quarterly leave record
-    const quarterlyLeave = await getOrCreateQuarterlyLeave(employeeId, year, quarter);
-    
-    // Check if employee has enough leave balance
-    const available = calculateAvailableLeaves(quarterlyLeave);
-    const leaveType = type.toLowerCase();
-    
-    if (available[leaveType] < days) {
-      return res.status(400).json({ 
-        error: `Insufficient ${type} leave balance. Available: ${available[leaveType]}, Requested: ${days}` 
-      });
+    // Skip balance checking for unpaid leaves
+    if (type.toLowerCase() !== 'unpaid') {
+      // Get or create quarterly leave record for financial quarter
+      const quarterlyLeave = await getOrCreateQuarterlyLeave(employeeId, year, quarter);
+      
+      // Check if employee has enough leave balance
+      const available = calculateAvailableLeaves(quarterlyLeave);
+      const leaveType = type.toLowerCase();
+      
+      if (available[leaveType] < days) {
+        return res.status(400).json({ 
+          error: `Insufficient ${type} leave balance. Available: ${available[leaveType]}, Requested: ${days}` 
+        });
+      }
     }
     
     // Create leave request
@@ -797,28 +906,31 @@ app.put('/api/leaves/:id', async (req, res) => {
       if (leave.status !== 'Pending') return res.status(400).json({ error: 'Cannot edit leave after approval/rejection.' });
       if (leave.employee.toString() !== employeeId) return res.status(403).json({ error: 'Not authorized.' });
       
-      // Calculate new leave days and quarter
+      // Calculate new leave days and financial quarter
       const newDays = calculateLeaveDays(from, to);
       const { quarter, year } = getCurrentFinancialQuarter(new Date(from));
       
-      // Get quarterly leave record
-      const quarterlyLeave = await getOrCreateQuarterlyLeave(employeeId, year, quarter);
-      
-      // Check if employee has enough leave balance (considering the current leave being edited)
-      const available = calculateAvailableLeaves(quarterlyLeave);
-      const leaveType = type.toLowerCase();
-      const currentLeaveType = leave.type.toLowerCase();
-      
-      // Add back the current leave days to available balance if same type
-      let adjustedAvailable = available[leaveType];
-      if (currentLeaveType === leaveType) {
-        adjustedAvailable += leave.days;
-      }
-      
-      if (adjustedAvailable < newDays) {
-        return res.status(400).json({ 
-          error: `Insufficient ${type} leave balance. Available: ${adjustedAvailable}, Requested: ${newDays}` 
-        });
+      // Skip balance checking for unpaid leaves
+      if (type.toLowerCase() !== 'unpaid') {
+        // Get quarterly leave record for financial quarter
+        const quarterlyLeave = await getOrCreateQuarterlyLeave(employeeId, year, quarter);
+        
+        // Check if employee has enough leave balance (considering the current leave being edited)
+        const available = calculateAvailableLeaves(quarterlyLeave);
+        const leaveType = type.toLowerCase();
+        const currentLeaveType = leave.type.toLowerCase();
+        
+        // Add back the current leave days to available balance if same type
+        let adjustedAvailable = available[leaveType];
+        if (currentLeaveType === leaveType && currentLeaveType !== 'unpaid') {
+          adjustedAvailable += leave.days;
+        }
+        
+        if (adjustedAvailable < newDays) {
+          return res.status(400).json({ 
+            error: `Insufficient ${type} leave balance. Available: ${adjustedAvailable}, Requested: ${newDays}` 
+          });
+        }
       }
       
       leave.type = type;
@@ -838,16 +950,25 @@ app.put('/api/leaves/:id', async (req, res) => {
       leave.status = status;
       await leave.save();
 
-      // Update quarterly leave balance based on status change
-      const quarterlyLeave = await getOrCreateQuarterlyLeave(leave.employee, leave.year, leave.quarter);
-      const leaveType = leave.type.toLowerCase();
-      
-      if (status === 'Approved' && oldStatus !== 'Approved') {
-        // Deduct from available balance
-        quarterlyLeave.used[leaveType] = (quarterlyLeave.used[leaveType] || 0) + leave.days;
-        await quarterlyLeave.save();
+      // Skip quarterly leave balance updates for unpaid leaves
+      if (leave.type.toLowerCase() !== 'unpaid') {
+        // Update quarterly leave balance based on status change
+        const quarterlyLeave = await getOrCreateQuarterlyLeave(leave.employee, leave.year, leave.quarter);
+        const leaveType = leave.type.toLowerCase();
         
-        // Mark attendance as present for each date in the leave range
+        if (status === 'Approved' && oldStatus !== 'Approved') {
+          // Deduct from available balance
+          quarterlyLeave.used[leaveType] = (quarterlyLeave.used[leaveType] || 0) + leave.days;
+          await quarterlyLeave.save();
+        } else if (status === 'Rejected' && oldStatus === 'Approved') {
+          // Add back to available balance
+          quarterlyLeave.used[leaveType] = Math.max(0, (quarterlyLeave.used[leaveType] || 0) - leave.days);
+          await quarterlyLeave.save();
+        }
+      }
+      
+      // Mark attendance as present for each date in the leave range (for all approved leaves)
+      if (status === 'Approved' && oldStatus !== 'Approved') {
         const employee = await Employee.findById(leave.employee);
         if (employee) {
           const fromDate = new Date(leave.from);
@@ -863,10 +984,6 @@ app.put('/api/leaves/:id', async (req, res) => {
           }
           await employee.save();
         }
-      } else if (status === 'Rejected' && oldStatus === 'Approved') {
-        // Add back to available balance
-        quarterlyLeave.used[leaveType] = Math.max(0, (quarterlyLeave.used[leaveType] || 0) - leave.days);
-        await quarterlyLeave.save();
       }
       
       return res.json(leave);
@@ -900,7 +1017,7 @@ app.get('/api/leaves/:employeeId/quarterly-balance', async (req, res) => {
     const { employeeId } = req.params;
     const { quarter, year } = getCurrentFinancialQuarter();
     
-    // Get or create quarterly leave record for current quarter
+    // Get or create quarterly leave record for current financial quarter
     const quarterlyLeave = await getOrCreateQuarterlyLeave(employeeId, year, quarter);
     
     // Calculate available leaves
@@ -925,6 +1042,7 @@ app.get('/api/leaves/:employeeId/quarterly-balance', async (req, res) => {
     
     res.json({
       currentQuarter: `${year}-${quarter}`,
+      currentFinancialYear: `${year}-${year + 1}`,
       available,
       breakdown,
       quarterlyLeave: {
@@ -938,6 +1056,65 @@ app.get('/api/leaves/:employeeId/quarterly-balance', async (req, res) => {
   } catch (err) {
     console.error('Quarterly balance error:', err);
     res.status(500).json({ error: 'Failed to fetch quarterly balance' });
+  }
+});
+// Keep financial year endpoint for backward compatibility but redirect to quarterly logic
+app.get('/api/leaves/:employeeId/financial-year-balance', async (req, res) => {
+  try {
+    const { employeeId } = req.params;
+    const { quarter, year } = getCurrentFinancialQuarter();
+    
+    // Get or create quarterly leave record for current financial quarter
+    const quarterlyLeave = await getOrCreateQuarterlyLeave(employeeId, year, quarter);
+    
+    // Calculate available leaves
+    const available = calculateAvailableLeaves(quarterlyLeave);
+    
+    // Calculate total for each type (allocated + carried forward)
+    const breakdown = {};
+    ['sick', 'casual', 'paid'].forEach(type => {
+      const allocated = quarterlyLeave.allocated[type] || 0;
+      const carriedForward = quarterlyLeave.carriedForward[type] || 0;
+      const used = quarterlyLeave.used[type] || 0;
+      const total = allocated + carriedForward;
+      
+      breakdown[type] = {
+        allocated,
+        carriedForward,
+        used,
+        total,
+        available: available[type]
+      };
+    });
+    
+    res.json({
+      currentFinancialYear: `${year}-${year + 1}`,
+      currentQuarter: `${year}-${quarter}`,
+      available,
+      breakdown,
+      yearlyLeave: {
+        year,
+        quarter,
+        allocated: quarterlyLeave.allocated,
+        used: quarterlyLeave.used,
+        carriedForward: quarterlyLeave.carriedForward
+      }
+    });
+  } catch (err) {
+    console.error('Financial year balance error:', err);
+    res.status(500).json({ error: 'Failed to fetch financial year balance' });
+  }
+});
+
+// Debug endpoint to get raw QuarterlyLeave records
+app.get('/api/leaves/:employeeId/quarterly-leave-debug', async (req, res) => {
+  try {
+    const { employeeId } = req.params;
+    const quarterlyLeaves = await QuarterlyLeave.find({ employee: employeeId }).sort({ year: -1, quarter: -1 });
+    res.json(quarterlyLeaves);
+  } catch (err) {
+    console.error('QuarterlyLeave debug error:', err);
+    res.status(500).json({ error: 'Failed to fetch quarterly leave records' });
   }
 });
 
@@ -984,6 +1161,53 @@ app.post('/api/leaves/test-carry-forward', async (req, res) => {
   } catch (err) {
     console.error('Carry-forward test error:', err);
     res.status(500).json({ error: 'Failed to test carry-forward' });
+  }
+});
+
+// Calculate salary impact for unpaid leave
+app.post('/api/leaves/calculate-unpaid-impact', async (req, res) => {
+  try {
+    const { employeeId, days, month } = req.body;
+    
+    if (!employeeId || !days) {
+      return res.status(400).json({ error: 'Employee ID and days are required' });
+    }
+    
+    const employee = await Employee.findById(employeeId);
+    if (!employee) {
+      return res.status(404).json({ error: 'Employee not found' });
+    }
+    
+    const annualSalary = employee.salary || 0;
+    const monthlySalary = annualSalary / 12;
+    
+    // Calculate days in the specified month or current month
+    let daysInMonth;
+    if (month) {
+      const [year, monthNum] = month.split('-');
+      daysInMonth = new Date(parseInt(year), parseInt(monthNum), 0).getDate();
+    } else {
+      const now = new Date();
+      daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    }
+    
+    const perDaySalary = monthlySalary / daysInMonth;
+    const salaryDeduction = perDaySalary * days;
+    const netSalary = monthlySalary - salaryDeduction;
+    
+    res.json({
+      employeeId,
+      employeeName: `${employee.firstname} ${employee.lastname}`,
+      unpaidLeaveDays: days,
+      monthlySalary: Math.round(monthlySalary * 100) / 100,
+      perDaySalary: Math.round(perDaySalary * 100) / 100,
+      salaryDeduction: Math.round(salaryDeduction * 100) / 100,
+      netSalaryAfterDeduction: Math.round(netSalary * 100) / 100,
+      daysInMonth
+    });
+  } catch (err) {
+    console.error('Unpaid leave calculation error:', err);
+    res.status(500).json({ error: 'Failed to calculate unpaid leave impact' });
   }
 });
 // --- End Leaves API ---
