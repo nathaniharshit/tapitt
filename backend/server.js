@@ -803,6 +803,23 @@ function calculateLeaveDays(fromDate, toDate) {
   return diffDays;
 }
 
+// Calculate number of working days (excluding weekends) between two dates
+function calculateWorkingDays(startDate, endDate) {
+  let count = 0;
+  const curDate = new Date(startDate.getTime());
+  
+  while (curDate <= endDate) {
+    const dayOfWeek = curDate.getDay();
+    // 0 = Sunday, 6 = Saturday
+    if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+      count++;
+    }
+    curDate.setDate(curDate.getDate() + 1);
+  }
+  
+  return count;
+}
+
 // Get or create quarterly leave record
 async function getOrCreateQuarterlyLeave(employeeId, year, quarter) {
   let quarterlyLeave = await QuarterlyLeave.findOne({ employee: employeeId, year, quarter });
@@ -971,6 +988,26 @@ app.post('/api/leaves', async (req, res) => {
     const emp = await Employee.findById(employeeId);
     if (!emp) return res.status(404).json({ error: 'Employee not found.' });
     
+    // Validate notice period for different leave types
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Set to beginning of day for accurate comparison
+    const fromDate = new Date(from);
+    fromDate.setHours(0, 0, 0, 0);
+    
+    // Calculate working days between today and the leave start date
+    const workingDaysBetween = calculateWorkingDays(today, fromDate);
+    
+    // Apply different notice period requirements based on leave type
+    if (type.toLowerCase() === 'casual' && workingDaysBetween < 5) {
+      return res.status(400).json({ 
+        error: 'Casual leave requires a minimum of 5 working days\' prior notice.' 
+      });
+    } else if (type.toLowerCase() === 'paid' && workingDaysBetween < 15) {
+      return res.status(400).json({ 
+        error: 'Paid leave requires a minimum of 15 working days\' prior notice.' 
+      });
+    }
+    
     // Calculate leave days and financial quarter
     const days = calculateLeaveDays(from, to);
     const { quarter, year } = getCurrentFinancialQuarter(new Date(from));
@@ -1055,6 +1092,28 @@ app.put('/api/leaves/:id', async (req, res) => {
     if (employeeId) {
       if (leave.status !== 'Pending') return res.status(400).json({ error: 'Cannot edit leave after approval/rejection.' });
       if (leave.employee.toString() !== employeeId) return res.status(403).json({ error: 'Not authorized.' });
+      
+      // Validate notice period for different leave types when updating
+      if (from !== leave.from || type !== leave.type) {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0); // Set to beginning of day for accurate comparison
+        const fromDate = new Date(from);
+        fromDate.setHours(0, 0, 0, 0);
+        
+        // Calculate working days between today and the leave start date
+        const workingDaysBetween = calculateWorkingDays(today, fromDate);
+        
+        // Apply different notice period requirements based on leave type
+        if (type.toLowerCase() === 'casual' && workingDaysBetween < 5) {
+          return res.status(400).json({ 
+            error: 'Casual leave requires a minimum of 5 working days\' prior notice.' 
+          });
+        } else if (type.toLowerCase() === 'paid' && workingDaysBetween < 15) {
+          return res.status(400).json({ 
+            error: 'Paid leave requires a minimum of 15 working days\' prior notice.' 
+          });
+        }
+      }
       
       // Calculate new leave days and financial quarter
       const newDays = calculateLeaveDays(from, to);
@@ -1532,26 +1591,15 @@ app.post('/api/leave-allocations/apply-to-future', async (req, res) => {
   try {
     const newAllocations = await getLeaveAllocations();
     const { quarter, year } = getCurrentFinancialQuarter();
-    
-    // Find all employees
     const employees = await Employee.find({});
     let updated = 0;
-    
     for (const employee of employees) {
-      // Update current quarter's allocation (if exists)
-      const currentQuarterLeave = await QuarterlyLeave.findOne({ 
-        employee: employee._id, 
-        year, 
-        quarter 
-      });
-      
-      if (currentQuarterLeave) {
-        currentQuarterLeave.allocated = newAllocations;
-        await currentQuarterLeave.save();
-        updated++;
-      }
+      // Use getOrCreateQuarterlyLeave to ensure record exists
+      const currentQuarterLeave = await getOrCreateQuarterlyLeave(employee._id, year, quarter);
+      currentQuarterLeave.allocated = newAllocations;
+      await currentQuarterLeave.save();
+      updated++;
     }
-    
     res.json({
       message: `Applied new leave allocations to ${updated} employee(s) for current quarter ${year}-${quarter}`,
       updated,
@@ -1933,6 +1981,7 @@ app.post('/api/employees/:id/remote', async (req, res) => {
 });
 
 // Employee requests remote work for a date (creates a pending request)
+
 app.post('/api/employees/:id/remote-request', async (req, res) => {
   try {
     const { date } = req.body;
@@ -2076,4 +2125,132 @@ app.get('/api/employees/:id/attendance', async (req, res) => {
 });
 
 // --- End Employee Management & Authentication Endpoints ---
+
+// --- Payroll Endpoints ---
+
+// Generate and download payslip
+app.get('/api/employees/:id/payslip', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { month } = req.query;
+    
+    if (!id || !month) {
+      return res.status(400).json({ error: 'Employee ID and month are required' });
+    }
+    
+    // Find employee
+    const employee = await Employee.findById(id);
+    if (!employee) {
+      return res.status(404).json({ error: 'Employee not found' });
+    }
+    
+    // Get employee's salary info
+    const standardPayroll = await getStandardPayrollItems();
+    let payrollData;
+    
+    if (!employee.allowances || !employee.deductions) {
+      payrollData = calculateEmployeePayroll(employee, standardPayroll);
+    } else {
+      payrollData = {
+        allowances: employee.allowances,
+        deductions: employee.deductions,
+        totalAllowances: Object.values(employee.allowances || {}).reduce((sum, val) => sum + val, 0),
+        totalDeductions: Object.values(employee.deductions || {}).reduce((sum, val) => sum + val, 0),
+        grossSalary: (employee.salary || 0) / 12 + Object.values(employee.allowances || {}).reduce((sum, val) => sum + val, 0),
+        netSalary: ((employee.salary || 0) / 12) 
+                   + Object.values(employee.allowances || {}).reduce((sum, val) => sum + val, 0)
+                   - Object.values(employee.deductions || {}).reduce((sum, val) => sum + val, 0)
+      };
+    }
+    
+    // Parse month format (YYYY-MM)
+    const [year, monthNum] = month.split('-');
+    const monthName = new Date(parseInt(year), parseInt(monthNum) - 1).toLocaleString('default', { month: 'long' });
+    
+    // Create PDF document
+    const doc = new PDFDocument();
+    
+    // Set response headers for PDF download
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=payslip_${id}_${month}.pdf`);
+    
+    // Pipe the PDF to the response
+    doc.pipe(res);
+    
+    // Build the PDF content
+    doc.fontSize(20).text('TAPITT TECHNOLOGIES', { align: 'center' });
+    doc.fontSize(16).text(`Employee Payslip - ${monthName} ${year}`, { align: 'center' });
+    doc.moveDown();
+    
+    // Employee details section
+    doc.fontSize(12).text('Employee Details', { underline: true });
+    doc.moveDown(0.5);
+    doc.fontSize(10).text(`Name: ${employee.firstname} ${employee.lastname}`);
+    doc.fontSize(10).text(`Employee ID: ${employee._id}`);
+    doc.fontSize(10).text(`Department: ${employee.department || 'N/A'}`);
+    doc.fontSize(10).text(`Designation: ${employee.designation || 'N/A'}`);
+    doc.moveDown();
+    
+    // Salary details
+    doc.fontSize(12).text('Salary Details', { underline: true });
+    doc.moveDown(0.5);
+    doc.fontSize(10).text(`Basic Salary: ₹${((employee.salary || 0) / 12).toFixed(2)}`);
+    
+    // Allowances
+    doc.moveDown();
+    doc.fontSize(12).text('Allowances', { underline: true });
+    doc.moveDown(0.5);
+    for (const [key, value] of Object.entries(payrollData.allowances || {})) {
+      const numValue = typeof value === 'number' ? value : parseFloat(value) || 0;
+      doc.fontSize(10).text(`${key.charAt(0).toUpperCase() + key.slice(1)}: ₹${numValue.toFixed(2)}`);
+    }
+    const totalAllowances = typeof payrollData.totalAllowances === 'number' ? payrollData.totalAllowances : 0;
+    doc.fontSize(10).text(`Total Allowances: ₹${totalAllowances.toFixed(2)}`);
+    
+    // Deductions
+    doc.moveDown();
+    doc.fontSize(12).text('Deductions', { underline: true });
+    doc.moveDown(0.5);
+    for (const [key, value] of Object.entries(payrollData.deductions || {})) {
+      const numValue = typeof value === 'number' ? value : parseFloat(value) || 0;
+      doc.fontSize(10).text(`${key.charAt(0).toUpperCase() + key.slice(1)}: ₹${numValue.toFixed(2)}`);
+    }
+    const totalDeductions = typeof payrollData.totalDeductions === 'number' ? payrollData.totalDeductions : 0;
+    doc.fontSize(10).text(`Total Deductions: ₹${totalDeductions.toFixed(2)}`);
+    
+    // Summary
+    doc.moveDown();
+    doc.fontSize(12).text('Payment Summary', { underline: true });
+    doc.moveDown(0.5);
+    const grossSalary = typeof payrollData.grossSalary === 'number' ? payrollData.grossSalary : 0;
+    const netSalary = typeof payrollData.netSalary === 'number' ? payrollData.netSalary : 0;
+    doc.fontSize(10).text(`Gross Salary: ₹${grossSalary.toFixed(2)}`);
+    doc.fontSize(10).text(`Net Salary: ₹${netSalary.toFixed(2)}`);
+    
+    // Footer
+    doc.moveDown(2);
+    doc.fontSize(8).text('This is a computer-generated document. No signature required.', { align: 'center' });
+    doc.fontSize(8).text(`Generated on: ${new Date().toLocaleDateString()}`, { align: 'center' });
+    
+    // Finalize the PDF
+    doc.end();
+    
+  } catch (error) {
+    console.error('Error generating payslip:', error);
+    
+    // Check if headers have been sent to avoid "write after end" errors
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Failed to generate payslip' });
+    } else {
+      // If headers already sent, just end the response
+      try {
+        res.end();
+      } catch (err) {
+        console.error('Error ending response:', err);
+      }
+    }
+  }
+});
+
+// --- Standard API Endpoints ---
 

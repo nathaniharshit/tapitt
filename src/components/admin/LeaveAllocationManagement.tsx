@@ -104,7 +104,7 @@ const LeaveAllocationManagement: React.FC = () => {
 
       if (response.ok) {
         const data = await response.json();
-        setMessage(`${data.message}. Note: This updates current quarter allocations for all employees.`);
+        setMessage(`${data.message}. Note: This updates current quarter allocations for all employees. Employees will need to refresh their leave page to see the changes.`);
         setMessageType('success');
       } else {
         const errorData = await response.json();
@@ -284,9 +284,31 @@ const LeaveAllocationManagement: React.FC = () => {
           <ul className="text-sm text-blue-800 space-y-1">
             <li>• Changes apply automatically to new quarters</li>
             <li>• Use "Apply to Current Quarter" to update existing allocations</li>
-            <li>• Employees will see updated balances in their leave section</li>
+            <li>• Employees will need to refresh their leave page to see the updated balances</li>
             <li>• All unused leaves are carried forward to the next quarter</li>
           </ul>
+        </div>
+        
+        {/* Leave Policy Information */}
+        <div className="mt-4 bg-green-50 border border-green-200 rounded-lg p-4">
+          <h4 className="font-medium text-green-900 mb-2">Leave Application Policies:</h4>
+          <ul className="text-sm text-green-800 space-y-1">
+            <li>• <span className="font-medium">Sick Leave:</span> Can be applied at any time</li>
+            <li>• <span className="font-medium">Casual Leave:</span> Requires 5 working days' prior notice</li>
+            <li>• <span className="font-medium">Paid Leave:</span> Requires 15 working days' prior notice</li>
+            <li>• <span className="font-medium">Unpaid Leave:</span> No notice requirement (salary deduction)</li>
+          </ul>
+          <p className="text-xs text-green-800 mt-2 italic">
+            These requirements are enforced by the system when employees apply for leave.
+          </p>
+        </div>
+        
+        {/* Admin Notice */}
+        <div className="mt-4 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+          <h4 className="font-medium text-yellow-900 mb-2">Important Notice:</h4>
+          <p className="text-sm text-yellow-800">
+            When you apply changes to the current quarter, please notify employees to refresh their leave page to see the updated allocations.
+          </p>
         </div>
       </CardContent>
     </Card>

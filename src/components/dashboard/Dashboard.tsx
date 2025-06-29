@@ -815,10 +815,21 @@ const fetchLeaves = useCallback(async () => {
 // Fetch yearly leave balance (financial year)
 const fetchQuarterlyBalance = useCallback(async () => {
   try {
-    const res = await fetch(`http://localhost:5050/api/leaves/${user.id}/quarterly-balance`);
+    // Add cache-busting timestamp to ensure we get the latest data
+    const timestamp = new Date().getTime();
+    const res = await fetch(`http://localhost:5050/api/leaves/${user.id}/quarterly-balance?t=${timestamp}`, {
+      headers: {
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache'
+      }
+    });
     if (res.ok) {
       const data = await res.json();
-      setQuarterlyBalance(data);
+      // Add a timestamp to the data when it was last fetched
+      setQuarterlyBalance({
+        ...data,
+        lastUpdated: new Date().toLocaleTimeString()
+      });
     } else {
       setQuarterlyBalance(null);
     }
@@ -839,10 +850,48 @@ const handleLeaveFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelec
   setLeaveForm({ ...leaveForm, [e.target.name]: e.target.value });
 };
 
+// Calculate working days between two dates (for frontend validation)
+const calculateWorkingDays = (startDate: Date, endDate: Date): number => {
+  let count = 0;
+  const curDate = new Date(startDate.getTime());
+  
+  while (curDate <= endDate) {
+    const dayOfWeek = curDate.getDay();
+    // 0 = Sunday, 6 = Saturday
+    if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+      count++;
+    }
+    curDate.setDate(curDate.getDate() + 1);
+  }
+  
+  return count;
+};
+
 const handleLeaveSubmit = async (e: React.FormEvent) => {
   e.preventDefault();
   setLeaveMsg('');
   setLeaveLoading(true);
+  
+  // Frontend validation for notice period
+  const today = new Date();
+  today.setHours(0, 0, 0, 0); // Set to beginning of day
+  const fromDate = new Date(leaveForm.from);
+  fromDate.setHours(0, 0, 0, 0);
+  
+  // Calculate working days notice
+  const workingDaysNotice = calculateWorkingDays(today, fromDate);
+  
+  // Validate notice periods
+  if (leaveForm.type === 'Casual' && workingDaysNotice < 5) {
+    setLeaveMsg('Error: Casual leave requires a minimum of 5 working days\' prior notice.');
+    setLeaveLoading(false);
+    return;
+  } else if (leaveForm.type === 'Paid' && workingDaysNotice < 15) {
+    setLeaveMsg('Error: Paid leave requires a minimum of 15 working days\' prior notice.');
+    setLeaveLoading(false);
+    return;
+  }
+  
   try {
     const resp = await fetch('http://localhost:5050/api/leaves', {
       method: 'POST',
@@ -916,6 +965,33 @@ const handleUpdateLeave = async (e: React.FormEvent) => {
   e.preventDefault();
   setLeaveMsg('');
   setLeaveLoading(true);
+  
+  // Frontend validation for notice period
+  const today = new Date();
+  today.setHours(0, 0, 0, 0); // Set to beginning of day
+  const fromDate = new Date(leaveForm.from);
+  fromDate.setHours(0, 0, 0, 0);
+  
+  // Calculate working days notice
+  const workingDaysNotice = calculateWorkingDays(today, fromDate);
+  
+  // Find the existing leave to check if dates/type changed
+  const existingLeave = leaves.find(l => l._id === editingLeaveId);
+  
+  // Only validate if the from date or leave type changed
+  if (existingLeave && (leaveForm.from !== existingLeave.from || leaveForm.type !== existingLeave.type)) {
+    // Validate notice periods
+    if (leaveForm.type === 'Casual' && workingDaysNotice < 5) {
+      setLeaveMsg('Error: Casual leave requires a minimum of 5 working days\' prior notice.');
+      setLeaveLoading(false);
+      return;
+    } else if (leaveForm.type === 'Paid' && workingDaysNotice < 15) {
+      setLeaveMsg('Error: Paid leave requires a minimum of 15 working days\' prior notice.');
+      setLeaveLoading(false);
+      return;
+    }
+  }
+  
   try {
     const resp = await fetch(`http://localhost:5050/api/leaves/${editingLeaveId}`, {
       method: 'PUT',
@@ -1138,11 +1214,49 @@ const handleDeleteLeave = async (leaveId: string) => {
   const handleDownloadPayslipForMonth = async (month: string) => {
     setPayslipError(null);
     try {
-      const response = await fetch(`http://localhost:5050/api/employees/${user.id}/payslip?month=${month}`);
-      if (!response.ok) {
-        setPayslipError('Failed to download payslip.');
+      // Add loading indicator
+      const loadingEl = document.createElement('div');
+      loadingEl.style.position = 'fixed';
+      loadingEl.style.top = '50%';
+      loadingEl.style.left = '50%';
+      loadingEl.style.transform = 'translate(-50%, -50%)';
+      loadingEl.style.padding = '20px';
+      loadingEl.style.background = 'rgba(0,0,0,0.7)';
+      loadingEl.style.color = 'white';
+      loadingEl.style.borderRadius = '5px';
+      loadingEl.style.zIndex = '9999';
+      loadingEl.textContent = 'Downloading payslip...';
+      document.body.appendChild(loadingEl);
+      
+      // Make sure the server is available before attempting download
+      const checkServerResponse = await fetch('http://localhost:5050/api/leave-allocations', { 
+        method: 'GET',
+        headers: { 'Cache-Control': 'no-cache' }
+      }).catch(() => null);
+      
+      if (!checkServerResponse || !checkServerResponse.ok) {
+        document.body.removeChild(loadingEl);
+        setPayslipError('Server not available. Please ensure the server is running.');
         return;
       }
+      
+      const response = await fetch(`http://localhost:5050/api/employees/${user.id}/payslip?month=${month}`);
+      
+      // Remove loading indicator
+      document.body.removeChild(loadingEl);
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        setPayslipError(`Failed to download payslip: ${errorData.error || 'Server error'}`);
+        return;
+      }
+      
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/pdf')) {
+        setPayslipError('Received invalid response from server. Please try again later.');
+        return;
+      }
+      
       const blob = await response.blob();
       const link = document.createElement('a');
       link.href = window.URL.createObjectURL(blob);
@@ -1150,8 +1264,9 @@ const handleDeleteLeave = async (leaveId: string) => {
       document.body.appendChild(link);
       link.click();
       link.remove();
-    } catch {
-      setPayslipError('Failed to download payslip.');
+    } catch (error) {
+      console.error('Payslip download error:', error);
+      setPayslipError('Failed to download payslip. Please check if the server is running.');
     }
   };
 
@@ -1987,6 +2102,59 @@ const handleDeleteLeave = async (leaveId: string) => {
         const selectedLeaveType = leaveForm.type.toLowerCase();
         const maxedOut = leaveForm.type !== 'Unpaid' && quarterlyBalance?.available?.[selectedLeaveType] <= 0;
         
+        // Helper function to get quarter date range
+        const getQuarterDateRange = (currentQuarter: string) => {
+          if (!currentQuarter) return '';
+          
+          // Handle both formats: "2025-Q1" and "2025-1"
+          let year, quarterNum;
+          if (currentQuarter.includes('Q')) {
+            [year, quarterNum] = currentQuarter.split('-Q');
+            quarterNum = parseInt(quarterNum);
+          } else {
+            [year, quarterNum] = currentQuarter.split('-');
+            quarterNum = parseInt(quarterNum);
+          }
+          
+          const yearNum = parseInt(year);
+          
+          const quarters = {
+            1: { start: 'Apr', end: 'Jun' },
+            2: { start: 'Jul', end: 'Sep' },
+            3: { start: 'Oct', end: 'Dec' },
+            4: { start: 'Jan', end: 'Mar' }
+          };
+          
+          const q = quarters[quarterNum as keyof typeof quarters];
+          if (!q) return '';
+          
+          // For Q4 (Jan-Mar), it's the next calendar year
+          const displayYear = quarterNum === 4 ? yearNum + 1 : yearNum;
+          return `${q.start} - ${q.end} ${displayYear}`;
+        };
+
+        // Helper function to get next quarter start month
+        const getNextQuarterStart = (currentQuarter: string) => {
+          if (!currentQuarter) return '';
+          
+          // Handle both formats: "2025-Q1" and "2025-1"
+          let quarterNum;
+          if (currentQuarter.includes('Q')) {
+            quarterNum = parseInt(currentQuarter.split('-Q')[1]);
+          } else {
+            quarterNum = parseInt(currentQuarter.split('-')[1]);
+          }
+          
+          const nextQuarterStarts = {
+            1: 'July',     // Q1 (Apr-Jun) → Q2 starts July 1st
+            2: 'October',  // Q2 (Jul-Sep) → Q3 starts October 1st  
+            3: 'January',  // Q3 (Oct-Dec) → Q4 starts January 1st
+            4: 'April'     // Q4 (Jan-Mar) → Q1 starts April 1st
+          };
+          
+          return nextQuarterStarts[quarterNum as keyof typeof nextQuarterStarts] || '';
+        };
+
         // Leaves feature: show leave balance, request leave, and leave history
         return (
           <div className="p-8">
@@ -1994,9 +2162,40 @@ const handleDeleteLeave = async (leaveId: string) => {
             {user.role === 'employee' && (
               <Card className="max-w-2xl mx-auto mb-8">
                 <CardHeader>
-                  <CardTitle>My Leave Balance ({quarterlyBalance?.currentFinancialYear || 'Current Financial Year'})</CardTitle>
+                  <div className="flex justify-between items-center">
+                    <CardTitle>My Leave Balance ({quarterlyBalance?.currentQuarter || 'Current Quarter'})</CardTitle>
+                    <button 
+                      onClick={() => {
+                        fetchQuarterlyBalance();
+                        // Show a small toast or notification that data is refreshed
+                        setLeaveMsg("Leave balances refreshed!");
+                        // Clear the message after 3 seconds
+                        setTimeout(() => setLeaveMsg(""), 3000);
+                      }}
+                      className="flex items-center gap-1 px-2 py-1 text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-md transition-colors"
+                      title="Refresh leave balances"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M21 2v6h-6"></path>
+                        <path d="M3 12a9 9 0 0 1 15-6.7L21 8"></path>
+                        <path d="M3 22v-6h6"></path>
+                        <path d="M21 12a9 9 0 0 1-15 6.7L3 16"></path>
+                      </svg>
+                      Refresh
+                    </button>
+                  </div>
                   <p className="text-sm text-muted-foreground">
-                    Financial Year: April to March | Leave allocations reset annually
+                    {quarterlyBalance?.currentQuarter && (
+                      <span className="inline-block mr-3">
+                        📅 {getQuarterDateRange(quarterlyBalance.currentQuarter)}
+                      </span>
+                    )}
+                    Quarterly System: Allocations refresh every quarter | Unused leaves carry forward
+                    {quarterlyBalance?.lastUpdated && (
+                      <span className="block text-xs text-gray-500 mt-1">
+                        Last updated: {quarterlyBalance.lastUpdated}
+                      </span>
+                    )}
                   </p>
                 </CardHeader>
                 <CardContent>
@@ -2067,6 +2266,35 @@ const handleDeleteLeave = async (leaveId: string) => {
                       );
                     })}
                   </div>
+                  
+                  {/* Quarter Information Box */}
+                  {quarterlyBalance?.currentQuarter && (
+                    <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="text-blue-600 dark:text-blue-400">ℹ️</span>
+                        <span className="text-sm font-medium text-blue-700 dark:text-blue-300">
+                          Quarter Information
+                        </span>
+                      </div>
+                      <div className="text-sm text-blue-600 dark:text-blue-400 space-y-1">
+                        <div>• Current Period: {getQuarterDateRange(quarterlyBalance.currentQuarter)}</div>
+                        <div>• Leave allocations are refreshed at the start of each quarter</div>
+                        <div>• Unused leaves automatically carry forward to the next quarter</div>
+                        <div>• Next quarter begins on the 1st of {getNextQuarterStart(quarterlyBalance.currentQuarter)}</div>
+                        
+                        <div className="mt-3 font-medium">Leave Application Policies:</div>
+                        <div className="ml-2">• <span className="font-medium">Sick Leave:</span> Can be applied at any time</div>
+                        <div className="ml-2">• <span className="font-medium">Casual Leave:</span> Requires 5 working days' prior notice</div>
+                        <div className="ml-2">• <span className="font-medium">Paid Leave:</span> Requires 15 working days' prior notice</div>
+                        <div className="ml-2">• <span className="font-medium">Unpaid Leave:</span> No notice requirement, but results in salary deduction</div>
+                        
+                        <div className="mt-2 p-2 bg-blue-100 dark:bg-blue-800 rounded border border-blue-300 dark:border-blue-700">
+                          <span className="font-medium">Note:</span> If an admin has updated allocations, click the "Refresh" button above to see the latest changes.
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
                   <form className="space-y-4" onSubmit={editingLeaveId ? handleUpdateLeave : handleLeaveSubmit}>
                     <div>
                       <label className="block text-sm font-medium mb-1 text-foreground">Leave Type</label>
@@ -2092,6 +2320,34 @@ const handleDeleteLeave = async (leaveId: string) => {
                           </div>
                           <p className="text-sm text-orange-600 dark:text-orange-400 mt-1">
                             This leave will result in salary deduction for the selected days. No leave balance will be consumed.
+                          </p>
+                        </div>
+                      )}
+                      
+                      {leaveForm.type === 'Casual' && (
+                        <div className="mt-2 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                          <div className="flex items-center gap-2">
+                            <span className="text-blue-600 dark:text-blue-400">ℹ️</span>
+                            <span className="text-sm font-medium text-blue-700 dark:text-blue-300">
+                              Casual Leave Policy
+                            </span>
+                          </div>
+                          <p className="text-sm text-blue-600 dark:text-blue-400 mt-1">
+                            Must be applied with a minimum of 5 working days' prior notice.
+                          </p>
+                        </div>
+                      )}
+                      
+                      {leaveForm.type === 'Paid' && (
+                        <div className="mt-2 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+                          <div className="flex items-center gap-2">
+                            <span className="text-green-600 dark:text-green-400">ℹ️</span>
+                            <span className="text-sm font-medium text-green-700 dark:text-green-300">
+                              Paid Leave Policy
+                            </span>
+                          </div>
+                          <p className="text-sm text-green-600 dark:text-green-400 mt-1">
+                            Requires a minimum of 15 working days' prior notice.
                           </p>
                         </div>
                       )}
