@@ -778,65 +778,9 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
 const LEAVE_TYPES = [
   { type: 'Sick', label: 'Sick Leave', limit: 2 },
   { type: 'Casual', label: 'Casual Leave', limit: 2 },
-  { type: 'Paid', label: 'Paid Leave', limit: 2 }
+  { type: 'Paid', label: 'Paid Leave', limit: 2 },
+  { type: 'Unpaid', label: 'Unpaid Leave', limit: null } // Unlimited, no balance tracking
 ];
-
-// Helper to get current financial quarter (April-based year)
-function getCurrentFinancialQuarter(date = new Date()) {
-  const month = date.getMonth() + 1; // 1-12
-  const year = date.getFullYear();
-  
-  let quarter, financialYear;
-  if (month >= 4 && month <= 6) {
-    quarter = 'Q1'; financialYear = year;
-  } else if (month >= 7 && month <= 9) {
-    quarter = 'Q2'; financialYear = year;
-  } else if (month >= 10 && month <= 12) {
-    quarter = 'Q3'; financialYear = year;
-  } else {
-    quarter = 'Q4'; financialYear = year - 1;
-  }
-  
-  return { quarter, year: financialYear, quarterString: `${financialYear}-${quarter}` };
-}
-
-// Helper to get quarter range dates
-function getQuarterRange(date = new Date()) {
-  const month = date.getMonth() + 1;
-  const year = date.getFullYear();
-  
-  let startMonth, endMonth, quarterYear;
-  if (month >= 4 && month <= 6) {
-    startMonth = 4; endMonth = 6; quarterYear = year;
-  } else if (month >= 7 && month <= 9) {
-    startMonth = 7; endMonth = 9; quarterYear = year;
-  } else if (month >= 10 && month <= 12) {
-    startMonth = 10; endMonth = 12; quarterYear = year;
-  } else {
-    startMonth = 1; endMonth = 3; quarterYear = year;
-  }
-  
-  const start = new Date(quarterYear, startMonth - 1, 1);
-  const end = new Date(quarterYear, endMonth, 0);
-  return {
-    start: start.toISOString().slice(0, 10),
-    end: end.toISOString().slice(0, 10)
-  };
-}
-
-// Helper to get leave counts for the current quarter
-function getLeaveTypeCounts(leaves: any[]) {
-  const { start: quarterStart, end: quarterEnd } = getQuarterRange();
-  const leavesThisQuarter = leaves.filter(l =>
-    l.status === 'Approved' &&
-    l.from >= quarterStart &&
-    l.from <= quarterEnd
-  );
-  return LEAVE_TYPES.reduce((acc, lt) => {
-    acc[lt.type] = leavesThisQuarter.filter(l => l.type === lt.type).length;
-    return acc;
-  }, {} as Record<string, number>);
-}
 
 const [leaves, setLeaves] = useState<any[]>([]);
 const [quarterlyBalance, setQuarterlyBalance] = useState<any>(null);
@@ -868,7 +812,7 @@ const fetchLeaves = useCallback(async () => {
   }
 }, [user?.id, user.role]);
 
-// Fetch quarterly leave balance
+// Fetch yearly leave balance (financial year)
 const fetchQuarterlyBalance = useCallback(async () => {
   try {
     const res = await fetch(`http://localhost:5050/api/leaves/${user.id}/quarterly-balance`);
@@ -1132,6 +1076,7 @@ const handleDeleteLeave = async (leaveId: string) => {
         }
       });
       if (!res.ok) {
+        console.error('Payroll API response not OK:', res.status, res.statusText);
         setSalary(null);
         setPayrollDetails(null);
         setSalaryLoading(false);
@@ -2040,7 +1985,7 @@ const handleDeleteLeave = async (leaveId: string) => {
       case 'leaves':
         // Calculate if the selected leave type is maxed out for the current quarter
         const selectedLeaveType = leaveForm.type.toLowerCase();
-        const maxedOut = quarterlyBalance?.available?.[selectedLeaveType] <= 0;
+        const maxedOut = leaveForm.type !== 'Unpaid' && quarterlyBalance?.available?.[selectedLeaveType] <= 0;
         
         // Leaves feature: show leave balance, request leave, and leave history
         return (
@@ -2049,17 +1994,35 @@ const handleDeleteLeave = async (leaveId: string) => {
             {user.role === 'employee' && (
               <Card className="max-w-2xl mx-auto mb-8">
                 <CardHeader>
-                  <CardTitle>My Leave Balance ({quarterlyBalance?.currentQuarter || 'Current Quarter'})</CardTitle>
+                  <CardTitle>My Leave Balance ({quarterlyBalance?.currentFinancialYear || 'Current Financial Year'})</CardTitle>
                   <p className="text-sm text-muted-foreground">
-                    Financial Year: April to March | Quarter resets every 3 months
+                    Financial Year: April to March | Leave allocations reset annually
                   </p>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-4">
                     {LEAVE_TYPES.map(lt => {
                       const leaveType = lt.type.toLowerCase();
                       const available = quarterlyBalance?.available?.[leaveType] || 0;
                       const breakdown = quarterlyBalance?.breakdown?.[leaveType];
+                      
+                      // Special handling for Unpaid leave - it's unlimited
+                      if (lt.type === 'Unpaid') {
+                        return (
+                          <Card
+                            key={lt.type}
+                            className="rounded-lg p-4 text-center shadow border-2 transition-colors border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-900"
+                          >
+                            <div className="text-2xl font-bold text-gray-700 dark:text-gray-200">
+                              ∞
+                            </div>
+                            <div className="text-muted-foreground text-sm font-medium">{lt.label}</div>
+                            <div className="text-xs text-muted-foreground mt-2">
+                              <div>Unlimited (No salary)</div>
+                            </div>
+                          </Card>
+                        );
+                      }
                       
                       return (
                         <Card
@@ -2119,6 +2082,19 @@ const handleDeleteLeave = async (leaveId: string) => {
                           <option key={lt.type} value={lt.type}>{lt.label}</option>
                         ))}
                       </select>
+                      {leaveForm.type === 'Unpaid' && (
+                        <div className="mt-2 p-3 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg">
+                          <div className="flex items-center gap-2">
+                            <span className="text-orange-600 dark:text-orange-400">⚠️</span>
+                            <span className="text-sm font-medium text-orange-700 dark:text-orange-300">
+                              Unpaid Leave Notice
+                            </span>
+                          </div>
+                          <p className="text-sm text-orange-600 dark:text-orange-400 mt-1">
+                            This leave will result in salary deduction for the selected days. No leave balance will be consumed.
+                          </p>
+                        </div>
+                      )}
                     </div>
                     <div>
                       <label className="block text-sm font-medium mb-1 text-foreground">From</label>
@@ -2180,7 +2156,7 @@ const handleDeleteLeave = async (leaveId: string) => {
                     </div>
                     {maxedOut && (
                       <div className="text-xs mt-1 text-red-600 dark:text-red-400">
-                        You have reached the maximum of 2 {leaveForm.type} leaves for this quarter.
+                        You have reached the maximum available {leaveForm.type} leaves for this financial year.
                       </div>
                     )}
                     {leaveMsg && (

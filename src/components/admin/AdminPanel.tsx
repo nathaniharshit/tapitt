@@ -1,11 +1,12 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Shield, Users, Database, Settings, RefreshCw, X } from 'lucide-react';
+import { Shield, Users, Database, Settings, RefreshCw, X, Calendar } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom'; // Add this import
 import { Edit2, Trash2 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import AttendanceCalendar from '../attendance/AttendanceCalendar';
+import LeaveAllocationManagement from './LeaveAllocationManagement';
 
 interface AdminPanelProps {
   userRole: 'superadmin' | 'admin' | 'employee' | 'manager';
@@ -50,6 +51,7 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
     { name: 'Professional Tax', percentage: 2 },
   ]);
   const [showEmployeePayroll, setShowEmployeePayroll] = useState(false);
+  const [showLeaveManagement, setShowLeaveManagement] = useState(false);
 
   const fetchCounts = async () => {
     setLoading(true);
@@ -141,6 +143,14 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
         { label: 'Edit Standards', onClick: () => setEditPayroll(true) },
         { label: 'Apply to All', onClick: () => handleApplyStandards() },
         { label: 'View Employee Payroll', onClick: () => setShowEmployeePayroll(true) }
+      ]
+    },
+    {
+      title: 'Leave Management',
+      description: 'Configure leave allocations for all employees',
+      icon: Calendar,
+      actions: [
+        { label: 'Manage Allocations', onClick: () => setShowLeaveManagement(true) }
       ]
     },
   ];
@@ -1043,6 +1053,32 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
           </div>
         </div>
       )}
+
+      {/* Leave Allocation Management Dialog */}
+      {showLeaveManagement && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg max-w-4xl w-full p-6 relative max-h-[90vh] overflow-y-auto">
+            <button
+              className="absolute top-2 right-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+              onClick={() => setShowLeaveManagement(false)}
+            >
+              <X className="h-6 w-6" />
+            </button>
+            
+            <LeaveAllocationManagement />
+            
+            <div className="flex justify-end mt-6">
+              <button
+                onClick={() => setShowLeaveManagement(false)}
+                className="px-6 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 dark:bg-gray-600 dark:hover:bg-gray-500"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };

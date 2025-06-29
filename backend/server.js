@@ -13,6 +13,18 @@ const { Server } = require('socket.io');
 const app = express();
 const PORT = process.env.PORT || 5050;
 
+// Create HTTP server for Socket.IO
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: '*',
+    methods: ['GET', 'POST']
+  }
+});
+
+// Make io accessible globally
+global._io = io;
+
 const MONGODB_URI = 'mongodb+srv://ADH:HELLO@employeemanagement.9tmhw4a.mongodb.net/?retryWrites=true&w=majority&appName=EmployeeManagement';
 
 const sessionSchema = new mongoose.Schema({
@@ -65,6 +77,8 @@ mongoose.connect(MONGODB_URI, { useNewUrlParser: true, useUnifiedTopology: true 
     console.log('Connected to MongoDB Atlas');
     // Initialize default payroll standards in Settings if not exists
     await initializePayrollStandards();
+    // Initialize default leave allocations in Settings if not exists  
+    await initializeLeaveAllocations();
   })
   .catch((err) => console.error('MongoDB connection error:', err));
 
@@ -291,6 +305,136 @@ const scheduledReportSchema = new mongoose.Schema({
 });
 const ScheduledReport = mongoose.model('ScheduledReport', scheduledReportSchema);
 // --- End Scheduled Report Model ---
+
+// --- Settings Model ---
+const settingsSchema = new mongoose.Schema({
+  key: { type: String, required: true, unique: true },
+  value: mongoose.Schema.Types.Mixed // Allow flexible value structure for different setting types
+});
+const Settings = mongoose.model('Settings', settingsSchema);
+// --- End Settings Model ---
+
+// --- Leave Allocation Settings Functions ---
+async function getLeaveAllocations() {
+  try {
+    const settings = await Settings.findOne({ key: 'leave_allocations' });
+    if (!settings) {
+      return { sick: 2, casual: 2, paid: 2 }; // Default values
+    }
+    return settings.value || { sick: 2, casual: 2, paid: 2 };
+  } catch (error) {
+    console.error('Error fetching leave allocations:', error);
+    return { sick: 2, casual: 2, paid: 2 }; // Default fallback
+  }
+}
+
+async function initializeLeaveAllocations() {
+  try {
+    const exists = await Settings.findOne({ key: 'leave_allocations' });
+    if (!exists) {
+      await Settings.create({
+        key: 'leave_allocations',
+        value: { sick: 2, casual: 2, paid: 2 }
+      });
+      console.log('Initialized default leave allocations in Settings.');
+    }
+  } catch (error) {
+    console.error('Error initializing leave allocations:', error);
+  }
+}
+
+// --- Payroll Settings Functions ---
+async function getStandardPayrollItems() {
+  try {
+    const settings = await Settings.findOne({ key: 'payroll_standards' });
+    if (!settings) return { allowances: [], deductions: [] };
+    return settings.value || { allowances: [], deductions: [] };
+  } catch (error) {
+    console.error('Error fetching standard payroll items:', error);
+    return { allowances: [], deductions: [] };
+  }
+}
+
+async function initializePayrollStandards() {
+  try {
+    const exists = await Settings.findOne({ key: 'payroll_standards' });
+    if (!exists) {
+      await Settings.create({
+        key: 'payroll_standards',
+        value: {
+          allowances: [
+            { name: 'HRA', percentage: 30 },
+            { name: 'Transport', percentage: 10 }
+          ],
+          deductions: [
+            { name: 'PF', percentage: 5 },
+            { name: 'Professional Tax', percentage: 2 }
+          ]
+        }
+      });
+      console.log('Initialized default percentage-based payroll standards in Settings.');
+    }
+  } catch (error) {
+    console.error('Error initializing payroll standards:', error);
+  }
+}
+
+function calculateEmployeePayroll(employee, standards) {
+  const annualSalary = employee?.salary || 0;
+  const basicSalary = annualSalary / 12; // Monthly basic
+  
+  if (!standards || !standards.allowances || !standards.deductions) {
+    return {
+      basicSalary: Math.round(basicSalary * 100) / 100,
+      grossSalary: Math.round(basicSalary * 100) / 100,
+      netSalary: Math.round(basicSalary * 100) / 100,
+      allowances: [],
+      deductions: [],
+      totalAllowances: 0,
+      totalDeductions: 0
+    };
+  }
+
+  const calculatedAllowances = (standards.allowances || []).map(allowance => {
+    const amount = basicSalary * (allowance.percentage / 100);
+    return {
+      name: allowance.name,
+      amount: Math.round(amount * 100) / 100, // round to 2 decimal places
+      percentage: allowance.percentage,
+      calculationType: 'percentage' // Explicitly set for frontend
+    };
+  });
+
+  const totalAllowances = calculatedAllowances.reduce((sum, item) => sum + item.amount, 0);
+  const grossSalary = basicSalary + totalAllowances;
+
+  const calculatedDeductions = (standards.deductions || []).map(deduction => {
+    // Deductions are calculated on the gross salary
+    const amount = grossSalary * (deduction.percentage / 100);
+    return {
+      name: deduction.name,
+      amount: Math.round(amount * 100) / 100, // round to 2 decimal places
+      percentage: deduction.percentage,
+      calculationType: 'percentage' // Explicitly set for frontend
+    };
+  });
+
+  const totalDeductions = calculatedDeductions.reduce((sum, item) => sum + item.amount, 0);
+  const netSalary = grossSalary - totalDeductions;
+
+  const result = {
+    basicSalary: Math.round(basicSalary * 100) / 100,
+    grossSalary: Math.round(grossSalary * 100) / 100,
+    netSalary: Math.round(netSalary * 100) / 100,
+    allowances: calculatedAllowances,
+    deductions: calculatedDeductions,
+    totalAllowances: Math.round(totalAllowances * 100) / 100,
+    totalDeductions: Math.round(totalDeductions * 100) / 100
+  };
+  
+  return result;
+}
+// --- End Settings and Utility Functions ---
 
 // Now require middleware (after models are registered, before any routes)
 const authorizeRoles = require('./middleware/rbac');
@@ -664,12 +808,15 @@ async function getOrCreateQuarterlyLeave(employeeId, year, quarter) {
   let quarterlyLeave = await QuarterlyLeave.findOne({ employee: employeeId, year, quarter });
   
   if (!quarterlyLeave) {
-    // Create new quarterly leave record with default allocations
+    // Get dynamic leave allocations from settings
+    const leaveAllocations = await getLeaveAllocations();
+    
+    // Create new quarterly leave record with dynamic allocations
     quarterlyLeave = new QuarterlyLeave({
       employee: employeeId,
       year,
       quarter,
-      allocated: { sick: 2, casual: 2, paid: 2 },
+      allocated: leaveAllocations,
       used: { sick: 0, casual: 0, paid: 0 },
       carriedForward: { sick: 0, casual: 0, paid: 0 }
     });
@@ -754,11 +901,14 @@ async function getOrCreateYearlyLeave(employeeId, year) {
   let yearlyLeave = await YearlyLeave.findOne({ employee: employeeId, year });
   
   if (!yearlyLeave) {
-    // Create new yearly leave record with default allocations (2 each per year)
+    // Get dynamic leave allocations from settings
+    const leaveAllocations = await getLeaveAllocations();
+    
+    // Create new yearly leave record with dynamic allocations
     yearlyLeave = new YearlyLeave({
       employee: employeeId,
       year,
-      allocated: { sick: 2, casual: 2, paid: 2 },
+      allocated: leaveAllocations,
       used: { sick: 0, casual: 0, paid: 0 },
       carriedForward: { sick: 0, casual: 0, paid: 0 }
     });
@@ -1106,113 +1256,471 @@ app.get('/api/leaves/:employeeId/financial-year-balance', async (req, res) => {
   }
 });
 
-// Debug endpoint to get raw QuarterlyLeave records
-app.get('/api/leaves/:employeeId/quarterly-leave-debug', async (req, res) => {
+// Debug endpoint to check leave allocation status and quarterly records
+app.get('/api/debug/leave-status/:employeeId', async (req, res) => {
   try {
     const { employeeId } = req.params;
-    const quarterlyLeaves = await QuarterlyLeave.find({ employee: employeeId }).sort({ year: -1, quarter: -1 });
-    res.json(quarterlyLeaves);
-  } catch (err) {
-    console.error('QuarterlyLeave debug error:', err);
-    res.status(500).json({ error: 'Failed to fetch quarterly leave records' });
-  }
-});
-
-// Test endpoint to manually trigger carry-forward (for testing purposes)
-app.post('/api/leaves/test-carry-forward', async (req, res) => {
-  try {
-    const { employeeId, fromYear, fromQuarter } = req.body;
+    const { quarter, year } = getCurrentFinancialQuarter();
     
-    if (!employeeId || !fromYear || !fromQuarter) {
-      return res.status(400).json({ error: 'employeeId, fromYear, and fromQuarter are required' });
-    }
+    // 1. Check current leave allocations in settings
+    const currentAllocations = await getLeaveAllocations();
     
-    // Execute carry-forward
-    await carryForwardLeaves(employeeId, fromYear, fromQuarter);
-    
-    // Get the next quarter details
-    const quarterOrder = ['Q1', 'Q2', 'Q3', 'Q4'];
-    const currentIndex = quarterOrder.indexOf(fromQuarter);
-    
-    let toYear = fromYear;
-    let toQuarter;
-    
-    if (currentIndex === 3) { // Q4 -> Q1 of next year
-      toYear = fromYear + 1;
-      toQuarter = 'Q1';
-    } else {
-      toQuarter = quarterOrder[currentIndex + 1];
-    }
-    
-    // Get the updated quarterly leave for next quarter
-    const nextQuarterLeave = await QuarterlyLeave.findOne({ 
+    // 2. Check employee's current quarterly leave record
+    const currentQuarterLeave = await QuarterlyLeave.findOne({ 
       employee: employeeId, 
-      year: toYear, 
-      quarter: toQuarter 
+      year, 
+      quarter 
     });
+    
+    // 3. Get all quarterly leave records for this employee
+    const allQuarterlyLeaves = await QuarterlyLeave.find({ 
+      employee: employeeId 
+    }).sort({ year: -1, quarter: -1 });
+    
+    // 4. Calculate current available leaves
+    let availableLeaves = null;
+    if (currentQuarterLeave) {
+      availableLeaves = calculateAvailableLeaves(currentQuarterLeave);
+    }
+    
+    // 5. Check employee info
+    const employee = await Employee.findById(employeeId, 'firstname lastname email');
     
     res.json({
-      message: 'Carry-forward completed',
-      fromQuarter: `${fromYear}-${fromQuarter}`,
-      toQuarter: `${toYear}-${toQuarter}`,
-      carriedForward: nextQuarterLeave?.carriedForward || {},
-      nextQuarterRecord: nextQuarterLeave
+      debug: true,
+      timestamp: new Date().toISOString(),
+      currentQuarter: `${year}-${quarter}`,
+      employee: employee || { error: 'Employee not found' },
+      
+      // Current system settings
+      systemAllocations: currentAllocations,
+      
+      // Current quarter record
+      currentQuarterRecord: currentQuarterLeave || { error: 'No current quarter record found' },
+      
+      // All historical records
+      allQuarterlyRecords: allQuarterlyLeaves,
+      
+      // Calculated available leaves
+      calculatedAvailable: availableLeaves || { error: 'Cannot calculate - no current quarter record' },
+      
+      // Status checks
+      checks: {
+        settingsExist: !!currentAllocations,
+        currentQuarterExists: !!currentQuarterLeave,
+        allocationsMatch: currentQuarterLeave ? 
+          JSON.stringify(currentQuarterLeave.allocated) === JSON.stringify(currentAllocations) :
+          false,
+        totalRecords: allQuarterlyLeaves.length
+      }
     });
   } catch (err) {
-    console.error('Carry-forward test error:', err);
-    res.status(500).json({ error: 'Failed to test carry-forward' });
+    console.error('Debug endpoint error:', err);
+    res.status(500).json({ 
+      error: 'Debug failed', 
+      details: err.message,
+      stack: err.stack 
+    });
   }
 });
 
-// Calculate salary impact for unpaid leave
-app.post('/api/leaves/calculate-unpaid-impact', async (req, res) => {
+// Debug endpoint to force refresh a specific employee's current quarter record
+app.post('/api/debug/refresh-quarter/:employeeId', async (req, res) => {
   try {
-    const { employeeId, days, month } = req.body;
+    const { employeeId } = req.params;
+    const { quarter, year } = getCurrentFinancialQuarter();
     
-    if (!employeeId || !days) {
-      return res.status(400).json({ error: 'Employee ID and days are required' });
+    // Get current allocations from settings
+    const newAllocations = await getLeaveAllocations();
+    
+    // Find and update current quarter record
+    const currentQuarterLeave = await QuarterlyLeave.findOne({ 
+      employee: employeeId, 
+      year, 
+      quarter 
+    });
+    
+    if (currentQuarterLeave) {
+      // Update the allocated amounts with new settings
+      const oldAllocated = { ...currentQuarterLeave.allocated };
+      currentQuarterLeave.allocated = newAllocations;
+      await currentQuarterLeave.save();
+      
+      res.json({
+        message: 'Quarter record refreshed successfully',
+        employeeId,
+        quarter: `${year}-${quarter}`,
+        changes: {
+          before: oldAllocated,
+          after: newAllocations
+        },
+        updatedRecord: currentQuarterLeave
+      });
+    } else {
+      // Create new quarter record if it doesn't exist
+      const newQuarterLeave = await getOrCreateQuarterlyLeave(employeeId, year, quarter);
+      
+      res.json({
+        message: 'New quarter record created',
+        employeeId,
+        quarter: `${year}-${quarter}`,
+        newRecord: newQuarterLeave
+      });
+    }
+  } catch (err) {
+    console.error('Refresh quarter error:', err);
+    res.status(500).json({ 
+      error: 'Refresh failed', 
+      details: err.message 
+    });
+  }
+});
+
+// --- End Debug Endpoints ---
+
+// --- Holiday Schema and Endpoints ---
+const holidaySchema = new mongoose.Schema({
+  name: { type: String, required: true },
+  date: { type: String, required: true }, // YYYY-MM-DD
+  createdBy: String,
+});
+const Holiday = mongoose.model('Holiday', holidaySchema);
+
+// Add a holiday (admin only)
+app.post('/api/holidays', async (req, res) => {
+  try {
+    const { name, date, createdBy } = req.body;
+    if (!name || !date) return res.status(400).json({ error: 'Name and date are required' });
+    const holiday = new Holiday({ name, date, createdBy });
+    await holiday.save();
+    res.json({ success: true, holiday });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get all holidays
+app.get('/api/holidays', async (req, res) => {
+  try {
+    const holidays = await Holiday.find().sort({ date: 1 });
+    res.json({ holidays });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+// --- End Holiday Schema and Endpoints ---
+
+// --- Payroll Management Endpoints ---
+app.get('/api/payroll/standards', async (req, res) => {
+  try {
+    const settings = await Settings.findOne({ key: 'payroll_standards' });
+    res.json(settings ? settings.value : { allowances: [], deductions: [] });
+  } catch (error) {
+    console.error('Error fetching payroll standards:', error);
+    res.status(500).json({ error: 'Failed to fetch payroll standards' });
+  }
+});
+
+app.post('/api/payroll/standards', async (req, res) => {
+  try {
+    const { allowances, deductions } = req.body;
+
+    // Validate that all incoming items are percentage-based
+    const validateItems = (items) => {
+      if (!Array.isArray(items)) return false;
+      return items.every(item => 
+        item &&
+        typeof item.name === 'string' &&
+        typeof item.percentage === 'number' &&
+        Object.keys(item).length === 2 // Ensures no extra properties like 'amount'
+      );
+    };
+
+    if (!validateItems(allowances) || !validateItems(deductions)) {
+      return res.status(400).json({ error: 'Invalid data format. All items must have only a name and a percentage.' });
+    }
+
+    let settings = await Settings.findOneAndUpdate(
+      { key: 'payroll_standards' },
+      { value: { allowances, deductions } },
+      { new: true, upsert: true }
+    );
+    
+    res.json(settings.value);
+  } catch (error) {
+    console.error('Error updating payroll standards:', error);
+    res.status(500).json({ error: 'Failed to update payroll standards' });
+  }
+});
+
+app.post('/api/payroll/apply-standards-to-all', async (req, res) => {
+  try {
+    const standardPayroll = await getStandardPayrollItems();
+    
+    const employees = await Employee.find({});
+    let updated = 0;
+    
+    for (const employee of employees) {
+      // Calculate fresh payroll amounts based on employee's salary
+      const payrollData = calculateEmployeePayroll(employee, standardPayroll);
+      
+      // Clear existing payroll items and set new calculated ones
+      employee.allowances = payrollData.allowances;
+      employee.deductions = payrollData.deductions;
+      
+      await employee.save();
+      updated++;
+      
+      console.log('Applied percentage-based payroll for: ' + employee.firstname + ' ' + employee.lastname + ' (Salary: Rs.' + employee.salary + ')');
     }
     
-    const employee = await Employee.findById(employeeId);
+    res.json({
+      message: 'Applied percentage-based payroll for ' + updated + ' employee(s)',
+      updated,
+      standardPayroll
+    });
+    
+  } catch (error) {
+    console.error('Error applying standards:', error);
+    res.status(500).json({ error: 'Failed to apply standards to all employees' });
+  }
+});
+
+// --- Leave Allocation Management Endpoints ---
+app.get('/api/leave-allocations', async (req, res) => {
+  try {
+    const allocations = await getLeaveAllocations();
+    res.json(allocations);
+  } catch (error) {
+    console.error('Error fetching leave allocations:', error);
+    res.status(500).json({ error: 'Failed to fetch leave allocations' });
+  }
+});
+
+app.post('/api/leave-allocations', async (req, res) => {
+  try {
+    const { sick, casual, paid } = req.body;
+    
+    // Validate input
+    if (typeof sick !== 'number' || typeof casual !== 'number' || typeof paid !== 'number') {
+      return res.status(400).json({ error: 'All leave types must be numbers' });
+    }
+    
+    if (sick < 0 || casual < 0 || paid < 0) {
+      return res.status(400).json({ error: 'Leave allocations cannot be negative' });
+    }
+    
+    // Update leave allocations in settings
+    const settings = await Settings.findOneAndUpdate(
+      { key: 'leave_allocations' },
+      { value: { sick, casual, paid } },
+      { new: true, upsert: true }
+    );
+    
+    res.json({
+      message: 'Leave allocations updated successfully',
+      allocations: settings.value
+    });
+  } catch (error) {
+    console.error('Error updating leave allocations:', error);
+    res.status(500).json({ error: 'Failed to update leave allocations' });
+  }
+});
+
+// Apply new leave allocations to future quarters (optional endpoint for mass updates)
+app.post('/api/leave-allocations/apply-to-future', async (req, res) => {
+  try {
+    const newAllocations = await getLeaveAllocations();
+    const { quarter, year } = getCurrentFinancialQuarter();
+    
+    // Find all employees
+    const employees = await Employee.find({});
+    let updated = 0;
+    
+    for (const employee of employees) {
+      // Update current quarter's allocation (if exists)
+      const currentQuarterLeave = await QuarterlyLeave.findOne({ 
+        employee: employee._id, 
+        year, 
+        quarter 
+      });
+      
+      if (currentQuarterLeave) {
+        currentQuarterLeave.allocated = newAllocations;
+        await currentQuarterLeave.save();
+        updated++;
+      }
+    }
+    
+    res.json({
+      message: `Applied new leave allocations to ${updated} employee(s) for current quarter ${year}-${quarter}`,
+      updated,
+      allocations: newAllocations,
+      appliedTo: `${year}-${quarter}`
+    });
+  } catch (error) {
+    console.error('Error applying leave allocations:', error);
+    res.status(500).json({ error: 'Failed to apply new leave allocations' });
+  }
+});
+// --- End Payroll and Leave Management Endpoints ---
+
+// --- End Standard Payroll API Endpoints ---
+
+server.listen(PORT, async () => {
+  console.log('Server is running on port ' + PORT);
+  
+  // Initialize payroll standards if not already present
+  await initializePayrollStandards();
+  // Initialize leave allocations if not present
+  await initializeLeaveAllocations();
+});
+
+// --- Employee Management & Authentication Endpoints ---
+
+// Get employee salary/payroll information
+app.get('/api/employees/:id/salary', async (req, res) => {
+  try {
+    const employee = await Employee.findById(req.params.id);
+    
     if (!employee) {
       return res.status(404).json({ error: 'Employee not found' });
     }
+
+    // Get standard payroll items to recalculate if needed
+    const standardPayroll = await getStandardPayrollItems();
     
-    const annualSalary = employee.salary || 0;
-    const monthlySalary = annualSalary / 12;
-    
-    // Calculate days in the specified month or current month
-    let daysInMonth;
-    if (month) {
-      const [year, monthNum] = month.split('-');
-      daysInMonth = new Date(parseInt(year), parseInt(monthNum), 0).getDate();
-    } else {
-      const now = new Date();
-      daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    // If employee doesn't have payroll data, calculate it
+    if (!employee.allowances || !employee.deductions) {
+      const payrollData = calculateEmployeePayroll(employee, standardPayroll);
+      
+      // Update employee with calculated payroll data
+      await Employee.findByIdAndUpdate(req.params.id, {
+        allowances: payrollData.allowances,
+        deductions: payrollData.deductions
+      });
+      
+      return res.json({
+        employeeId: employee._id,
+        name: `${employee.firstname} ${employee.lastname}`,
+        basicSalary: employee.salary || 0,
+        allowances: payrollData.allowances,
+        deductions: payrollData.deductions,
+        totalAllowances: payrollData.totalAllowances,
+        totalDeductions: payrollData.totalDeductions,
+        grossSalary: payrollData.grossSalary,
+        netSalary: payrollData.netSalary
+      });
     }
-    
-    const perDaySalary = monthlySalary / daysInMonth;
-    const salaryDeduction = perDaySalary * days;
-    const netSalary = monthlySalary - salaryDeduction;
-    
+
+    // Return existing payroll data
+    const basicSalary = employee.salary || 0;
+    const totalAllowances = (employee.allowances || []).reduce((sum, item) => sum + (item.amount || 0), 0);
+    const totalDeductions = (employee.deductions || []).reduce((sum, item) => sum + (item.amount || 0), 0);
+    const grossSalary = basicSalary + totalAllowances;
+    const netSalary = grossSalary - totalDeductions;
+
     res.json({
-      employeeId,
-      employeeName: `${employee.firstname} ${employee.lastname}`,
-      unpaidLeaveDays: days,
-      monthlySalary: Math.round(monthlySalary * 100) / 100,
-      perDaySalary: Math.round(perDaySalary * 100) / 100,
-      salaryDeduction: Math.round(salaryDeduction * 100) / 100,
-      netSalaryAfterDeduction: Math.round(netSalary * 100) / 100,
-      daysInMonth
+      employeeId: employee._id,
+      name: `${employee.firstname} ${employee.lastname}`,
+      basicSalary: Math.round(basicSalary * 100) / 100,
+      allowances: employee.allowances || [],
+      deductions: employee.deductions || [],
+      totalAllowances: Math.round(totalAllowances * 100) / 100,
+      totalDeductions: Math.round(totalDeductions * 100) / 100,
+      grossSalary: Math.round(grossSalary * 100) / 100,
+      netSalary: Math.round(netSalary * 100) / 100
     });
+    
   } catch (err) {
-    console.error('Unpaid leave calculation error:', err);
-    res.status(500).json({ error: 'Failed to calculate unpaid leave impact' });
+    console.error('Error fetching employee salary:', err);
+    res.status(500).json({ error: err.message });
   }
 });
-// --- End Leaves API ---
 
-// --- Employees API: filter by role for team selection ---
+// Get employee payroll information (alias for salary endpoint)
+app.get('/api/employees/:id/payroll', async (req, res) => {
+  try {
+    const employee = await Employee.findById(req.params.id);
+    
+    if (!employee) {
+      return res.status(404).json({ error: 'Employee not found' });
+    }
+
+    // Get standard payroll items to recalculate if needed
+    const standardPayroll = await getStandardPayrollItems();
+    
+    // If employee doesn't have payroll data, calculate it
+    if (!employee.allowances || !employee.deductions) {
+      const payrollData = calculateEmployeePayroll(employee, standardPayroll);
+      
+      // Update employee with calculated payroll data
+      await Employee.findByIdAndUpdate(req.params.id, {
+        allowances: payrollData.allowances,
+        deductions: payrollData.deductions
+      });
+      
+      return res.json({
+        employeeId: employee._id,
+        name: `${employee.firstname} ${employee.lastname}`,
+        basicSalary: (employee.salary || 0) / 12, // Monthly basic salary
+        allowances: payrollData.allowances,
+        deductions: payrollData.deductions,
+        totalAllowances: payrollData.totalAllowances,
+        totalDeductions: payrollData.totalDeductions,
+        grossSalary: payrollData.grossSalary,
+        netSalary: payrollData.netSalary
+      });
+    }
+
+    // Return existing payroll data
+    const annualSalary = employee.salary || 0;
+    const basicSalary = annualSalary / 12; // Monthly basic salary
+    const totalAllowances = (employee.allowances || []).reduce((sum, item) => sum + (item.amount || 0), 0);
+    const totalDeductions = (employee.deductions || []).reduce((sum, item) => sum + (item.amount || 0), 0);
+    const grossSalary = basicSalary + totalAllowances;
+    const netSalary = grossSalary - totalDeductions;
+
+    // Add percentage information to existing allowances and deductions
+    const allowancesWithPercentage = (employee.allowances || []).map(allowance => {
+      const stdAllowance = standardPayroll.allowances?.find(std => std.name === allowance.name);
+      return {
+        name: allowance.name,
+        amount: allowance.amount,
+        percentage: stdAllowance?.percentage || 0,
+        calculationType: 'percentage'
+      };
+    });
+
+    const deductionsWithPercentage = (employee.deductions || []).map(deduction => {
+      const stdDeduction = standardPayroll.deductions?.find(std => std.name === deduction.name);
+      return {
+        name: deduction.name,
+        amount: deduction.amount,
+        percentage: stdDeduction?.percentage || 0,
+        calculationType: 'percentage'
+      };
+    });
+
+    res.json({
+      employeeId: employee._id,
+      name: `${employee.firstname} ${employee.lastname}`,
+      basicSalary: Math.round(basicSalary * 100) / 100, // Monthly basic salary
+      allowances: allowancesWithPercentage,
+      deductions: deductionsWithPercentage,
+      totalAllowances: Math.round(totalAllowances * 100) / 100,
+      totalDeductions: Math.round(totalDeductions * 100) / 100,
+      grossSalary: Math.round(grossSalary * 100) / 100,
+      netSalary: Math.round(netSalary * 100) / 100
+    });
+    
+  } catch (err) {
+    console.error('Error fetching employee payroll:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get all employees
 app.get('/api/employees', async (req, res) => {
   try {
     let filter = {};
@@ -1277,6 +1785,7 @@ app.put('/api/employees/:id', upload.fields([
   }
 });
 
+// Delete employee
 app.delete('/api/employees/:id', async (req, res) => {
   try {
     const deletedEmployee = await Employee.findByIdAndDelete(req.params.id);
@@ -1289,10 +1798,11 @@ app.delete('/api/employees/:id', async (req, res) => {
   }
 });
 
+// Login endpoint
 app.post('/api/login', async (req, res) => {
   const { email, employeeId, password } = req.body;
   
-  // Accept either email or employeeId for login, but prioritize employeeId
+  // Accept either employeeId or email for login, but prioritize employeeId
   const loginField = employeeId || email;
   if (!loginField || !password) {
     return res.status(400).json({ error: 'Employee ID and password are required' });
@@ -1317,26 +1827,33 @@ app.post('/api/login', async (req, res) => {
     if (!isMatch) {
       return res.status(401).json({ error: 'Invalid employee ID or password' });
     }
+    
     // Update lastLogin timestamp
     employee.lastLogin = new Date();
     await employee.save();
+    
     // Populate roleRef for permissions-based RBAC
     const employeeWithRole = await Employee.findById(employee._id).populate('roleRef');
-    res.json({ message: 'Login successful', employee: {
-      _id: employee._id,
-      email: employee.email,
-      role: employee.role,
-      mustChangePassword: employee.mustChangePassword,
-      firstname: employee.firstname,
-      lastname: employee.lastname,
-      lastLogin: employee.lastLogin,
-      roleRef: employeeWithRole.roleRef // includes name and permissions
-    }});
+    
+    res.json({ 
+      message: 'Login successful', 
+      employee: {
+        _id: employee._id,
+        email: employee.email,
+        role: employee.role,
+        mustChangePassword: employee.mustChangePassword,
+        firstname: employee.firstname,
+        lastname: employee.lastname,
+        lastLogin: employee.lastLogin,
+        roleRef: employeeWithRole.roleRef // includes name and permissions
+      }
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
+// Set password endpoint
 app.post('/api/employees/:id/set-password', async (req, res) => {
   try {
     const { password } = req.body;
@@ -1533,7 +2050,7 @@ app.post('/api/employees/:id/attendance', async (req, res) => {
     if (!employee) return res.status(404).json({ error: 'Employee not found' });
 
     // Prevent marking attendance if already marked for that date
-    if ((employee.attendance || []).some(a => a.date === date)) {
+    if ((employee.attendance || []).some(att => att.date === date)) {
       return res.status(400).json({ error: 'Attendance already marked for this date.' });
     }
 
@@ -1558,732 +2075,5 @@ app.get('/api/employees/:id/attendance', async (req, res) => {
   }
 });
 
-// --- Reports API ---
-const { Parser } = require('json2csv');
-
-// Helper to generate a table in PDF
-function addTable(doc, headers, rows) {
-  doc.font('Helvetica-Bold').fontSize(12);
-  // Print headers
-  headers.forEach((header, i) => {
-    doc.text(header, { continued: i < headers.length - 1, width: 120 });
-  });
-  doc.moveDown();
-  doc.font('Helvetica').fontSize(10);
-  // Print rows
-  rows.forEach(row => {
-    headers.forEach((header, i) => {
-      doc.text(row[header] !== undefined ? String(row[header]) : '', { continued: i < headers.length - 1, width: 120 });
-    });
-    doc.moveDown();
-  });
-}
-
-// Download Employee Summary Report (PDF)
-app.get('/api/reports/employee-summary', async (req, res) => {
-  try {
-    const employees = await Employee.find({}, 'firstname lastname email department status role');
-    const headers = ['firstname', 'lastname', 'email', 'department', 'status', 'role'];
-    const doc = new PDFDocument();
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', 'attachment; filename=employee_summary.pdf');
-    doc.pipe(res);
-
-    // Handle PDFKit errors
-    doc.on('error', (err) => {
-      if (!res.headersSent) {
-        res.status(500).end('Failed to generate PDF');
-      }
-    });
-
-    doc.fontSize(16).text('Employee Summary Report', { align: 'center' });
-    doc.moveDown();
-    const rows = employees.length > 0
-      ? employees.map(e => e.toObject())
-      : [{ firstname: 'N/A', lastname: 'N/A', email: 'N/A', department: 'N/A', status: 'N/A', role: 'N/A' }];
-    addTable(doc, headers, rows);
-    doc.end();
-  } catch (err) {
-    if (!res.headersSent) {
-      res.status(500).end('Failed to generate employee summary report');
-    }
-  }
-});
-
-// Download Department Analysis Report (PDF)
-app.get('/api/reports/department-analysis', async (req, res) => {
-  try {
-    const departments = await Employee.aggregate([
-      { $group: { _id: '$department', count: { $sum: 1 } } },
-      { $sort: { count: -1 } }
-    ]);
-    const headers = ['_id', 'count'];
-    const doc = new PDFDocument();
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', 'attachment; filename=department_analysis.pdf');
-    doc.pipe(res);
-
-    doc.on('error', (err) => {
-      if (!res.headersSent) {
-        res.status(500).end('Failed to generate PDF');
-      }
-    });
-
-    doc.fontSize(16).text('Department Analysis Report', { align: 'center' });
-    doc.moveDown();
-    addTable(doc, headers, departments);
-    doc.end();
-  } catch (err) {
-    if (!res.headersSent) {
-      res.status(500).end('Failed to generate department analysis report');
-    }
-  }
-});
-
-// Download Payroll Report (PDF)
-app.get('/api/reports/payroll', async (req, res) => {
-  try {
-    const employees = await Employee.find({}, 'firstname lastname email department salary');
-    const headers = ['firstname', 'lastname', 'email', 'department', 'salary'];
-    const doc = new PDFDocument();
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', 'attachment; filename=payroll_report.pdf');
-    doc.pipe(res);
-
-    doc.on('error', (err) => {
-      if (!res.headersSent) {
-        res.status(500).end('Failed to generate PDF');
-      }
-    });
-
-    doc.fontSize(16).text('Payroll Report', { align: 'center' });
-    doc.moveDown();
-    addTable(doc, headers, employees.map(e => e.toObject()));
-    doc.end();
-  } catch (err) {
-    if (!res.headersSent) {
-      res.status(500).end('Failed to generate payroll report');
-    }
-  }
-});
-
-// Download Attendance Report (PDF)
-app.get('/api/reports/attendance', async (req, res) => {
-  try {
-    // Get month from query param, default to current month
-    let { month } = req.query;
-    if (!month) {
-      const now = new Date();
-      month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-    }
-    // month is in format YYYY-MM
-    const employees = await Employee.find({}, 'firstname lastname email attendance');
-    const rows = [];
-    employees.forEach(emp => {
-      (emp.attendance || []).forEach(a => {
-        // Only include attendance for the selected month
-        if (a.date && a.date.startsWith(month)) {
-          rows.push({
-            firstname: String(emp.firstname || ''),
-            lastname: String(emp.lastname || ''),
-            email: String(emp.email || ''),
-            date: String(a.date || ''),
-            status: String(a.status || '')
-          });
-        }
-      });
-    });
-    const headers = ['firstname', 'lastname', 'email', 'date', 'status'];
-    const doc = new PDFDocument();
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename=attendance_report_${month}.pdf`);
-    doc.pipe(res);
-
-    doc.on('error', (err) => {
-      if (!res.headersSent) {
-        res.status(500).end('Failed to generate PDF');
-      }
-    });
-
-    doc.fontSize(16).text(`Attendance Report (${month})`, { align: 'center' });
-    doc.moveDown();
-    addTable(
-      doc,
-      headers,
-      rows.length > 0
-        ? rows
-        : [{
-            firstname: 'No data',
-            lastname: '-',
-            email: '-',
-            date: '-',
-            status: '-'
-          }]
-    );
-    doc.end();
-  } catch (err) {
-    if (!res.headersSent) {
-      res.status(500).end('Failed to generate attendance report');
-    }
-  }
-});
-
-// Download Payslip PDF for an employee for a given month
-app.get('/api/employees/:id/payslip', async (req, res) => {
-  try {
-    const { id } = req.params;
-    let { month } = req.query;
-    if (!month) {
-      const now = new Date();
-      month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-    }
-    const emp = await Employee.findById(id);
-    if (!emp) return res.status(404).json({ error: 'Employee not found' });
-
-    // Get payroll details
-    const standards = await getStandardPayrollItems();
-    const payrollDetails = calculateEmployeePayroll(emp, standards);
-
-    const doc = new PDFDocument();
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename=payslip_${emp.firstname}_${emp.lastname}_${month}.pdf`);
-    doc.pipe(res);
-
-    doc.on('error', (err) => {
-      if (!res.headersSent) {
-        res.status(500).end('Failed to generate payslip PDF');
-      }
-    });
-
-    // Payslip Header
-    doc.fontSize(18).text('Payslip', { align: 'center' });
-    doc.moveDown();
-    doc.fontSize(12).text(`Month: ${month}`, { align: 'right' });
-    doc.moveDown();
-
-    // Employee Details
-    doc.fontSize(12).text(`Name: ${emp.firstname} ${emp.lastname}`);
-    doc.text(`Email: ${emp.email}`);
-    doc.text(`Department: ${emp.department || '-'}`);
-    doc.text(`Position: ${emp.position || '-'}`);
-    doc.text(`Employee ID: ${emp.employeeId || emp._id}`);
-    doc.moveDown();
-
-    // Salary Details
-    doc.fontSize(14).text('Salary Details', { underline: true });
-    doc.moveDown(0.5);
-    
-    // Basic Salary
-    doc.fontSize(12).text(`Basic Salary: ₹${payrollDetails.basicSalary.toLocaleString('en-IN')}`);
-    doc.moveDown(0.5);
-    
-    // Allowances
-    if (payrollDetails.allowances && payrollDetails.allowances.length > 0) {
-      doc.fontSize(13).text('Allowances:', { underline: true });
-      doc.moveDown(0.3);
-      payrollDetails.allowances.forEach(allowance => {
-        doc.fontSize(11).text(`  ${allowance.name} (${allowance.percentage}%): ₹${allowance.amount.toLocaleString('en-IN')}`);
-      });
-      doc.fontSize(12).text(`Total Allowances: ₹${payrollDetails.totalAllowances.toLocaleString('en-IN')}`, { indent: 20 });
-      doc.moveDown(0.5);
-    }
-    
-    // Gross Salary
-    doc.fontSize(12).text(`Gross Salary: ₹${payrollDetails.grossSalary.toLocaleString('en-IN')}`, { underline: true });
-    doc.moveDown(0.5);
-    
-    // Deductions
-    if (payrollDetails.deductions && payrollDetails.deductions.length > 0) {
-      doc.fontSize(13).text('Deductions:', { underline: true });
-      doc.moveDown(0.3);
-      payrollDetails.deductions.forEach(deduction => {
-        doc.fontSize(11).text(`  ${deduction.name} (${deduction.percentage}%): ₹${deduction.amount.toLocaleString('en-IN')}`);
-      });
-      doc.fontSize(12).text(`Total Deductions: ₹${payrollDetails.totalDeductions.toLocaleString('en-IN')}`, { indent: 20 });
-      doc.moveDown(0.5);
-    }
-    
-    // Net Salary
-    doc.fontSize(14).text(`Net Salary: ₹${payrollDetails.netSalary.toLocaleString('en-IN')}`, { underline: true });
-    doc.moveDown();
-    
-    // Annual CTC
-    doc.fontSize(12).text(`Annual CTC: ₹${(payrollDetails.grossSalary * 12).toLocaleString('en-IN')}`);
-    doc.moveDown();
-
-    // Footer
-    doc.text('This is a system generated payslip.', { align: 'center', fontSize: 10 });
-    doc.end();
-  } catch (err) {
-    if (!res.headersSent) {
-      res.status(500).end('Failed to generate payslip');
-    }
-  }
-});
-// --- End Reports API ---
-
-// --- Schedule Report Endpoint ---
-app.post('/api/reports/schedule', async (req, res) => {
-  try {
-    const { type, date, email } = req.body;
-    if (!type || !date || !email) {
-      return res.status(400).json({ error: 'Type, date, and email are required.' });
-    }
-    await ScheduledReport.create({ type, date, email });
-    res.json({ message: 'Report scheduled successfully.' });
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to schedule report.' });
-  }
-});
-// --- End Schedule Report Endpoint ---
-
-// --- Automated Scheduled Report Sender ---
-const sendScheduledReports = async () => {
-  const now = new Date();
-  // Find all pending reports scheduled for now or earlier
-  const pending = await ScheduledReport.find({ status: 'pending', date: { $lte: now } });
-  for (const report of pending) {
-    try {
-      // Generate report CSV
-      let csv, filename;
-      if (report.type === 'summary') {
-        const employees = await Employee.find({}, 'firstname lastname email department status role');
-        const fields = ['firstname', 'lastname', 'email', 'department', 'status', 'role'];
-        const parser = new (require('json2csv').Parser)({ fields });
-        csv = parser.parse(employees);
-        filename = 'employee_summary.csv';
-      } else if (report.type === 'analytics') {
-        const departments = await Employee.aggregate([
-          { $group: { _id: '$department', count: { $sum: 1 } } },
-          { $sort: { count: -1 } }
-        ]);
-        const fields = ['_id', 'count'];
-        const parser = new (require('json2csv').Parser)({ fields });
-        csv = parser.parse(departments);
-        filename = 'department_analysis.csv';
-      } else if (report.type === 'financial') {
-        const employees = await Employee.find({}, 'firstname lastname email department salary');
-        const fields = ['firstname', 'lastname', 'email', 'department', 'salary'];
-        const parser = new (require('json2csv').Parser)({ fields });
-        csv = parser.parse(employees);
-        filename = 'payroll_report.csv';
-      } else if (report.type === 'attendance') {
-        const employees = await Employee.find({}, 'firstname lastname email attendance');
-        const rows = [];
-        employees.forEach(emp => {
-          (emp.attendance || []).forEach(a => {
-            rows.push({
-              firstname: emp.firstname,
-              lastname: emp.lastname,
-              email: emp.email,
-              date: a.date,
-              status: a.status
-            });
-          });
-        });
-        const fields = ['firstname', 'lastname', 'email', 'date', 'status'];
-        const parser = new (require('json2csv').Parser)({ fields });
-        csv = parser.parse(rows);
-        filename = 'attendance_report.csv';
-      } else {
-        throw new Error('Unknown report type');
-      }
-      // Send email
-      let transporter = nodemailer.createTransport({
-        service: 'gmail',
-        auth: {
-          user: process.env.REPORT_EMAIL_USER || 'your-email@gmail.com',
-          pass: process.env.REPORT_EMAIL_PASS || 'your-app-password'
-        }
-      });
-      await transporter.sendMail({
-        from: process.env.REPORT_EMAIL_USER || 'your-email@gmail.com',
-        to: report.email,
-        subject: 'Your Scheduled Report',
-        text: 'Please find your scheduled report attached.',
-        attachments: [{ filename, content: csv }]
-      });
-      report.status = 'sent';
-      await report.save();
-    } catch (err) {
-      report.status = 'failed';
-      await report.save();
-    }
-  }
-};
-// Run every 1 minute
-cron.schedule('* * * * *', sendScheduledReports);
-// --- End Automated Scheduled Report Sender ---
-
-// --- Holiday Schema and Endpoints ---
-const holidaySchema = new mongoose.Schema({
-  name: { type: String, required: true },
-  date: { type: String, required: true }, // YYYY-MM-DD
-  createdBy: String,
-});
-const Holiday = mongoose.model('Holiday', holidaySchema);
-
-// Add a holiday (admin only)
-app.post('/api/holidays', async (req, res) => {
-  try {
-    const { name, date, createdBy } = req.body;
-    if (!name || !date) return res.status(400).json({ error: 'Name and date are required' });
-    const holiday = new Holiday({ name, date, createdBy });
-    await holiday.save();
-    res.json({ success: true, holiday });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Get all holidays
-app.get('/api/holidays', async (req, res) => {
-  try {
-    const holidays = await Holiday.find().sort({ date: 1 });
-    res.json({ holidays });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-// --- End Holiday Schema and Endpoints ---
-
-// --- Payroll Calculation Functions (Percentage-based Only) ---
-async function getStandardPayrollItems() {
-  try {
-    const settings = await Settings.findOne({ key: 'payroll_standards' });
-    if (!settings) return { allowances: [], deductions: [] };
-    return settings.value || { allowances: [], deductions: [] };
-  } catch (error) {
-    console.error('Error fetching standard payroll items:', error);
-    return { allowances: [], deductions: [] };
-  }
-}
-
-function calculateEmployeePayroll(employee, standards) {
-  const annualSalary = employee?.salary || 0;
-  const basicSalary = annualSalary / 12; // Monthly basic
-  
-  if (!standards || !standards.allowances || !standards.deductions) {
-    return {
-      basicSalary: Math.round(basicSalary * 100) / 100,
-      grossSalary: Math.round(basicSalary * 100) / 100,
-      netSalary: Math.round(basicSalary * 100) / 100,
-      allowances: [],
-      deductions: [],
-      totalAllowances: 0,
-      totalDeductions: 0
-    };
-  }
-
-  const calculatedAllowances = (standards.allowances || []).map(allowance => {
-    const amount = basicSalary * (allowance.percentage / 100);
-    return {
-      name: allowance.name,
-      amount: Math.round(amount * 100) / 100, // round to 2 decimal places
-      percentage: allowance.percentage,
-      calculationType: 'percentage' // Explicitly set for frontend
-    };
-  });
-
-  const totalAllowances = calculatedAllowances.reduce((sum, item) => sum + item.amount, 0);
-  const grossSalary = basicSalary + totalAllowances;
-
-  const calculatedDeductions = (standards.deductions || []).map(deduction => {
-    // Deductions are calculated on the gross salary
-    const amount = grossSalary * (deduction.percentage / 100);
-    return {
-      name: deduction.name,
-      amount: Math.round(amount * 100) / 100, // round to 2 decimal places
-      percentage: deduction.percentage,
-      calculationType: 'percentage' // Explicitly set for frontend
-    };
-  });
-
-  const totalDeductions = calculatedDeductions.reduce((sum, item) => sum + item.amount, 0);
-  const netSalary = grossSalary - totalDeductions;
-
-  const result = {
-    basicSalary: Math.round(basicSalary * 100) / 100,
-    grossSalary: Math.round(grossSalary * 100) / 100,
-    netSalary: Math.round(netSalary * 100) / 100,
-    allowances: calculatedAllowances,
-    deductions: calculatedDeductions,
-    totalAllowances: Math.round(totalAllowances * 100) / 100,
-    totalDeductions: Math.round(totalDeductions * 100) / 100
-  };
-  
-  return result;
-}
-
-async function initializePayrollStandards() {
-  try {
-    const exists = await Settings.findOne({ key: 'payroll_standards' });
-    if (!exists) {
-      await Settings.create({
-        key: 'payroll_standards',
-        value: {
-          allowances: [
-            { name: 'HRA', percentage: 30 },
-            { name: 'Transport', percentage: 10 }
-          ],
-          deductions: [
-            { name: 'PF', percentage: 5 },
-            { name: 'Professional Tax', percentage: 2 }
-          ]
-        }
-      });
-      console.log('Initialized default percentage-based payroll standards in Settings.');
-    }
-  } catch (error) {
-    console.error('Error initializing payroll standards:', error);
-  }
-}
-// --- End Payroll Calculation Functions ---
-
-// --- Settings Model for Payroll Standards ---
-const settingsSchema = new mongoose.Schema({
-  key: { type: String, required: true, unique: true },
-  value: {
-    allowances: [{
-      name: { type: String, required: true },
-      percentage: { type: Number, required: true } // Enforce percentage only
-    }],
-    deductions: [{
-      name: { type: String, required: true },
-      percentage: { type: Number, required: true } // Enforce percentage only
-    }]
-  }
-});
-const Settings = mongoose.model('Settings', settingsSchema);
-
-// --- Payroll Management Endpoints (Settings-based) ---
-app.get('/api/payroll/standards', async (req, res) => {
-  try {
-    const settings = await Settings.findOne({ key: 'payroll_standards' });
-    res.json(settings ? settings.value : { allowances: [], deductions: [] });
-  } catch (error) {
-    console.error('Error fetching payroll standards:', error);
-    res.status(500).json({ error: 'Failed to fetch payroll standards' });
-  }
-});
-
-app.post('/api/payroll/standards', async (req, res) => {
-  try {
-    const { allowances, deductions } = req.body;
-
-    // Validate that all incoming items are percentage-based
-    const validateItems = (items) => {
-      if (!Array.isArray(items)) return false;
-      return items.every(item => 
-        item &&
-        typeof item.name === 'string' &&
-        typeof item.percentage === 'number' &&
-        Object.keys(item).length === 2 // Ensures no extra properties like 'amount'
-      );
-    };
-
-    if (!validateItems(allowances) || !validateItems(deductions)) {
-      return res.status(400).json({ error: 'Invalid data format. All items must have only a name and a percentage.' });
-    }
-
-    let settings = await Settings.findOneAndUpdate(
-      { key: 'payroll_standards' },
-      { value: { allowances, deductions } },
-      { new: true, upsert: true }
-    );
-    
-    res.json(settings.value);
-  } catch (error) {
-    console.error('Error updating payroll standards:', error);
-    res.status(500).json({ error: 'Failed to update payroll standards' });
-  }
-});
-
-app.post('/api/payroll/apply-standards-to-all', async (req, res) => {
-  try {
-    const standardPayroll = await getStandardPayrollItems();
-    
-    const employees = await Employee.find({});
-    let updated = 0;
-    
-    for (const employee of employees) {
-      // Calculate fresh payroll amounts based on employee's salary
-      const payrollData = calculateEmployeePayroll(employee, standardPayroll);
-      
-      // Clear existing payroll items and set new calculated ones
-      employee.allowances = payrollData.allowances;
-      employee.deductions = payrollData.deductions;
-      
-      await employee.save();
-      updated++;
-      
-      console.log('Applied percentage-based payroll for: ' + employee.firstname + ' ' + employee.lastname + ' (Salary: Rs.' + employee.salary + ')');
-    }
-    
-    res.json({
-      message: 'Applied percentage-based payroll for ' + updated + ' employee(s)',
-      updated,
-      standardPayroll
-    });
-    
-  } catch (error) {
-    console.error('Error applying standards:', error);
-    res.status(500).json({ error: 'Failed to apply standards to all employees' });
-  }
-});
-
-// --- SOCKET.IO SETUP ---
-const server = http.createServer(app);
-const io = new Server(server, {
-  cors: {
-    origin: '*',
-    methods: ['GET', 'POST']
-  }
-});
-
-global._io = io; // Make io accessible globally if needed
-// --- END SOCKET.IO SETUP ---
-
-// --- Document (Company Policy) Model ---
-const documentSchema = new mongoose.Schema({
-  title: { type: String, required: true },
-  description: { type: String }, // Add description field
-  filePath: { type: String, required: true },
-  uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', required: false },
-  uploadedAt: { type: Date, default: Date.now }
-});
-const Document = mongoose.model('Document', documentSchema);
-
-// Policy model (alias for Document to match frontend expectations)
-const PolicyDoc = Document;
-// --- End Document Model ---
-
-// --- Policy Endpoints (Compatible with frontend) ---
-// Get all policies
-app.get('/api/policies', async (req, res) => {
-  try {
-    const policies = await PolicyDoc.find({})
-      .populate({ path: 'uploadedBy', select: 'firstname lastname' })
-      .sort({ uploadedAt: -1 });
-    
-    res.json(policies.map(policy => ({
-      _id: policy._id,
-      title: policy.title,
-      description: policy.description,
-      uploadedBy: policy.uploadedBy ? (policy.uploadedBy.firstname + ' ' + policy.uploadedBy.lastname) : 'Admin',
-      uploadedAt: policy.uploadedAt,
-      fileUrl: 'http://localhost:5050' + policy.filePath, // Full URL for file access
-    })));
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch policies' });
-  }
-});
-
-app.post('/api/policies', upload.single('file'), async (req, res) => {
-  try {
-    const { title, description, uploadedBy } = req.body;
-    
-    console.log('Policy upload request:', { title, description, uploadedBy, hasFile: !!req.file });
-    
-    if (!title || !req.file) {
-      console.log('Missing title or file:', { title: !!title, file: !!req.file });
-      return res.status(400).json({ error: 'Title and file are required' });
-    }
-    
-    const policy = new PolicyDoc({
-      title,
-      description: description || '',
-      filePath: '/uploads/' + req.file.filename,
-      uploadedBy: uploadedBy || undefined // Use undefined instead of null for optional ObjectId
-    });
-    
-    await policy.save();
-    console.log('Policy saved successfully:', policy._id);
-    
-    // Populate uploadedBy for response
-    const populatedPolicy = await PolicyDoc.findById(policy._id)
-      .populate({ path: 'uploadedBy', select: 'firstname lastname' });
-    
-    res.status(201).json({
-      _id: populatedPolicy._id,
-      title: populatedPolicy.title,
-      description: populatedPolicy.description,
-      uploadedBy: populatedPolicy.uploadedBy ? (populatedPolicy.uploadedBy.firstname + ' ' + populatedPolicy.uploadedBy.lastname) : 'Admin',
-      uploadedAt: populatedPolicy.uploadedAt,
-      fileUrl: 'http://localhost:5050' + populatedPolicy.filePath,
-    });
-  } catch (err) {
-    console.error('Policy upload error:', err);
-    res.status(400).json({ error: 'Failed to upload policy', details: err.message });
-  }
-});
-
-app.delete('/api/policies/:id', async (req, res) => {
-  try {
-    const policy = await PolicyDoc.findById(req.params.id);
-    if (!policy) {
-      return res.status(404).json({ error: 'Policy not found' });
-    }
-    
-    // Delete the physical file
-    const filePath = path.join(__dirname, policy.filePath);
-    if (fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath);
-    }
-    
-    await PolicyDoc.findByIdAndDelete(req.params.id);
-    res.json({ message: 'Policy deleted successfully' });
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to delete policy' });
-  }
-});
-// --- End Policy Endpoints ---
-
-// GET endpoint to fetch all sessions for an employee
-app.get('/api/sessions', async (req, res) => {
-  try {
-    const { employeeId } = req.query;
-    if (!employeeId) return res.status(400).json({ error: 'employeeId is required' });
-    const sessions = await Session.find({ employeeId }).sort({ startTime: -1 });
-    res.json({ sessions });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// --- Standard Payroll API Endpoints ---
-
-// Get calculated payroll for a specific employee (using percentage-based calculation)
-app.get('/api/employees/:id/payroll', async (req, res) => {
-  try {
-    const employee = await Employee.findById(req.params.id);
-    if (!employee) {
-      return res.status(404).json({ error: 'Employee not found' });
-    }
-
-    // Get the current payroll standards
-    const standards = await getStandardPayrollItems();
-    
-    // Calculate payroll using the standardized function
-    const payrollDetails = calculateEmployeePayroll(employee, standards);
-
-    res.json({
-      employeeId: employee.employeeId,
-      name: employee.firstname + ' ' + employee.lastname,
-      ...payrollDetails
-    });
-  } catch (error) {
-    console.error('Error calculating employee payroll:', error);
-    res.status(500).json({ error: 'Failed to calculate payroll' });
-  }
-});
-
-// --- End Standard Payroll API Endpoints ---
-
-server.listen(PORT, async () => {
-  console.log('Server is running on port ' + PORT);
-  
-  // Initialize payroll standards if not already present
-  await initializePayrollStandards();
-});
+// --- End Employee Management & Authentication Endpoints ---
 
