@@ -27,12 +27,7 @@ const Session = mongoose.model('Session', sessionSchema);
 app.use(express.json());
 
 app.post('/api/session/start', async (req, res) => {
-  // Log the raw body for debugging
-  console.log('Raw req.body:', req.body);
   const { employeeName, employeeId } = req.body || {};
-
-  // Log the request body and employeeId for debugging
-  console.log('Session start request body:', req.body);
 
   try {
     // Save session to database
@@ -42,7 +37,6 @@ app.post('/api/session/start', async (req, res) => {
       startTime: new Date(),
     });
     await session.save();
-    console.log('Session saved:', session);
     res.json({ success: true });
   } catch (error) {
     console.error('Error saving session:', error);
@@ -300,20 +294,8 @@ app.post('/api/employees', async (req, res) => {
     employeeData.allowances = payrollData.allowances;
     employeeData.deductions = payrollData.deductions;
     
-    console.log('Assigning calculated payroll to new employee:', {
-      basicSalary: payrollData.basicSalary,
-      allowances: payrollData.allowances,
-      deductions: payrollData.deductions,
-      grossSalary: payrollData.grossSalary,
-      netSalary: payrollData.netSalary
-    });
-    
     const employee = new Employee(employeeData);
     await employee.save();
-    
-    // Debug: log the employee with password field
-    const saved = await Employee.findById(employee._id).select('+password');
-    console.log('Saved employee with password and payroll:', saved);
     
     res.status(201).json(employee);
   } catch (err) {
@@ -774,7 +756,6 @@ app.put('/api/employees/:id', upload.fields([
 });
 
 app.delete('/api/employees/:id', async (req, res) => {
-  console.log('Delete request for id:', req.params.id); // Debug log
   try {
     const deletedEmployee = await Employee.findByIdAndDelete(req.params.id);
     if (!deletedEmployee) {
@@ -804,11 +785,6 @@ app.post('/api/login', async (req, res) => {
       employee = await Employee.findOne({ email: loginField }).select('+password +mustChangePassword +firstname +lastname +role +lastLogin');
     }
     
-    console.log('Login attempt with:', loginField);
-    console.log('Employee found:', employee ? `${employee.firstname} ${employee.lastname} (${employee.employeeId})` : 'None');
-    if (employee) {
-      console.log('Employee has password set:', !!employee.password);
-    }
     if (!employee) {
       return res.status(401).json({ error: 'Invalid employee ID or password' });
     }
@@ -817,7 +793,6 @@ app.post('/api/login', async (req, res) => {
     }
     const isMatch = await bcrypt.compare(password, employee.password);
     if (!isMatch) {
-      console.log('Password comparison failed for employee:', employee.employeeId);
       return res.status(401).json({ error: 'Invalid employee ID or password' });
     }
     // Update lastLogin timestamp
@@ -903,20 +878,17 @@ app.post('/api/employees/:id/remote', async (req, res) => {
     }
     const emp = await Employee.findById(req.params.id);
     if (!emp) {
-      console.error('Remote mark failed: Employee not found for id', req.params.id);
       return res.status(404).json({ error: 'Employee not found' });
     }
     if (!Array.isArray(emp.remoteWork)) emp.remoteWork = [];
     if (emp.remoteWork.includes(date)) {
-      console.warn('Remote mark failed: Already marked as remote for this date.', { id: req.params.id, date });
       return res.status(400).json({ error: 'Already marked as remote for this date.' });
     }
     emp.remoteWork.push(date);
     await emp.save();
-    console.log('Remote mark success:', { id: req.params.id, date });
     res.json({ message: 'Marked as remote', remoteWork: emp.remoteWork });
   } catch (err) {
-    console.error('Remote mark failed:', err);
+    console.error('Failed to mark remote:', err);
     res.status(400).json({ error: 'Failed to mark remote', details: err.message });
   }
 });
@@ -1199,8 +1171,6 @@ app.get('/api/reports/attendance', async (req, res) => {
         }
       });
     });
-    // Debug: log how many rows are being added
-    console.log(`[Attendance Report] Month: ${month}, Rows: ${rows.length}`);
     const headers = ['firstname', 'lastname', 'email', 'date', 'status'];
     const doc = new PDFDocument();
     res.setHeader('Content-Type', 'application/pdf');
@@ -1342,55 +1312,36 @@ app.post('/api/fix-attendance-format', async (req, res) => {
   }
 });
 
-// Add this endpoint before app.listen
+// Get salary details for a specific employee (using percentage-based calculation)
 app.get('/api/employees/:id/salary', async (req, res) => {
   try {
-    const emp = await Employee.findById(req.params.id);
-    if (!emp) return res.status(404).json({ error: 'Employee not found' });
-    
-    // Get current payroll standards
-    const settings = await Settings.findOne({ key: 'payroll_standards' });
-    if (!settings) {
-      return res.status(500).json({ error: 'Payroll standards not configured' });
+    const employee = await Employee.findById(req.params.id);
+    if (!employee) {
+      return res.status(404).json({ error: 'Employee not found' });
     }
     
-    // Calculate payroll using current standards
-    const payroll = calculateEmployeePayroll(emp, settings.value);
+    // Get the current payroll standards
+    const standards = await getStandardPayrollItems();
     
-    console.log(`Dynamic salary calculation for employee ${emp.employeeId}:`, {
-      basicSalary: payroll.basicSalary,
-      totalAllowances: payroll.totalAllowances,
-      totalDeductions: payroll.totalDeductions,
-      grossSalary: payroll.grossSalary,
-      netSalary: payroll.netSalary
-    });
+    // Calculate payroll using the standardized function
+    const payrollDetails = calculateEmployeePayroll(employee, standards);
+
+    // Ensure the response has the expected structure
+    const response = {
+      employeeId: employee.employeeId,
+      name: `${employee.firstname} ${employee.lastname}`,
+      basicSalary: payrollDetails.basicSalary,
+      grossSalary: payrollDetails.grossSalary,
+      netSalary: payrollDetails.netSalary,
+      allowances: payrollDetails.allowances,
+      deductions: payrollDetails.deductions,
+      totalAllowances: payrollDetails.totalAllowances,
+      totalDeductions: payrollDetails.totalDeductions
+    };
     
-    // Calculate monthly values
-    const grossMonthlySalary = payroll.grossSalary / 12;
-    const netMonthlySalary = payroll.netSalary / 12;
-    
-    // Convert allowances and deductions to monthly amounts for frontend display
-    const monthlyAllowances = payroll.allowances.map(a => ({
-      ...a,
-      amount: Math.round((a.amount / 12) * 100) / 100 // Convert to monthly and round to 2 decimal places
-    }));
-    
-    const monthlyDeductions = payroll.deductions.map(d => ({
-      ...d,
-      amount: Math.round((d.amount / 12) * 100) / 100 // Convert to monthly and round to 2 decimal places
-    }));
-    
-    res.json({ 
-      salary: payroll.basicSalary,
-      allowances: monthlyAllowances || [],
-      deductions: monthlyDeductions || [],
-      totalAllowances: payroll.totalAllowances,
-      totalDeductions: payroll.totalDeductions,
-      grossMonthlySalary: Math.round(grossMonthlySalary * 100) / 100, // Round to 2 decimal places
-      netMonthlySalary: Math.round(netMonthlySalary * 100) / 100 // Round to 2 decimal places
-    });
-  } catch (err) {
-    console.error('Error fetching salary:', err);
+    res.json(response);
+  } catch (error) {
+    console.error('Error fetching employee salary:', error);
     res.status(500).json({ error: 'Failed to fetch salary' });
   }
 });
@@ -1520,7 +1471,7 @@ app.get('/api/holidays', async (req, res) => {
 });
 // --- End Holiday Schema and Endpoints ---
 
-// --- Payroll Calculation Functions (Settings-based) ---
+// --- Payroll Calculation Functions (Percentage-based Only) ---
 async function getStandardPayrollItems() {
   try {
     const settings = await Settings.findOne({ key: 'payroll_standards' });
@@ -1532,54 +1483,60 @@ async function getStandardPayrollItems() {
   }
 }
 
-function calculatePayrollAmount(item, basicSalary, grossSalary = null) {
-  if (item.calculationType === 'percentage') {
-    if (item.type === 'allowance') {
-      return Math.round((item.amount / 100) * basicSalary);
-    } else {
-      const baseAmount = grossSalary || basicSalary;
-      return Math.round((item.amount / 100) * baseAmount);
-    }
-  } else {
-    return item.amount;
+function calculateEmployeePayroll(employee, standards) {
+  const annualSalary = employee?.salary || 0;
+  const basicSalary = annualSalary / 12; // Monthly basic
+  
+  if (!standards || !standards.allowances || !standards.deductions) {
+    return {
+      basicSalary: Math.round(basicSalary * 100) / 100,
+      grossSalary: Math.round(basicSalary * 100) / 100,
+      netSalary: Math.round(basicSalary * 100) / 100,
+      allowances: [],
+      deductions: [],
+      totalAllowances: 0,
+      totalDeductions: 0
+    };
   }
-}
 
-function calculateEmployeePayroll(employee, standardPayroll) {
-  const basicSalary = employee.salary || 0;
-  let totalAllowances = 0;
-  const calculatedAllowances = (standardPayroll.allowances || []).map(allowance => {
-    const calculatedAmount = calculatePayrollAmount({ ...allowance, type: 'allowance' }, basicSalary);
-    totalAllowances += calculatedAmount;
+  const calculatedAllowances = (standards.allowances || []).map(allowance => {
+    const amount = basicSalary * (allowance.percentage / 100);
     return {
       name: allowance.name,
-      amount: calculatedAmount,
-      calculationType: allowance.calculationType || 'fixed',
-      originalAmount: allowance.amount
+      amount: Math.round(amount * 100) / 100, // round to 2 decimal places
+      percentage: allowance.percentage,
+      calculationType: 'percentage' // Explicitly set for frontend
     };
   });
+
+  const totalAllowances = calculatedAllowances.reduce((sum, item) => sum + item.amount, 0);
   const grossSalary = basicSalary + totalAllowances;
-  let totalDeductions = 0;
-  const calculatedDeductions = (standardPayroll.deductions || []).map(deduction => {
-    const calculatedAmount = calculatePayrollAmount({ ...deduction, type: 'deduction' }, basicSalary, grossSalary);
-    totalDeductions += calculatedAmount;
+
+  const calculatedDeductions = (standards.deductions || []).map(deduction => {
+    // Deductions are calculated on the gross salary
+    const amount = grossSalary * (deduction.percentage / 100);
     return {
       name: deduction.name,
-      amount: calculatedAmount,
-      calculationType: deduction.calculationType || 'fixed',
-      originalAmount: deduction.amount
+      amount: Math.round(amount * 100) / 100, // round to 2 decimal places
+      percentage: deduction.percentage,
+      calculationType: 'percentage' // Explicitly set for frontend
     };
   });
+
+  const totalDeductions = calculatedDeductions.reduce((sum, item) => sum + item.amount, 0);
   const netSalary = grossSalary - totalDeductions;
-  return {
-    basicSalary,
+
+  const result = {
+    basicSalary: Math.round(basicSalary * 100) / 100,
+    grossSalary: Math.round(grossSalary * 100) / 100,
+    netSalary: Math.round(netSalary * 100) / 100,
     allowances: calculatedAllowances,
     deductions: calculatedDeductions,
-    totalAllowances,
-    totalDeductions,
-    grossSalary,
-    netSalary
+    totalAllowances: Math.round(totalAllowances * 100) / 100,
+    totalDeductions: Math.round(totalDeductions * 100) / 100
   };
+  
+  return result;
 }
 
 async function initializePayrollStandards() {
@@ -1590,16 +1547,16 @@ async function initializePayrollStandards() {
         key: 'payroll_standards',
         value: {
           allowances: [
-            { name: 'HRA', amount: 40, calculationType: 'percentage' },
-            { name: 'Transport', amount: 2000, calculationType: 'fixed' }
+            { name: 'HRA', percentage: 30 },
+            { name: 'Transport', percentage: 10 }
           ],
           deductions: [
-            { name: 'PF', amount: 12, calculationType: 'percentage' },
-            { name: 'Professional Tax', amount: 200, calculationType: 'fixed' }
+            { name: 'PF', percentage: 5 },
+            { name: 'Professional Tax', percentage: 2 }
           ]
         }
       });
-      console.log('Initialized default payroll standards in Settings.');
+      console.log('Initialized default percentage-based payroll standards in Settings.');
     }
   } catch (error) {
     console.error('Error initializing payroll standards:', error);
@@ -1610,22 +1567,24 @@ async function initializePayrollStandards() {
 // --- Settings Model for Payroll Standards ---
 const settingsSchema = new mongoose.Schema({
   key: { type: String, required: true, unique: true },
-  value: { type: mongoose.Schema.Types.Mixed, required: true }
+  value: {
+    allowances: [{
+      name: { type: String, required: true },
+      percentage: { type: Number, required: true } // Enforce percentage only
+    }],
+    deductions: [{
+      name: { type: String, required: true },
+      percentage: { type: Number, required: true } // Enforce percentage only
+    }]
+  }
 });
 const Settings = mongoose.model('Settings', settingsSchema);
 
 // --- Payroll Management Endpoints (Settings-based) ---
 app.get('/api/payroll/standards', async (req, res) => {
   try {
-    console.log('GET /api/payroll/standards - Fetching standards...');
     const settings = await Settings.findOne({ key: 'payroll_standards' });
-    console.log('Found settings:', settings ? 'YES' : 'NO');
-    if (settings) {
-      console.log('Settings value:', JSON.stringify(settings.value, null, 2));
-    }
-    const response = settings ? settings.value : { allowances: [], deductions: [] };
-    console.log('Returning response:', JSON.stringify(response, null, 2));
-    res.json(response);
+    res.json(settings ? settings.value : { allowances: [], deductions: [] });
   } catch (error) {
     console.error('Error fetching payroll standards:', error);
     res.status(500).json({ error: 'Failed to fetch payroll standards' });
@@ -1634,66 +1593,63 @@ app.get('/api/payroll/standards', async (req, res) => {
 
 app.post('/api/payroll/standards', async (req, res) => {
   try {
-    console.log('POST /api/payroll/standards - Request body:', JSON.stringify(req.body, null, 2));
-    
     const { allowances, deductions } = req.body;
-    let settings = await Settings.findOne({ key: 'payroll_standards' });
-    
-    console.log('Found existing settings:', settings ? 'YES' : 'NO');
-    
-    if (!settings) {
-      settings = new Settings({ key: 'payroll_standards', value: { allowances: [], deductions: [] } });
-      console.log('Created new settings document');
+
+    // Validate that all incoming items are percentage-based
+    const validateItems = (items) => {
+      if (!Array.isArray(items)) return false;
+      return items.every(item => 
+        item &&
+        typeof item.name === 'string' &&
+        typeof item.percentage === 'number' &&
+        Object.keys(item).length === 2 // Ensures no extra properties like 'amount'
+      );
+    };
+
+    if (!validateItems(allowances) || !validateItems(deductions)) {
+      return res.status(400).json({ error: 'Invalid data format. All items must have only a name and a percentage.' });
     }
+
+    let settings = await Settings.findOneAndUpdate(
+      { key: 'payroll_standards' },
+      { value: { allowances, deductions } },
+      { new: true, upsert: true }
+    );
     
-    console.log('Before update - settings.value:', JSON.stringify(settings.value, null, 2));
-    
-    settings.value.allowances = Array.isArray(allowances) ? allowances : [];
-    settings.value.deductions = Array.isArray(deductions) ? deductions : [];
-    
-    // Mark the value field as modified so Mongoose knows to save it
-    settings.markModified('value');
-    
-    console.log('After update - settings.value:', JSON.stringify(settings.value, null, 2));
-    console.log('Settings modified:', settings.isModified());
-    
-    const saveResult = await settings.save();
-    console.log('Save result:', saveResult ? 'SUCCESS' : 'FAILED');
-    console.log('Saved document ID:', saveResult._id);
-    
-    res.json({ success: true, value: settings.value });
+    res.json(settings.value);
   } catch (error) {
-    console.error('Error in POST /api/payroll/standards:', error);
-    res.status(500).json({ error: 'Failed to update payroll standards', details: error.message });
+    console.error('Error updating payroll standards:', error);
+    res.status(500).json({ error: 'Failed to update payroll standards' });
   }
 });
 
 app.post('/api/payroll/apply-standards-to-all', async (req, res) => {
   try {
-    const settings = await Settings.findOne({ key: 'payroll_standards' });
-    if (!settings) return res.status(400).json({ error: 'Payroll standards not set' });
-    
-    console.log('Applying payroll standards:', JSON.stringify(settings.value, null, 2));
+    const standardPayroll = await getStandardPayrollItems();
     
     const employees = await Employee.find({});
     let updated = 0;
-    for (const emp of employees) {
-      console.log(`\nProcessing employee: ${emp.firstname} ${emp.lastname} (Salary: ₹${emp.salary})`);
-      const payroll = calculateEmployeePayroll(emp, settings.value);
+    
+    for (const employee of employees) {
+      // Calculate fresh payroll amounts based on employee's salary
+      const payrollData = calculateEmployeePayroll(employee, standardPayroll);
       
-      console.log('Calculated payroll:', {
-        allowances: payroll.allowances,
-        deductions: payroll.deductions,
-        grossSalary: payroll.grossSalary,
-        netSalary: payroll.netSalary
-      });
+      // Clear existing payroll items and set new calculated ones
+      employee.allowances = payrollData.allowances;
+      employee.deductions = payrollData.deductions;
       
-      emp.allowances = payroll.allowances;
-      emp.deductions = payroll.deductions;
-      await emp.save();
+      await employee.save();
       updated++;
+      
+      console.log(`Applied percentage-based payroll for: ${employee.firstname} ${employee.lastname} (Salary: ₹${employee.salary})`);
     }
-    res.json({ success: true, updated });
+    
+    res.json({
+      message: `Applied percentage-based payroll for ${updated} employee(s)`,
+      updated,
+      standardPayroll
+    });
+    
   } catch (error) {
     console.error('Error applying standards:', error);
     res.status(500).json({ error: 'Failed to apply standards to all employees' });
@@ -1807,10 +1763,8 @@ app.delete('/api/policies/:id', async (req, res) => {
 app.get('/api/sessions', async (req, res) => {
   try {
     const { employeeId } = req.query;
-    console.log('Fetching sessions for employeeId:', employeeId);
     if (!employeeId) return res.status(400).json({ error: 'employeeId is required' });
     const sessions = await Session.find({ employeeId }).sort({ startTime: -1 });
-    console.log('Sessions found:', sessions);
     res.json({ sessions });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -1819,43 +1773,7 @@ app.get('/api/sessions', async (req, res) => {
 
 // --- Standard Payroll API Endpoints ---
 
-// Clean up duplicate payroll items and reapply standards
-app.post('/api/payroll/cleanup-and-reapply', async (req, res) => {
-  try {
-    const standardPayroll = await getStandardPayrollItems();
-    
-    const employees = await Employee.find({});
-    let updatedCount = 0;
-    
-    for (const employee of employees) {
-      // Calculate fresh payroll amounts based on employee's salary
-      const payrollData = calculateEmployeePayroll(employee, standardPayroll);
-      
-      // Clear existing payroll items and set new calculated ones
-      employee.allowances = payrollData.allowances;
-      employee.deductions = payrollData.deductions;
-      
-      await employee.save();
-      updatedCount++;
-      
-      console.log(`Cleaned up and reapplied payroll for: ${employee.firstname} ${employee.lastname} (Salary: ₹${employee.salary})`);
-      console.log(`  HRA: ₹${payrollData.allowances.find(a => a.name === 'HRA')?.amount || 0}`);
-      console.log(`  PF: ₹${payrollData.deductions.find(d => d.name === 'PF')?.amount || 0}`);
-    }
-    
-    res.json({
-      message: `Cleaned up and reapplied payroll for ${updatedCount} employee(s)`,
-      updated: updatedCount,
-      standardPayroll
-    });
-    
-  } catch (error) {
-    console.error('Error cleaning up payroll:', error);
-    res.status(500).json({ error: 'Failed to clean up and reapply payroll' });
-  }
-});
-
-// Get calculated payroll for a specific employee
+// Get calculated payroll for a specific employee (using percentage-based calculation)
 app.get('/api/employees/:id/payroll', async (req, res) => {
   try {
     const employee = await Employee.findById(req.params.id);
@@ -1863,24 +1781,16 @@ app.get('/api/employees/:id/payroll', async (req, res) => {
       return res.status(404).json({ error: 'Employee not found' });
     }
 
-    const basicSalary = employee.salary || 0;
+    // Get the current payroll standards
+    const standards = await getStandardPayrollItems();
     
-    // Calculate totals from employee's allowances and deductions
-    const totalAllowances = (employee.allowances || []).reduce((sum, a) => sum + (a.amount || 0), 0);
-    const totalDeductions = (employee.deductions || []).reduce((sum, d) => sum + (d.amount || 0), 0);
-    const grossSalary = basicSalary + totalAllowances;
-    const netSalary = grossSalary - totalDeductions;
+    // Calculate payroll using the standardized function
+    const payrollDetails = calculateEmployeePayroll(employee, standards);
 
     res.json({
       employeeId: employee.employeeId,
       name: `${employee.firstname} ${employee.lastname}`,
-      basicSalary,
-      allowances: employee.allowances || [],
-      deductions: employee.deductions || [],
-      totalAllowances,
-      totalDeductions,
-      grossSalary,
-      netSalary
+      ...payrollDetails
     });
   } catch (error) {
     console.error('Error calculating employee payroll:', error);
@@ -1890,7 +1800,10 @@ app.get('/api/employees/:id/payroll', async (req, res) => {
 
 // --- End Standard Payroll API Endpoints ---
 
-server.listen(PORT, () => {
+server.listen(PORT, async () => {
   console.log(`Server is running on port ${PORT}`);
+  
+  // Initialize payroll standards if not already present
+  await initializePayrollStandards();
 });
 

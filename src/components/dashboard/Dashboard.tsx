@@ -969,6 +969,8 @@ const handleDeleteLeave = async (leaveId: string) => {
   interface AllowanceOrDeduction {
     name: string;
     amount: number;
+    percentage: number;
+    calculationType: string;
   }
   interface PayrollDetails {
     salary: number;
@@ -977,6 +979,12 @@ const handleDeleteLeave = async (leaveId: string) => {
     startDate: string;
     allowances: AllowanceOrDeduction[];
     deductions: AllowanceOrDeduction[];
+    // Add backend-calculated fields
+    grossMonthlySalary?: number;
+    netMonthlySalary?: number;
+    totalAllowances?: number;
+    totalDeductions?: number;
+    lastUpdated?: number;
   }
   const [salary, setSalary] = useState<number | null>(null);
   const [salaryLoading, setSalaryLoading] = useState(false);
@@ -1005,20 +1013,26 @@ const handleDeleteLeave = async (leaveId: string) => {
     fetchStandards();
   }, []);
 
+  // Legacy frontend calculation functions (kept as fallback for older data)
   function calculateMonthlyGross(salary: number) {
     if (typeof salary !== "number" || isNaN(salary)) return 0;
     return Math.round(salary / 12);
   }
   function calculateTotalAllowances(details: PayrollDetails | null) {
-    if (!details || !Array.isArray(details.allowances)) return 0;
+    if (!details || !Array.isArray(details.allowances)) {
+      return 0;
+    }
     return details.allowances.reduce((sum, a) => sum + (a.amount || 0), 0);
   }
   function calculateTotalDeductions(details: PayrollDetails | null) {
-    if (!details || !Array.isArray(details.deductions)) return 0;
+    if (!details || !Array.isArray(details.deductions)) {
+      return 0;
+    }
     return details.deductions.reduce((sum, d) => sum + (d.amount || 0), 0);
   }
   function calculateNetMonthlySalary(details: PayrollDetails | null) {
-    const gross = details ? calculateMonthlyGross(details.salary) : 0;
+    // Fallback calculation for legacy data without backend-calculated values
+    const gross = salary !== null ? calculateMonthlyGross(salary) : 0;
     const allowances = calculateTotalAllowances(details);
     const deductions = calculateTotalDeductions(details);
     return gross + allowances - deductions;
@@ -1026,10 +1040,44 @@ const handleDeleteLeave = async (leaveId: string) => {
 
   // Fetch salary and payroll details for the current user from backend for all roles
   const fetchSalary = useCallback(async () => {
+    if (!userId) {
+      setSalaryLoading(false);
+      return;
+    }
+    
     setSalaryLoading(true);
+    
+    // Clear existing data to prevent stale display
+    setPayrollDetails(null);
+    setSalary(null);
+    
     try {
-      // Fetch salary from dedicated endpoint
-      const res = await fetch(`http://localhost:5050/api/employees/${userId}/salary`);
+      // First, fetch the latest standard allowances and deductions with cache-busting
+      const standardRes = await fetch('http://localhost:5050/api/payroll/standards', {
+        cache: 'no-cache',
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        }
+      });
+      const standardData = standardRes.ok ? await standardRes.json() : {};
+      const latestStandardAllowances = standardData.allowances || [];
+      const latestStandardDeductions = standardData.deductions || [];
+      
+      // Update the state for standard allowances and deductions
+      setStandardAllowances(latestStandardAllowances);
+      setStandardDeductions(latestStandardDeductions);
+      
+      // Fetch salary from dedicated endpoint with cache-busting (now includes backend-calculated gross and net)
+      const cacheBuster = Date.now();
+      const apiUrl = `http://localhost:5050/api/employees/${userId}/payroll?t=${cacheBuster}`;
+      const res = await fetch(apiUrl, {
+        cache: 'no-cache',
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        }
+      });
       if (!res.ok) {
         setSalary(null);
         setPayrollDetails(null);
@@ -1037,27 +1085,55 @@ const handleDeleteLeave = async (leaveId: string) => {
         return;
       }
       const data = await res.json();
-      setSalary(typeof data.salary === "number" ? data.salary : (data.salary && !isNaN(Number(data.salary)) ? Number(data.salary) : null));
-      // Optionally fetch other details from /api/employees/:id if needed
-      const empRes = await fetch(`http://localhost:5050/api/employees/${userId}`);
+      
+      // Extract salary from basicSalary * 12 (since basicSalary is monthly)
+      const annualSalary = data.basicSalary ? data.basicSalary * 12 : null;
+      setSalary(annualSalary);
+      
+      // Fetch other details from /api/employees/:id if needed with cache-busting
+      const empRes = await fetch(`http://localhost:5050/api/employees/${userId}`, {
+        cache: 'no-cache',
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        }
+      });
       const empData = empRes.ok ? await empRes.json() : {};
-      setPayrollDetails({
-        salary: typeof data.salary === "number" ? data.salary : (data.salary && !isNaN(Number(data.salary)) ? Number(data.salary) : 0),
+      
+      const finalPayrollDetails = {
+        salary: annualSalary || 0,
         position: empData.position ?? '',
         department: empData.department ?? '',
         startDate: empData.startDate ?? '',
-        allowances: Array.isArray(empData.allowances) && empData.allowances.length > 0 ? empData.allowances : standardAllowances,
-        deductions: Array.isArray(empData.deductions) && empData.deductions.length > 0 ? empData.deductions : standardDeductions,
-      });
-    } catch {
+        allowances: data.allowances || [],
+        deductions: data.deductions || [],
+        // Add backend-calculated values (already monthly from backend)
+        grossMonthlySalary: data.grossSalary || 0,
+        netMonthlySalary: data.netSalary || 0,
+        totalAllowances: data.totalAllowances || 0,
+        totalDeductions: data.totalDeductions || 0
+      };
+      
+      // Add timestamp to force re-render
+      const finalPayrollDetailsWithTimestamp = {
+        ...finalPayrollDetails,
+        lastUpdated: Date.now()
+      };
+      
+      setPayrollDetails(finalPayrollDetailsWithTimestamp);
+    } catch (error) {
+      console.error('Error in fetchSalary:', error);
       setSalary(null);
       setPayrollDetails(null);
     }
     setSalaryLoading(false);
-  }, [userId, standardAllowances, standardDeductions]);
+  }, [userId]);
 
   useEffect(() => {
-    if (activeTab === 'payroll') fetchSalary();
+    if (activeTab === 'payroll') {
+      // Always refresh payroll data when the tab is accessed
+      fetchSalary();
+    }
   }, [activeTab, fetchSalary]);
 
   // Payslip download handler for any month
@@ -2193,7 +2269,16 @@ const handleDeleteLeave = async (leaveId: string) => {
           <div className="p-8">
             <Card className="max-w-2xl mx-auto mb-8 shadow-lg border border-gray-200 dark:border-gray-700">
               <CardHeader>
-                <CardTitle className="text-2xl font-bold text-center mb-2">My Salary Details</CardTitle>
+                <div className="flex justify-between items-center">
+                  <CardTitle className="text-2xl font-bold">Payroll Information</CardTitle>
+                  <button
+                    onClick={fetchSalary}
+                    disabled={salaryLoading}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                  >
+                    {salaryLoading ? 'Loading...' : 'Refresh Data'}
+                  </button>
+                </div>
               </CardHeader>
               <CardContent>
                 {salaryLoading ? (
@@ -2207,55 +2292,86 @@ const handleDeleteLeave = async (leaveId: string) => {
                       </div>
                       <div className="bg-purple-50 dark:bg-purple-900 rounded p-3 flex flex-col">
                         <span className="font-semibold text-purple-700 dark:text-purple-200">Monthly Gross Salary</span>
-                        <span className="text-lg font-bold">{salary !== null && salary !== undefined ? `₹${calculateMonthlyGross(salary)?.toLocaleString("en-IN")}` : '--'}</span>
+                        <span className="text-lg font-bold">
+                          {payrollDetails?.grossMonthlySalary !== undefined 
+                            ? `₹${payrollDetails.grossMonthlySalary.toLocaleString("en-IN")}` 
+                            : (salary !== null && salary !== undefined ? `₹${calculateMonthlyGross(salary)?.toLocaleString("en-IN")}` : '--')
+                          }
+                        </span>
                       </div>
                     </div>
                     {/* Allowances Section */}
-                    {Array.isArray(payrollDetails?.allowances) && payrollDetails.allowances.length > 0 && (
-                      <div>
-                        <div className="font-semibold text-green-700 dark:text-green-300 mb-1 flex items-center gap-2">
-                          <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 1.343-3 3s1.343 3 3 3 3-1.343 3-3-1.343-3-3-3z"/><path strokeLinecap="round" strokeLinejoin="round" d="M19.4 15a1.65 1.65 0 01-1.4 2.4H6a1.65 1.65 0 01-1.4-2.4l1.4-2.4V7a5 5 0 0110 0v5.6l1.4 2.4z"/></svg>
-                          Allowances (Monthly)
-                        </div>
-                        <table className="w-full text-sm mb-2">
+                    <div>
+                      <div className="font-semibold text-green-700 dark:text-green-300 mb-1 flex items-center gap-2">
+                        <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 1.343-3 3s1.343 3 3 3 3-1.343 3-3-1.343-3-3-3z"/><path strokeLinecap="round" strokeLinejoin="round" d="M19.4 15a1.65 1.65 0 01-1.4 2.4H6a1.65 1.65 0 01-1.4-2.4l1.4-2.4V7a5 5 0 0110 0v5.6l1.4 2.4z"/></svg>
+                        Allowances (Monthly)
+                      </div>
+                      {Array.isArray(payrollDetails?.allowances) && payrollDetails.allowances.length > 0 ? (
+                        <table className="w-full text-sm mb-2" key={`allowances-${payrollDetails.allowances.length}-${payrollDetails.allowances[0]?.amount}`}>
                           <tbody>
                             {payrollDetails.allowances.map((a, idx) => (
                               <tr key={idx} className="border-b border-gray-100 dark:border-gray-700">
-                                <td className="py-1 pl-2">{a.name}</td>
-                                <td className="py-1 pr-2 text-right text-green-700 dark:text-green-300 font-semibold">₹{a.amount}</td>
+                                <td className="py-1 pl-2">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-medium">{a.name}</span>
+                                    <span className="px-2 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 text-xs font-semibold rounded">
+                                      {a.percentage || 0}%
+                                    </span>
+                                  </div>
+                                </td>
+                                <td className="py-1 pr-2 text-right text-green-700 dark:text-green-300 font-semibold">
+                                  ₹{a.amount.toLocaleString("en-IN")}
+                                </td>
                               </tr>
                             ))}
                           </tbody>
                         </table>
-                      </div>
-                    )}
+                      ) : (
+                        <div className="text-sm text-gray-500 dark:text-gray-400 mb-2 pl-2">No allowances configured</div>
+                      )}
+                    </div>
                     {/* Deductions Section */}
-                    {Array.isArray(payrollDetails?.deductions) && payrollDetails.deductions.length > 0 && (
-                      <div>
-                        <div className="font-semibold text-red-700 dark:text-red-300 mb-1 flex items-center gap-2">
-                          <svg className="w-4 h-4 text-red-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 1.343-3 3s1.343 3 3 3 3-1.343 3-3-1.343-3-3-3z"/><path strokeLinecap="round" strokeLinejoin="round" d="M19.4 15a1.65 1.65 0 01-1.4 2.4H6a1.65 1.65 0 01-1.4-2.4l1.4-2.4V7a5 5 0 0110 0v5.6l1.4 2.4z"/></svg>
-                          Deductions (Monthly)
-                        </div>
-                        <table className="w-full text-sm mb-2">
+                    <div>
+                      <div className="font-semibold text-red-700 dark:text-red-300 mb-1 flex items-center gap-2">
+                        <svg className="w-4 h-4 text-red-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 1.343-3 3s1.343 3 3 3 3-1.343 3-3-1.343-3-3-3z"/><path strokeLinecap="round" strokeLinejoin="round" d="M19.4 15a1.65 1.65 0 01-1.4 2.4H6a1.65 1.65 0 01-1.4-2.4l1.4-2.4V7a5 5 0 0110 0v5.6l1.4 2.4z"/></svg>
+                        Deductions (Monthly)
+                      </div>
+                      {Array.isArray(payrollDetails?.deductions) && payrollDetails.deductions.length > 0 ? (
+                        <table className="w-full text-sm mb-2" key={`deductions-${payrollDetails.deductions.length}-${payrollDetails.deductions[0]?.amount}`}>
                           <tbody>
                             {payrollDetails.deductions.map((d, idx) => (
                               <tr key={idx} className="border-b border-gray-100 dark:border-gray-700">
-                                <td className="py-1 pl-2">{d.name}</td>
-                                <td className="py-1 pr-2 text-right text-red-700 dark:text-red-300 font-semibold">₹{d.amount}</td>
+                                <td className="py-1 pl-2">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-medium">{d.name}</span>
+                                    <span className="px-2 py-0.5 bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 text-xs font-semibold rounded">
+                                      {d.percentage || 0}%
+                                    </span>
+                                  </div>
+                                </td>
+                                <td className="py-1 pr-2 text-right text-red-700 dark:text-red-300 font-semibold">
+                                  ₹{d.amount.toLocaleString("en-IN")}
+                                </td>
                               </tr>
                             ))}
                           </tbody>
                         </table>
-                      </div>
-                    )}
+                      ) : (
+                        <div className="text-sm text-gray-500 dark:text-gray-400 mb-2 pl-2">No deductions configured</div>
+                      )}
+                    </div>
                     {/* Net Salary Section */}
                     <div className="flex justify-between items-center mt-4 p-3 rounded bg-green-100 dark:bg-green-900 border border-green-200 dark:border-green-700 shadow">
                       <span className="font-bold text-lg">Net Monthly Salary</span>
                       <span className="font-bold text-2xl text-green-700 dark:text-green-300">
-                        {payrollDetails ? `₹${calculateNetMonthlySalary(payrollDetails)?.toLocaleString("en-IN")}` : '--'}
+                        {payrollDetails?.netMonthlySalary !== undefined && payrollDetails?.netMonthlySalary !== null
+                          ? `₹${payrollDetails.netMonthlySalary.toLocaleString("en-IN")}` 
+                          : (payrollDetails && payrollDetails.grossMonthlySalary !== undefined 
+                            ? `₹${(payrollDetails.grossMonthlySalary + (payrollDetails.totalAllowances || 0) - (payrollDetails.totalDeductions || 0)).toLocaleString("en-IN")}`
+                            : '--')
+                        }
                       </span>
                     </div>
-                    <div className="text-xs text-gray-500 mt-2">* CTC is annual. All other values are monthly. Net = Gross + Allowances - Deductions</div>
                   </div>
                 )}
                 <div className="mb-4 flex items-center gap-4">

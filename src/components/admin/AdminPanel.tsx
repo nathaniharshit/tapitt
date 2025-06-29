@@ -42,12 +42,12 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
   const [payrollLoading, setPayrollLoading] = useState(false);
   const [payrollMsg, setPayrollMsg] = useState('');
   const [standardAllowances, setStandardAllowances] = useState([
-    { name: 'HRA', amount: 40, calculationType: 'percentage' },
-    { name: 'Transport', amount: 2000, calculationType: 'fixed' },
+    { name: 'HRA', percentage: 30 },
+    { name: 'Transport', percentage: 10 },
   ]);
   const [standardDeductions, setStandardDeductions] = useState([
-    { name: 'PF', amount: 12, calculationType: 'percentage' },
-    { name: 'Professional Tax', amount: 200, calculationType: 'fixed' },
+    { name: 'PF', percentage: 5 },
+    { name: 'Professional Tax', percentage: 2 },
   ]);
   const [showEmployeePayroll, setShowEmployeePayroll] = useState(false);
 
@@ -291,27 +291,22 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
     setPayrollLoading(true);
     setPayrollMsg('');
     try {
-      // Send complete allowances and deductions arrays with calculationType
+      // Send only name and percentage for each item (backend expects percentage-only format)
       const response = await fetch('http://localhost:5050/api/payroll/standards', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          allowances: standardAllowances,
-          deductions: standardDeductions
+          allowances: standardAllowances.map(a => ({ name: a.name, percentage: a.percentage })),
+          deductions: standardDeductions.map(d => ({ name: d.name, percentage: d.percentage }))
         })
       });
       
       if (response.ok) {
         const result = await response.json();
         console.log('Standards saved:', result);
-        setPayrollMsg('✅ Standards saved successfully! Note: Users may need to refresh their payroll section to see updated calculations.');
-        
-        // Optional: Trigger a custom event that the Dashboard can listen to
-        window.dispatchEvent(new CustomEvent('payrollStandardsUpdated', {
-          detail: { allowances: standardAllowances, deductions: standardDeductions }
-        }));
+        setPayrollMsg('Standards saved successfully!');
       } else {
-        setPayrollMsg('❌ Failed to save standards.');
+        setPayrollMsg('Failed to save standards.');
       }
     } catch (error) {
       console.error('Error saving standards:', error);
@@ -320,7 +315,7 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
     setPayrollLoading(false);
   };
 
-  const handleAllowanceChange = (index: number, field: 'name' | 'amount' | 'calculationType', value: string | number) => {
+  const handleAllowanceChange = (index: number, field: 'name' | 'percentage', value: string | number) => {
     setStandardAllowances(prev => 
       prev.map((item, idx) => 
         idx === index ? { ...item, [field]: value } : item
@@ -328,7 +323,7 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
     );
   };
 
-  const handleDeductionChange = (index: number, field: 'name' | 'amount' | 'calculationType', value: string | number) => {
+  const handleDeductionChange = (index: number, field: 'name' | 'percentage', value: string | number) => {
     setStandardDeductions(prev => 
       prev.map((item, idx) => 
         idx === index ? { ...item, [field]: value } : item
@@ -337,7 +332,7 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
   };
 
   const handleAddAllowance = () => {
-    setStandardAllowances(prev => [...prev, { name: '', amount: 0, calculationType: 'fixed' }]);
+    setStandardAllowances(prev => [...prev, { name: '', percentage: 0 }]);
   };
 
   const handleRemoveAllowance = (index: number) => {
@@ -345,7 +340,7 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
   };
 
   const handleAddDeduction = () => {
-    setStandardDeductions(prev => [...prev, { name: '', amount: 0, calculationType: 'fixed' }]);
+    setStandardDeductions(prev => [...prev, { name: '', percentage: 0 }]);
   };
 
   const handleRemoveDeduction = (index: number) => {
@@ -607,144 +602,7 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
         <div className="flex-1 border-t border-indigo-200 dark:border-indigo-700" />
       </div>
 
-      {/* Standard Payroll Values Section */}
-      <div className="relative z-10 px-6">
-        <Card className="w-full mb-12 bg-white/90 dark:bg-gray-800/90 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-lg">
-          <CardHeader>
-            <CardTitle className="text-foreground dark:text-gray-100 flex items-center gap-2">
-              <Database className="h-5 w-5 text-pink-500 dark:text-pink-300" />
-              Standard Payroll Allowances & Deductions
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="mb-4">
-              <div className="flex justify-between items-center mb-2">
-                <span className="font-semibold text-green-700 dark:text-green-400">Allowances (Monthly)</span>
-                <Button size="sm" variant="outline" className="dark:bg-gray-900 dark:text-gray-100 dark:border-gray-700" onClick={handleAddAllowance}>Add Allowance</Button>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="min-w-[800px] w-full text-sm mb-2 bg-background dark:bg-gray-900 border dark:border-gray-700">
-                  <thead>
-                    <tr className="bg-gray-50 dark:bg-gray-800">
-                      <th className="px-3 py-2 text-left border-b dark:border-gray-700">Name</th>
-                      <th className="px-3 py-2 text-left border-b dark:border-gray-700">Amount/Percentage</th>
-                      <th className="px-3 py-2 text-left border-b dark:border-gray-700">Type</th>
-                      <th className="px-3 py-2 text-center border-b dark:border-gray-700">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {standardAllowances.map((a, idx) => (
-                      <tr key={idx} className="border-b border-gray-200 dark:border-gray-700">
-                        <td className="px-3 py-2">
-                          <input
-                            className="border rounded px-2 py-1 w-32 bg-background text-foreground dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700"
-                            value={a.name}
-                            onChange={e => handleAllowanceChange(idx, 'name', e.target.value)}
-                            placeholder="Name"
-                          />
-                        </td>
-                        <td className="px-3 py-2">
-                          <div className="flex items-center gap-2">
-                            <input
-                              className="border rounded px-2 py-1 w-24 text-right bg-background text-foreground dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700"
-                              type="number"
-                              value={a.amount}
-                              onChange={e => handleAllowanceChange(idx, 'amount', Number(e.target.value))}
-                              placeholder="Amount"
-                            />
-                            <span className="text-sm text-gray-500">
-                              {a.calculationType === 'percentage' ? '%' : '₹'}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="px-3 py-2">
-                          <select
-                            className="border rounded px-2 py-1 w-28 bg-background text-foreground dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700"
-                            value={a.calculationType || 'fixed'}
-                            onChange={e => handleAllowanceChange(idx, 'calculationType', e.target.value)}
-                          >
-                            <option value="fixed">Fixed (₹)</option>
-                            <option value="percentage">Percentage (%)</option>
-                          </select>
-                        </td>
-                        <td className="px-3 py-2 text-center">
-                          <Button size="icon" variant="ghost" className="dark:text-gray-400" onClick={() => handleRemoveAllowance(idx)}><X className="w-4 h-4" /></Button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-            <div className="mb-4">
-              <div className="flex justify-between items-center mb-2">
-                <span className="font-semibold text-red-700 dark:text-red-400">Deductions (Monthly)</span>
-                <Button size="sm" variant="outline" className="dark:bg-gray-900 dark:text-gray-100 dark:border-gray-700" onClick={handleAddDeduction}>Add Deduction</Button>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="min-w-[800px] w-full text-sm mb-2 bg-background dark:bg-gray-900 border dark:border-gray-700">
-                  <thead>
-                    <tr className="bg-gray-50 dark:bg-gray-800">
-                      <th className="px-3 py-2 text-left border-b dark:border-gray-700">Name</th>
-                      <th className="px-3 py-2 text-left border-b dark:border-gray-700">Amount/Percentage</th>
-                      <th className="px-3 py-2 text-left border-b dark:border-gray-700">Type</th>
-                      <th className="px-3 py-2 text-center border-b dark:border-gray-700">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {standardDeductions.map((d, idx) => (
-                      <tr key={idx} className="border-b border-gray-200 dark:border-gray-700">
-                        <td className="px-3 py-2">
-                          <input
-                            className="border rounded px-2 py-1 w-32 bg-background text-foreground dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700"
-                            value={d.name}
-                            onChange={e => handleDeductionChange(idx, 'name', e.target.value)}
-                            placeholder="Name"
-                          />
-                        </td>
-                        <td className="px-3 py-2">
-                          <div className="flex items-center gap-2">
-                            <input
-                              className="border rounded px-2 py-1 w-24 text-right bg-background text-foreground dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700"
-                              type="number"
-                              value={d.amount}
-                              onChange={e => handleDeductionChange(idx, 'amount', Number(e.target.value))}
-                              placeholder="Amount"
-                            />
-                            <span className="text-sm text-gray-500">
-                              {d.calculationType === 'percentage' ? '%' : '₹'}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="px-3 py-2">
-                          <select
-                            className="border rounded px-2 py-1 w-28 bg-background text-foreground dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700"
-                            value={d.calculationType || 'fixed'}
-                            onChange={e => handleDeductionChange(idx, 'calculationType', e.target.value)}
-                          >
-                            <option value="fixed">Fixed (₹)</option>
-                            <option value="percentage">Percentage (%)</option>
-                          </select>
-                        </td>
-                        <td className="px-3 py-2 text-center">
-                          <Button size="icon" variant="ghost" className="dark:text-gray-400" onClick={() => handleRemoveDeduction(idx)}><X className="w-4 h-4" /></Button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-            <div className="flex gap-2 mb-2">
-              <Button size="sm" className="dark:bg-gray-700 dark:text-gray-100" onClick={handleSaveStandards} disabled={payrollLoading}>Save Standards</Button>
-              <Button size="sm" variant="secondary" className="dark:bg-gray-700 dark:text-gray-100" onClick={handleApplyStandards} disabled={payrollLoading}>Apply Standards to All Employees</Button>
-              {payrollLoading && <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">Processing...</span>}
-            </div>
-            {payrollMsg && <div className={`text-xs mb-2 ${payrollMsg.startsWith('Failed') || payrollMsg.startsWith('Network') ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>{payrollMsg}</div>}
-            <div className="text-xs text-gray-500 dark:text-gray-400">These values will be used as defaults for new employees. You can override them per employee.</div>
-          </CardContent>
-        </Card>
-      </div>
+
 
       {/* Org Structure Section: Expand/Collapse by Department */}
       <div className="relative z-10 px-6 mt-12">
@@ -971,12 +829,15 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
                         placeholder="Allowance name"
                         className="flex-1 px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-green-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                       />
-                      <span className="text-gray-600 dark:text-gray-400">₹</span>
+                      <span className="text-gray-600 dark:text-gray-400">%</span>
                       <input
                         type="number"
-                        value={allowance.amount}
-                        onChange={(e) => handleAllowanceChange(idx, 'amount', Number(e.target.value))}
-                        placeholder="Amount"
+                        min="0"
+                        max="100"
+                        step="0.1"
+                        value={allowance.percentage}
+                        onChange={(e) => handleAllowanceChange(idx, 'percentage', Number(e.target.value))}
+                        placeholder="Percentage"
                         className="w-24 px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-green-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                       />
                       <button
@@ -1009,12 +870,15 @@ const AdminPanel = ({ userRole }: AdminPanelProps) => {
                         placeholder="Deduction name"
                         className="flex-1 px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-red-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                       />
-                      <span className="text-gray-600 dark:text-gray-400">₹</span>
+                      <span className="text-gray-600 dark:text-gray-400">%</span>
                       <input
                         type="number"
-                        value={deduction.amount}
-                        onChange={(e) => handleDeductionChange(idx, 'amount', Number(e.target.value))}
-                        placeholder="Amount"
+                        min="0"
+                        max="100"
+                        step="0.1"
+                        value={deduction.percentage}
+                        onChange={(e) => handleDeductionChange(idx, 'percentage', Number(e.target.value))}
+                        placeholder="Percentage"
                         className="w-24 px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-red-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                       />
                       <button
