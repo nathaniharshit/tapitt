@@ -30,8 +30,8 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
 
   // Helper to get prefix based on role
   const getIdPrefix = (role: string) => {
-    if (role === 'intern') return 'TD2025int';
-    return 'TD2025em';
+    if (role === 'intern') return 'TDint';
+    return 'TDem';
   };
 
   // Generate next employeeId based on role and existing employees
@@ -45,7 +45,7 @@ const EmployeeForm = ({ onEmployeeAdded }: EmployeeFormProps) => {
         if (
           emp.employeeId &&
           emp.employeeId.startsWith(prefix) &&
-          /^TD2025(em|int)\d{3}$/.test(emp.employeeId)
+          /^TD(em|int)\d{3}$/.test(emp.employeeId)
         ) {
           const num = parseInt(emp.employeeId.replace(prefix, ''), 10);
           if (num > maxNum) maxNum = num;
