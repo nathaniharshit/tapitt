@@ -7,7 +7,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
-import { FileText, Upload, Trash2, Eye, Calendar, User } from 'lucide-react';
+import { FileText, Upload, Trash2, Eye, Download, Calendar, User } from 'lucide-react';
+
+const API_BASE_URL = 'http://localhost:5050';
 
 interface PolicyDoc {
   _id: string;
@@ -33,7 +35,7 @@ const CompanyPolicyDocs: React.FC<CompanyPolicyDocsProps> = ({ userRole }) => {
 
   const fetchDocs = async () => {
     try {
-      const res = await axios.get<PolicyDoc[]>('http://localhost:5050/api/policies');
+      const res = await axios.get<PolicyDoc[]>(`${API_BASE_URL}/api/policies`);
       // Ensure the response data is an array
       const data = Array.isArray(res.data) ? res.data : [];
       setDocs(data);
@@ -217,16 +219,35 @@ const CompanyPolicyDocs: React.FC<CompanyPolicyDocsProps> = ({ userRole }) => {
                         <Button
                           variant="outline"
                           size="sm"
+                          onClick={() => {
+                            const pdfUrl = `${API_BASE_URL}${doc.fileUrl}`;
+                            try {
+                              window.open(pdfUrl, '_blank', 'noopener,noreferrer');
+                            } catch (error) {
+                              console.error('Error opening PDF:', error);
+                              toast({
+                                title: "Error",
+                                description: "Failed to open PDF. Please try downloading instead.",
+                                variant: "destructive",
+                              });
+                            }
+                          }}
+                        >
+                          <Eye className="h-4 w-4 mr-1" />
+                          View PDF
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
                           asChild
                         >
                           <a 
-                            href={doc.fileUrl} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
+                            href={`${API_BASE_URL}${doc.fileUrl}`} 
+                            download={doc.title}
                             className="flex items-center gap-1"
                           >
-                            <Eye className="h-4 w-4" />
-                            View PDF
+                            <Download className="h-4 w-4" />
+                            Download
                           </a>
                         </Button>
                         {['admin', 'superadmin'].includes(userRole) && (

@@ -447,6 +447,17 @@ const settingsSchema = new mongoose.Schema({
 const Settings = mongoose.model('Settings', settingsSchema);
 // --- End Settings Model ---
 
+// --- Policy Document Model ---
+const policySchema = new mongoose.Schema({
+  title: { type: String, required: true },
+  description: { type: String },
+  fileUrl: { type: String, required: true },
+  uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee' },
+  uploadedAt: { type: Date, default: Date.now }
+});
+const Policy = mongoose.model('Policy', policySchema);
+// --- End Policy Document Model ---
+
 // --- Leave Allocation Settings Functions ---
 async function getLeaveAllocations() {
   try {
@@ -818,6 +829,88 @@ app.delete('/api/announcements/:id', async (req, res) => {
   }
 });
 // --- End Announcements API ---
+
+// --- Policy Documents API ---
+app.get('/api/policies', async (req, res) => {
+  try {
+    const policies = await Policy.find({})
+      .sort({ uploadedAt: -1 })
+      .populate({ path: 'uploadedBy', select: 'firstname lastname email' });
+    res.json(policies);
+  } catch (err) {
+    console.error('Error fetching policies:', err);
+    res.status(500).json({ error: 'Failed to fetch policy documents' });
+  }
+});
+
+// Upload a new policy document
+app.post('/api/policies', upload.single('file'), async (req, res) => {
+  try {
+    const { title, description, uploadedBy } = req.body;
+    
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+    
+    // Create file URL
+    const fileUrl = `/uploads/${req.file.filename}`;
+    
+    const policy = new Policy({
+      title,
+      description,
+      fileUrl,
+      uploadedBy: uploadedBy || null
+    });
+    
+    await policy.save();
+    res.status(201).json(policy);
+  } catch (err) {
+    console.error('Error uploading policy:', err);
+    res.status(500).json({ error: 'Failed to upload policy document' });
+  }
+});
+
+// Get a specific policy document
+app.get('/api/policies/:id', async (req, res) => {
+  try {
+    const policy = await Policy.findById(req.params.id)
+      .populate({ path: 'uploadedBy', select: 'firstname lastname email' });
+    
+    if (!policy) {
+      return res.status(404).json({ error: 'Policy document not found' });
+    }
+    
+    res.json(policy);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch policy document' });
+  }
+});
+
+// Delete a policy document
+app.delete('/api/policies/:id', async (req, res) => {
+  try {
+    const policy = await Policy.findById(req.params.id);
+    
+    if (!policy) {
+      return res.status(404).json({ error: 'Policy document not found' });
+    }
+    
+    // Delete the file from the filesystem if it exists
+    if (policy.fileUrl) {
+      const filePath = path.join(__dirname, policy.fileUrl.replace(/^\/uploads/, 'uploads'));
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+    }
+    
+    await policy.deleteOne();
+    res.json({ message: 'Policy document deleted successfully' });
+  } catch (err) {
+    console.error('Error deleting policy:', err);
+    res.status(500).json({ error: 'Failed to delete policy document' });
+  }
+});
+// --- End Policy Documents API ---
 
 // --- Awards API ---
 
@@ -1911,21 +2004,9 @@ app.get('/api/employees', async (req, res) => {
     }
     // Support ?remoteDate=YYYY-MM-DD to filter employees working remotely on that date
     if (req.query.remoteDate) {
-      const remoteDate = req.query.remoteDate;
-      // Find employees who are remote or have a pending remote request for the date
-      const remoteEmployees = await Employee.find({
-        ...filter,
-        remoteWork: remoteDate
-      }).select('+createdAt +updatedAt');
-      const pendingRemoteRequests = await Employee.find({
-        ...filter,
-        remoteWorkRequests: remoteDate
-      }).select('+createdAt +updatedAt');
-      return res.json({
-        remoteEmployees,
-        pendingRemoteRequests
-      });
+      filter.remoteWork = req.query.remoteDate;
     }
+    
     // Explicitly select createdAt and updatedAt fields
     const employees = await Employee.find(filter).select('+createdAt +updatedAt');
     res.json(employees);
