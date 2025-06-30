@@ -25,18 +25,35 @@ const AttendanceCalendar: React.FC<AttendanceCalendarProps> = ({ user, month }) 
   const [holidays, setHolidays] = useState<{ date: string; name: string }[]>([]);
 
   useEffect(() => {
-    if (!user?.id) return;
+    if (!user?.id) {
+      console.log('AttendanceCalendar: No user.id available, skipping data fetch');
+      return;
+    }
+    
+    console.log('AttendanceCalendar: Fetching data for user:', user.id);
+    
     fetch(`http://localhost:5050/api/employees/${user.id}/attendance`)
       .then(res => res.json())
-      .then(data => setAttendance(data.attendance || []));
+      .then(data => setAttendance(data.attendance || []))
+      .catch(err => console.error('AttendanceCalendar: Error fetching attendance:', err));
+    
     // Fetch work sessions for the user
     fetch(`http://localhost:5050/api/sessions?employeeId=${user.id}`)
-      .then(res => res.json())
-      .then(data => setWorkSessions((data.sessions || []).map((s: any) => ({ start: s.startTime, end: s.endTime }))));
+      .then(res => {
+        console.log('AttendanceCalendar: Sessions API response status:', res.status);
+        return res.json();
+      })
+      .then(data => {
+        console.log('AttendanceCalendar: Sessions data received:', data);
+        setWorkSessions((data.sessions || []).map((s: any) => ({ start: s.startTime, end: s.endTime })));
+      })
+      .catch(err => console.error('AttendanceCalendar: Error fetching sessions:', err));
+    
     // Fetch holidays for the calendar
     fetch('http://localhost:5050/api/holidays')
       .then(res => res.json())
-      .then(data => setHolidays(Array.isArray(data.holidays) ? data.holidays : []));
+      .then(data => setHolidays(Array.isArray(data.holidays) ? data.holidays : []))
+      .catch(err => console.error('AttendanceCalendar: Error fetching holidays:', err));
   }, [user?.id]);
 
   // Use selected month or current month

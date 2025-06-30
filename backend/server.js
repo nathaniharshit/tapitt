@@ -28,24 +28,34 @@ global._io = io;
 const MONGODB_URI = 'mongodb+srv://ADH:HELLO@employeemanagement.9tmhw4a.mongodb.net/?retryWrites=true&w=majority&appName=EmployeeManagement';
 
 const sessionSchema = new mongoose.Schema({
-  employeeId: String,
+  employeeId: String, // This can be any user ID, not just employees
   employeeName: String,
+  role: String, // Store user role for filtering and permission checks
   startTime: { type: Date, default: Date.now },
   endTime: { type: Date, default: null } // Add endTime for session end
 });
 const Session = mongoose.model('Session', sessionSchema);
 
+// Configure CORS first, before any routes or middleware
+app.use(cors({
+  origin: ['http://localhost:8080', 'http://localhost:8081', 'http://localhost:3000', 'http://localhost:5173'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
+}));
+
 // Add express.json() middleware at the very top, before any routes
 app.use(express.json());
 
 app.post('/api/session/start', async (req, res) => {
-  const { employeeName, employeeId } = req.body || {};
+  const { employeeName, employeeId, role } = req.body || {};
 
   try {
-    // Save session to database
+    // Save session to database with user role
     const session = new Session({
       employeeId: employeeId,
       employeeName: employeeName,
+      role: role || 'employee', // Default to employee if no role provided
       startTime: new Date(),
     });
     await session.save();
@@ -69,6 +79,128 @@ app.post('/api/session/end', async (req, res) => {
     res.json({ success: true, session });
   } catch (error) {
     res.status(500).json({ error: 'Failed to end session', details: error.message });
+  }
+});
+
+// Endpoint to get sessions for any user (employee, admin, manager, etc.)
+app.get('/api/sessions', async (req, res) => {
+  try {
+    const { employeeId, userId, role, date, page, limit } = req.query;
+    
+    // Date filter for specific day if provided
+    let dateFilter = {};
+    if (date) {
+      const targetDate = new Date(date);
+      const nextDay = new Date(targetDate);
+      nextDay.setDate(nextDay.getDate() + 1);
+      
+      dateFilter = {
+        startTime: {
+          $gte: targetDate,
+          $lt: nextDay
+        }
+      };
+    }
+    
+    // Pagination setup
+    const pageNum = parseInt(page) || 1;
+    const pageSize = parseInt(limit) || 100;
+    const skip = (pageNum - 1) * pageSize;
+    
+    // If specific user ID is provided (can be any role, not just employees)
+    const userIdToFetch = employeeId || userId;
+    if (userIdToFetch) {
+      const filter = { employeeId: userIdToFetch, ...dateFilter };
+      const sessions = await Session.find(filter)
+        .sort({ startTime: -1 })
+        .skip(skip)
+        .limit(pageSize);
+      
+      // Calculate session statistics for this user
+      const completedSessions = sessions.filter(s => s.endTime);
+      let totalDuration = 0;
+      
+      completedSessions.forEach(session => {
+        const start = new Date(session.startTime);
+        const end = new Date(session.endTime);
+        totalDuration += (end - start);
+      });
+      
+      return res.json({ 
+        success: true, 
+        sessions,
+        activeSession: sessions.find(s => !s.endTime) || null,
+        pagination: {
+          page: pageNum,
+          limit: pageSize,
+          total: await Session.countDocuments(filter)
+        },
+        stats: {
+          totalSessions: sessions.length,
+          completedSessions: completedSessions.length,
+          activeSessions: sessions.length - completedSessions.length,
+          totalDuration // in milliseconds
+        }
+      });
+    }
+    
+    // If no specific user ID but role is admin/superadmin/manager, return all sessions
+    if (role === 'admin' || role === 'superadmin' || role === 'manager') {
+      // Return all sessions with pagination
+      const filter = { ...dateFilter };
+      const allSessions = await Session.find(filter)
+        .sort({ startTime: -1 })
+        .skip(skip)
+        .limit(pageSize);
+      
+      const activeSessions = await Session.find({ 
+        ...filter,
+        endTime: null 
+      }).sort({ startTime: -1 });
+      
+      // Get unique employee count
+      const uniqueEmployees = new Set();
+      allSessions.forEach(session => uniqueEmployees.add(session.employeeId));
+      
+      // Count total duration of all completed sessions
+      let totalDuration = 0;
+      allSessions.filter(s => s.endTime).forEach(session => {
+        const start = new Date(session.startTime);
+        const end = new Date(session.endTime);
+        totalDuration += (end - start);
+      });
+      
+      return res.json({
+        success: true,
+        sessions: allSessions,
+        activeSessions: activeSessions,
+        pagination: {
+          page: pageNum,
+          limit: pageSize,
+          total: await Session.countDocuments(filter)
+        },
+        stats: {
+          totalSessions: allSessions.length,
+          uniqueEmployees: uniqueEmployees.size,
+          activeSessions: activeSessions.length,
+          totalDuration
+        }
+      });
+    }
+    
+    // If no valid parameters are provided, return an error
+    return res.status(400).json({ 
+      error: 'Either employeeId, userId query parameter or admin/manager role is required',
+      usage: 'Use ?employeeId=X for specific employee, ?userId=X for any user, or include role=admin|superadmin|manager for all sessions'
+    });
+    
+  } catch (error) {
+    console.error('Error fetching sessions:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to fetch sessions', 
+      details: error.message 
+    });
   }
 });
 
@@ -440,7 +572,6 @@ function calculateEmployeePayroll(employee, standards) {
 const authorizeRoles = require('./middleware/rbac');
 const authorizePermission = require('./middleware/permission');
 
-app.use(cors()); // allow all origins for now
 app.use(express.json());
 
 // Multer config for file uploads

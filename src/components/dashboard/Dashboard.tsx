@@ -552,9 +552,11 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
     if (!user.id) return;
     const fetchSessions = async () => {
       try {
+        console.log('Fetching sessions for user ID:', user.id);
         const res = await fetch(`http://localhost:5050/api/sessions?employeeId=${user.id}`);
         const data = await res.json();
-        if (Array.isArray(data.sessions)) {
+        console.log('Sessions API response:', data);
+        if (data.success && Array.isArray(data.sessions)) {
           // Show all sessions (full history)
           setWorkSessions(
             data.sessions.map((s: any) => ({ start: s.startTime, end: s.endTime }))
@@ -562,8 +564,14 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
           setSessionActive(
             data.sessions.length > 0 && !data.sessions[0].endTime
           );
+          console.log('Sessions loaded:', data.sessions.length);
+        } else {
+          console.warn('Invalid sessions response:', data);
+          setWorkSessions([]);
+          setSessionActive(false);
         }
-      } catch {
+      } catch (error) {
+        console.error('Error fetching sessions:', error);
         setWorkSessions([]);
         setSessionActive(false);
       }
@@ -576,15 +584,27 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
     const now = new Date().toISOString();
     setWorkSessions((prev) => [{ start: now }, ...prev]); // Optimistically add session
     setSessionActive(true);
-    await fetch('http://localhost:5050/api/session/start', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ employeeName: user.name, employeeId: user.id })
-    });
-    // Re-fetch sessions after starting
-    const res = await fetch(`http://localhost:5050/api/sessions?employeeId=${user.id}`);
-    const data = await res.json();
-    setWorkSessions(data.sessions.map((s: any) => ({ start: s.startTime, end: s.endTime })));
+    
+    try {
+      console.log('Starting session for user:', { name: user.name, id: user.id, role: user.role });
+      const startRes = await fetch('http://localhost:5050/api/session/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ employeeName: user.name, employeeId: user.id, role: user.role })
+      });
+      const startData = await startRes.json();
+      console.log('Session start response:', startData);
+      
+      // Re-fetch sessions after starting
+      const res = await fetch(`http://localhost:5050/api/sessions?employeeId=${user.id}`);
+      const data = await res.json();
+      console.log('Sessions after start:', data);
+      if (data.success && Array.isArray(data.sessions)) {
+        setWorkSessions(data.sessions.map((s: any) => ({ start: s.startTime, end: s.endTime })));
+      }
+    } catch (error) {
+      console.error('Error starting session:', error);
+    }
   };
 
   // End the current work session
@@ -598,15 +618,27 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
       return updated;
     });
     setSessionActive(false);
-    await fetch('http://localhost:5050/api/session/end', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ employeeId: user.id })
-    });
-    // Re-fetch sessions after ending
-    const res = await fetch(`http://localhost:5050/api/sessions?employeeId=${user.id}`);
-    const data = await res.json();
-    setWorkSessions(data.sessions.map((s: any) => ({ start: s.startTime, end: s.endTime })));
+    
+    try {
+      console.log('Ending session for user ID:', user.id);
+      const endRes = await fetch('http://localhost:5050/api/session/end', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ employeeId: user.id })
+      });
+      const endData = await endRes.json();
+      console.log('Session end response:', endData);
+      
+      // Re-fetch sessions after ending
+      const res = await fetch(`http://localhost:5050/api/sessions?employeeId=${user.id}`);
+      const data = await res.json();
+      console.log('Sessions after end:', data);
+      if (data.success && Array.isArray(data.sessions)) {
+        setWorkSessions(data.sessions.map((s: any) => ({ start: s.startTime, end: s.endTime })));
+      }
+    } catch (error) {
+      console.error('Error ending session:', error);
+    }
   };
 
   // --- End Work Session Tracker ---
