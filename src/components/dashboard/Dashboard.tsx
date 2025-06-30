@@ -647,37 +647,44 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
   useEffect(() => {
     const fetchLoginTime = async () => {
       try {
-        const res = await fetch(`http://localhost:5050/api/employees`);
-        const employees = await res.json();
-        const emp = employees.find((e: any) => e.email === user.email);
-        if (emp && emp.lastLogin) {
-          setLoginTime(emp.lastLogin);
+        // Use the specific user ID instead of searching by email
+        const res = await fetch(`http://localhost:5050/api/employees/${user.id}`);
+        if (res.ok) {
+          const emp = await res.json();
+          if (emp && emp.lastLogin) {
+            setLoginTime(emp.lastLogin);
+          } else {
+            setLoginTime(null);
+          }
         } else {
           setLoginTime(null);
-        }
-        // Always update user.id to the real MongoDB ObjectId if found
-        if (emp && emp._id && user.id !== emp._id) {
-          // Instead of mutating the prop, store the id in state
-          setUserId(emp._id);
         }
       } catch {
         setLoginTime(null);
       }
     };
-    fetchLoginTime();
-  }, [user.email]);
+    if (user.id) {
+      fetchLoginTime();
+    }
+  }, [user.id]);
 
   // Fetch clock-in/out times for the current user
   useEffect(() => {
     const fetchClockTimes = async () => {
       try {
-        const res = await fetch(`http://localhost:5050/api/employees`);
-        const employees = await res.json();
-        const emp = employees.find((e: any) => e.email === user.email);
-        if (emp) {
-          setClockInTime(emp.clockInTime || null);
-          setClockOutTime(emp.clockOutTime || null);
-          setIsClockedIn(!!emp.clockInTime && !emp.clockOutTime);
+        // Use the specific user ID instead of searching by email
+        const res = await fetch(`http://localhost:5050/api/employees/${user.id}`);
+        if (res.ok) {
+          const emp = await res.json();
+          if (emp) {
+            setClockInTime(emp.clockInTime || null);
+            setClockOutTime(emp.clockOutTime || null);
+            setIsClockedIn(!!emp.clockInTime && !emp.clockOutTime);
+          }
+        } else {
+          setClockInTime(null);
+          setClockOutTime(null);
+          setIsClockedIn(false);
         }
       } catch {
         setClockInTime(null);
@@ -685,26 +692,13 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
         setIsClockedIn(false);
       }
     };
-    fetchClockTimes();
-  }, [user.email]);
+    if (user.id) {
+      fetchClockTimes();
+    }
+  }, [user.id]);
 
-  // Add a state for userId and use it everywhere instead of user.id
-  const [userId, setUserId] = useState(user.id);
-
-  // Ensure userId is always up to date with the latest employee data
-  useEffect(() => {
-    const fetchAndSetUserId = async () => {
-      try {
-        const res = await fetch(`http://localhost:5050/api/employees`);
-        const employees = await res.json();
-        const emp = employees.find((e: any) => e.email === user.email);
-        if (emp && emp._id) {
-          setUserId(emp._id);
-        }
-      } catch {}
-    };
-    fetchAndSetUserId();
-  }, [user.email]);
+  // Use user.id directly instead of maintaining separate state
+  const userId = user.id;
   // Fetch employees
   const fetchEmployees = async () => {
     const res = await fetch('http://localhost:5050/api/employees');
@@ -1146,9 +1140,12 @@ const handleDeleteLeave = async (leaveId: string) => {
   // Fetch salary and payroll details for the current user from backend for all roles
   const fetchSalary = useCallback(async () => {
     if (!userId) {
+      console.log('❌ Dashboard: No userId provided to fetchSalary');
       setSalaryLoading(false);
       return;
     }
+    
+    console.log('🔍 Dashboard: Fetching salary for userId:', userId, 'user.id:', user.id, 'user.email:', user.email, 'user.name:', user.name);
     
     setSalaryLoading(true);
     
@@ -1191,6 +1188,8 @@ const handleDeleteLeave = async (leaveId: string) => {
         return;
       }
       const data = await res.json();
+      
+      console.log('💰 Dashboard: Payroll API response for userId:', userId, 'data:', data);
       
       // Extract salary from basicSalary * 12 (since basicSalary is monthly)
       const annualSalary = data.basicSalary ? data.basicSalary * 12 : null;

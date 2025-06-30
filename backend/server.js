@@ -1914,11 +1914,22 @@ app.get('/api/employees/:id/salary', async (req, res) => {
 // Get employee payroll information (alias for salary endpoint)
 app.get('/api/employees/:id/payroll', async (req, res) => {
   try {
-    const employee = await Employee.findById(req.params.id);
+    const employeeId = req.params.id;
+    console.log('🔍 Backend: Fetching payroll for employee ID:', employeeId);
+    
+    const employee = await Employee.findById(employeeId);
     
     if (!employee) {
+      console.log('❌ Backend: Employee not found for ID:', employeeId);
       return res.status(404).json({ error: 'Employee not found' });
     }
+
+    console.log('👤 Backend: Found employee:', {
+      id: employee._id,
+      name: `${employee.firstname} ${employee.lastname}`,
+      email: employee.email,
+      salary: employee.salary
+    });
 
     // Get standard payroll items to recalculate if needed
     const standardPayroll = await getStandardPayrollItems();
@@ -1975,7 +1986,7 @@ app.get('/api/employees/:id/payroll', async (req, res) => {
       };
     });
 
-    res.json({
+    const finalResponse = {
       employeeId: employee._id,
       name: `${employee.firstname} ${employee.lastname}`,
       basicSalary: Math.round(basicSalary * 100) / 100, // Monthly basic salary
@@ -1985,7 +1996,11 @@ app.get('/api/employees/:id/payroll', async (req, res) => {
       totalDeductions: Math.round(totalDeductions * 100) / 100,
       grossSalary: Math.round(grossSalary * 100) / 100,
       netSalary: Math.round(netSalary * 100) / 100
-    });
+    };
+
+    console.log('💰 Backend: Sending payroll response:', finalResponse);
+
+    res.json(finalResponse);
     
   } catch (err) {
     console.error('Error fetching employee payroll:', err);
