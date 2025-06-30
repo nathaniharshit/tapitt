@@ -73,33 +73,6 @@ const Settings = ({ userRole, userId }: SettingsProps) => {
       </div>
 
       <div className="grid gap-6">
-        {/* Profile Settings */}
-        <Card className="bg-card text-foreground">
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <User className="h-5 w-5" />
-              <span>Profile Settings</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="firstName">First Name</Label>
-                <Input id="firstName" defaultValue="John" className="bg-background text-foreground" />
-              </div>
-              <div>
-                <Label htmlFor="lastName">Last Name</Label>
-                <Input id="lastName" defaultValue="Smith" className="bg-background text-foreground" />
-              </div>
-            </div>
-            <div>
-              <Label htmlFor="email">Email</Label>
-              <Input id="email" type="email" defaultValue="john@company.com" className="bg-background text-foreground" />
-            </div>
-            <Button>Update Profile</Button>
-          </CardContent>
-        </Card>
-
         {/* Security Settings */}
         <Card className="bg-card text-foreground">
           <CardHeader>
